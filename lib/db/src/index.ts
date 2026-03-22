@@ -18,6 +18,13 @@ if (process.env.NEON_DATABASE_URL) {
 }
 
 export const pool = new Pool(poolOptions);
+
+if (process.env.NEON_DATABASE_URL) {
+  pool.on("connect", (client) => {
+    client.query("SET search_path TO public");
+  });
+}
+
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
