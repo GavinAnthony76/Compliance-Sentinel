@@ -82,97 +82,98 @@ export function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8">
 
             {/* Feature 1: Recurring Plans */}
-            <div className="bg-white rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1">
-              <div className="bg-gradient-to-b from-emerald-300 via-green-200 to-emerald-50 px-6 pt-6 pb-4">
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Recurring Plans</h3>
-                  <p className="text-sm text-gray-600 mt-0.5">Auto-scheduling</p>
+            <div className="bg-gradient-to-br from-emerald-100 via-green-50 to-emerald-100 rounded-3xl border border-emerald-200/60 overflow-hidden hover:shadow-xl hover:shadow-emerald-100 transition-all duration-300 hover:-translate-y-1 relative">
+              <div className="absolute top-3 right-3 w-20 h-20 bg-emerald-200/50 rounded-full" />
+              <div className="absolute bottom-24 left-2 w-12 h-12 bg-green-200/40 rounded-full" />
+              {/* Floating white panel */}
+              <div className="mx-5 mt-6 bg-white rounded-2xl shadow-lg overflow-hidden relative z-10">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                  <span className="font-bold text-gray-900">Recurring Plans</span>
+                  <span className="text-xs px-2.5 py-1 rounded-full border border-emerald-400 text-emerald-600 font-medium">Auto-scheduling</span>
                 </div>
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                  <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-                    <span className="text-sm font-semibold text-gray-700">Weekly</span>
-                    <div className="w-12 h-6 bg-primary rounded-full relative flex items-center px-0.5 cursor-pointer">
-                      <div className="w-5 h-5 bg-white rounded-full shadow-sm ml-auto" />
-                    </div>
-                    <span className="text-sm text-gray-400">Bi-Weekly</span>
+                <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-100">
+                  <div className="flex bg-gray-100 rounded-full p-0.5">
+                    <span className="px-4 py-1 bg-primary text-white text-sm font-semibold rounded-full">Weekly</span>
+                    <span className="px-4 py-1 text-gray-500 text-sm">Bi-Weekly</span>
                   </div>
-                  <div className="px-5 py-1">
-                    {[['Mon, Jun 16', 'Lawn Mowing'], ['Wed, Jun 18', 'Lawn Mowing'], ['Mon, Jun 23', 'Lawn Mowing'], ['Wed, Jun 25', 'Lawn Mowing']].map(([date, svc]) => (
-                      <div key={date} className="flex items-center gap-3 py-2.5 border-b border-gray-50 last:border-0">
-                        <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0">
-                          <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                        </div>
-                        <span className="text-sm font-medium text-gray-800 flex-1">{date}</span>
-                        <span className="text-sm text-gray-400">- {svc}</span>
+                  <div className="ml-auto w-11 h-6 bg-primary rounded-full flex items-center px-0.5">
+                    <div className="w-5 h-5 bg-white rounded-full shadow ml-auto" />
+                  </div>
+                </div>
+                <div className="px-4 py-2 space-y-1.5">
+                  {['Mowing every Friday', 'Trimming & Edging', 'Fertilization (Seasonal)'].map((item) => (
+                    <div key={item} className="flex items-center gap-3 px-3 py-2.5 bg-emerald-50 border border-emerald-100 rounded-xl">
+                      <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center shrink-0">
+                        <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
                       </div>
-                    ))}
-                  </div>
+                      <span className="text-sm font-medium text-gray-800">{item}</span>
+                    </div>
+                  ))}
                 </div>
+                <div className="h-3" />
               </div>
-              <div className="px-6 py-5">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
-                  <RotateCw className="w-5 h-5 text-primary" />
+              {/* Text on gradient */}
+              <div className="px-6 pt-5 pb-6 relative z-10">
+                <div className="w-10 h-10 bg-emerald-200 rounded-xl flex items-center justify-center mb-3">
+                  <RotateCw className="w-5 h-5 text-emerald-700" />
                 </div>
-                <h3 className="text-lg font-bold mb-1">Recurring Plans</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Set up weekly or bi-weekly mowing schedules that generate jobs automatically — no manual rescheduling needed.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Recurring Plans</h3>
+                <p className="text-gray-600 text-sm leading-relaxed">Set weekly or bi-weekly schedules to generate jobs automatically.</p>
               </div>
             </div>
 
             {/* Feature 2: Automated Invoicing */}
-            <div className="bg-white rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1">
-              <div className="bg-gradient-to-b from-slate-700 via-slate-800 to-slate-900 px-6 pt-6 pb-4">
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold text-white">Automated Invoicing</h3>
-                  <p className="text-sm text-slate-400 mt-0.5">Get paid faster</p>
+            <div className="bg-gradient-to-br from-indigo-100 via-blue-50 to-indigo-100 rounded-3xl border border-indigo-200/60 overflow-hidden hover:shadow-xl hover:shadow-indigo-100 transition-all duration-300 hover:-translate-y-1 relative">
+              <div className="absolute top-3 right-3 w-20 h-20 bg-indigo-200/50 rounded-full" />
+              <div className="absolute bottom-24 left-2 w-12 h-12 bg-blue-200/40 rounded-full" />
+              <div className="mx-5 mt-6 bg-white rounded-2xl shadow-lg overflow-hidden relative z-10">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                  <span className="font-bold text-gray-900">Invoice #1042</span>
+                  <span className="text-xs px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 font-semibold border border-amber-200">Unpaid</span>
                 </div>
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                  <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-500 font-medium">Invoice #1042 · Green Horizons</span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">Unpaid</span>
+                <div className="px-5 py-3 border-b border-gray-100">
+                  <div className="text-3xl font-bold text-gray-900">$285.00</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Green Horizons · Due Jun 30, 2025</div>
+                </div>
+                <div className="px-4 py-2 space-y-1.5">
+                  {[['Lawn Mowing (2×)', '$160'], ['Edge Trimming', '$65'], ['Fertilization', '$60']].map(([item, price]) => (
+                    <div key={item} className="flex items-center justify-between px-3 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl">
+                      <span className="text-sm font-medium text-gray-700">{item}</span>
+                      <span className="text-sm font-bold text-gray-900">{price}</span>
                     </div>
-                    <div className="text-3xl font-bold text-gray-900">$285.00</div>
-                    <div className="text-xs text-gray-400 mt-0.5">Due Jun 30, 2025</div>
-                  </div>
-                  <div className="px-5 py-3 space-y-2 border-b border-gray-100">
-                    {[['Lawn Mowing (2×)', '$160'], ['Edge Trimming', '$65'], ['Fertilization', '$60']].map(([item, price]) => (
-                      <div key={item} className="flex justify-between text-sm">
-                        <span className="text-gray-600">{item}</span>
-                        <span className="font-semibold text-gray-900">{price}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="px-5 py-3">
-                    <button className="w-full py-2.5 bg-primary rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2">
-                      <DollarSign className="w-4 h-4" />Pay Now — One Click
-                    </button>
-                  </div>
+                  ))}
+                </div>
+                <div className="px-4 py-3">
+                  <button className="w-full py-2.5 bg-primary rounded-xl text-white text-sm font-bold flex items-center justify-center gap-2">
+                    <DollarSign className="w-4 h-4" />Pay Now — One Click
+                  </button>
                 </div>
               </div>
-              <div className="px-6 py-5">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
-                  <CreditCard className="w-5 h-5 text-primary" />
+              <div className="px-6 pt-5 pb-6 relative z-10">
+                <div className="w-10 h-10 bg-indigo-200 rounded-xl flex items-center justify-center mb-3">
+                  <CreditCard className="w-5 h-5 text-indigo-700" />
                 </div>
-                <h3 className="text-lg font-bold mb-1">Automated Invoicing</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Get paid faster with auto-generated invoices after every job. Customers pay instantly online — no chasing checks.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Automated Invoicing</h3>
+                <p className="text-gray-600 text-sm leading-relaxed">Auto-generated invoices after every job. Customers pay instantly — no chasing checks.</p>
               </div>
             </div>
 
             {/* Feature 3: Smart Route Planning */}
-            <div className="bg-white rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1">
-              <div className="bg-gradient-to-b from-sky-200 via-blue-100 to-sky-50 relative overflow-hidden">
+            <div className="bg-gradient-to-br from-sky-100 via-blue-50 to-sky-100 rounded-3xl border border-sky-200/60 overflow-hidden hover:shadow-xl hover:shadow-sky-100 transition-all duration-300 hover:-translate-y-1 relative">
+              <div className="absolute top-3 right-3 w-20 h-20 bg-sky-200/50 rounded-full" />
+              <div className="mx-5 mt-6 bg-white rounded-2xl shadow-lg overflow-hidden relative z-10">
                 <img
                   src={`${import.meta.env.BASE_URL}images/smartroute.png`}
                   alt="Smart Route Planning"
                   className="w-full object-cover object-center"
                 />
               </div>
-              <div className="px-6 py-5">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
-                  <MapPin className="w-5 h-5 text-primary" />
+              <div className="px-6 pt-5 pb-6 relative z-10">
+                <div className="w-10 h-10 bg-sky-200 rounded-xl flex items-center justify-center mb-3">
+                  <MapPin className="w-5 h-5 text-sky-700" />
                 </div>
-                <h3 className="text-lg font-bold mb-1">Smart Route Planning</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Auto-optimize your daily routes to cut drive time and fuel costs. More jobs done, less time in the truck.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Smart Route Planning</h3>
+                <p className="text-gray-600 text-sm leading-relaxed">Auto-optimize daily routes to cut drive time and fuel costs. More jobs done, less time in the truck.</p>
               </div>
             </div>
 
@@ -181,131 +182,122 @@ export function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8 mt-8">
 
             {/* Feature 4: Customer CRM */}
-            <div className="bg-white rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1">
-              <div className="bg-gradient-to-b from-violet-300 via-purple-200 to-violet-50 px-6 pt-6 pb-4">
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Customer CRM</h3>
-                  <p className="text-sm text-gray-600 mt-0.5">Every detail, one place</p>
+            <div className="bg-gradient-to-br from-violet-100 via-purple-50 to-violet-100 rounded-3xl border border-violet-200/60 overflow-hidden hover:shadow-xl hover:shadow-violet-100 transition-all duration-300 hover:-translate-y-1 relative">
+              <div className="absolute top-3 right-3 w-20 h-20 bg-violet-200/50 rounded-full" />
+              <div className="absolute bottom-24 left-2 w-12 h-12 bg-purple-200/40 rounded-full" />
+              <div className="mx-5 mt-6 bg-white rounded-2xl shadow-lg overflow-hidden relative z-10">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                  <span className="font-bold text-gray-900">Customer Profile</span>
+                  <span className="text-xs px-2.5 py-1 rounded-full border border-emerald-400 text-emerald-600 font-medium">Active</span>
                 </div>
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                  <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100">
-                    <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-violet-600">MH</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-gray-800">Margaret Harris</div>
-                      <div className="text-xs text-gray-400 flex items-center gap-1"><Phone className="w-3 h-3" />(555) 248-0193</div>
-                    </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">Active</span>
+                <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-100">
+                  <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
+                    <span className="text-sm font-bold text-violet-700">MH</span>
                   </div>
-                  <div className="px-5 py-3 space-y-2 border-b border-gray-100">
-                    <div className="flex items-center gap-2.5 text-sm">
-                      <Home className="w-4 h-4 text-gray-400 shrink-0" />
-                      <span className="text-gray-600">142 Maple Drive · Gate: <span className="font-bold text-gray-900">4821</span></span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-sm">
-                      <Star className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span className="text-gray-600">Morning visits · Dog in backyard</span>
-                    </div>
-                  </div>
-                  <div className="px-5 py-3">
-                    <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Service History</div>
-                    {[['Lawn Mowing', 'Jun 10', 'text-emerald-600'], ['Fertilization', 'May 28', 'text-blue-600'], ['Edge Trim', 'May 14', 'text-purple-600']].map(([svc, date, cls]) => (
-                      <div key={svc} className="flex justify-between py-1 text-sm">
-                        <span className={`font-medium ${cls}`}>{svc}</span>
-                        <span className="text-gray-400">{date}</span>
-                      </div>
-                    ))}
+                  <div>
+                    <div className="text-sm font-bold text-gray-900">Margaret Harris</div>
+                    <div className="text-xs text-gray-400 flex items-center gap-1"><Phone className="w-3 h-3" />(555) 248-0193</div>
                   </div>
                 </div>
+                <div className="px-4 py-2 space-y-1.5">
+                  <div className="flex items-center gap-3 px-3 py-2.5 bg-violet-50 border border-violet-100 rounded-xl">
+                    <Home className="w-4 h-4 text-violet-500 shrink-0" />
+                    <span className="text-sm text-gray-700">142 Maple Drive · Gate: <span className="font-bold text-gray-900">4821</span></span>
+                  </div>
+                  <div className="flex items-center gap-3 px-3 py-2.5 bg-violet-50 border border-violet-100 rounded-xl">
+                    <Star className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span className="text-sm text-gray-700">Morning visits · Dog in backyard</span>
+                  </div>
+                  {[['Lawn Mowing', 'Jun 10'], ['Fertilization', 'May 28']].map(([svc, date]) => (
+                    <div key={svc} className="flex items-center justify-between px-3 py-2.5 bg-violet-50 border border-violet-100 rounded-xl">
+                      <span className="text-sm font-medium text-gray-800">{svc}</span>
+                      <span className="text-xs text-gray-400">{date}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="h-3" />
               </div>
-              <div className="px-6 py-5">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
-                  <Users className="w-5 h-5 text-primary" />
+              <div className="px-6 pt-5 pb-6 relative z-10">
+                <div className="w-10 h-10 bg-violet-200 rounded-xl flex items-center justify-center mb-3">
+                  <Users className="w-5 h-5 text-violet-700" />
                 </div>
-                <h3 className="text-lg font-bold mb-1">Customer CRM</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Track every property, gate code, pet, and preference. Full service history always at your fingertips.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Customer CRM</h3>
+                <p className="text-gray-600 text-sm leading-relaxed">Track every property, gate code, and preference. Full service history always at your fingertips.</p>
               </div>
             </div>
 
             {/* Feature 5: Growth Analytics */}
-            <div className="bg-white rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1">
-              <div className="bg-gradient-to-b from-amber-300 via-orange-200 to-amber-50 px-6 pt-6 pb-4">
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Growth Analytics</h3>
-                  <p className="text-sm text-gray-600 mt-0.5">Real-time business insights</p>
+            <div className="bg-gradient-to-br from-amber-100 via-orange-50 to-amber-100 rounded-3xl border border-amber-200/60 overflow-hidden hover:shadow-xl hover:shadow-amber-100 transition-all duration-300 hover:-translate-y-1 relative">
+              <div className="absolute top-3 right-3 w-20 h-20 bg-amber-200/50 rounded-full" />
+              <div className="absolute bottom-24 left-2 w-12 h-12 bg-orange-200/40 rounded-full" />
+              <div className="mx-5 mt-6 bg-white rounded-2xl shadow-lg overflow-hidden relative z-10">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                  <span className="font-bold text-gray-900">Revenue · Jun 2025</span>
+                  <span className="text-xs px-2.5 py-1 rounded-full border border-emerald-400 text-emerald-600 font-medium flex items-center gap-1"><ArrowUpRight className="w-3 h-3" />+18%</span>
                 </div>
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
-                  <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <div className="text-3xl font-bold text-gray-900">$12,480</div>
-                        <div className="text-xs text-gray-400 mt-0.5">Revenue · June 2025</div>
-                      </div>
-                      <span className="text-sm font-bold text-emerald-600 flex items-center gap-0.5 mb-1">
-                        <ArrowUpRight className="w-4 h-4" />+18%
-                      </span>
-                    </div>
-                  </div>
-                  <div className="px-5 py-3 border-b border-gray-100">
-                    <div className="flex items-end gap-1 h-16">
-                      {[38, 52, 44, 68, 58, 78, 63, 85, 73, 92, 100, 80].map((h, i) => (
-                        <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${h}%`, background: i >= 9 ? '#22c55e' : `rgba(34,197,94,${0.12 + i * 0.06})` }} />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 divide-x divide-gray-100">
-                    {[['47', 'Jobs Done'], ['$1,840', 'Outstanding'], ['$265', 'Avg Job']].map(([val, label]) => (
-                      <div key={label} className="py-3 text-center">
-                        <div className="text-base font-bold text-gray-900">{val}</div>
-                        <div className="text-xs text-gray-400 mt-0.5">{label}</div>
-                      </div>
+                <div className="px-5 py-3 border-b border-gray-100">
+                  <div className="text-3xl font-bold text-gray-900">$12,480</div>
+                  <div className="flex items-end gap-0.5 h-14 mt-3">
+                    {[38, 52, 44, 68, 58, 78, 63, 85, 73, 92, 100, 80].map((h, i) => (
+                      <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${h}%`, background: i >= 9 ? '#22c55e' : `rgba(34,197,94,${0.12 + i * 0.06})` }} />
                     ))}
                   </div>
                 </div>
-              </div>
-              <div className="px-6 py-5">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
-                  <TrendingUp className="w-5 h-5 text-primary" />
+                <div className="px-4 py-2 space-y-1.5">
+                  {[['47 Jobs Done', 'This month'], ['$1,840 Outstanding', 'Awaiting payment'], ['$265 Avg Job', 'Per service']].map(([val, sub]) => (
+                    <div key={val} className="flex items-center justify-between px-3 py-2.5 bg-amber-50 border border-amber-100 rounded-xl">
+                      <span className="text-sm font-bold text-gray-900">{val}</span>
+                      <span className="text-xs text-gray-400">{sub}</span>
+                    </div>
+                  ))}
                 </div>
-                <h3 className="text-lg font-bold mb-1">Growth Analytics</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Real-time revenue charts, outstanding balances, and job stats so you always know where your business stands.</p>
+                <div className="h-3" />
+              </div>
+              <div className="px-6 pt-5 pb-6 relative z-10">
+                <div className="w-10 h-10 bg-amber-200 rounded-xl flex items-center justify-center mb-3">
+                  <TrendingUp className="w-5 h-5 text-amber-700" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Growth Analytics</h3>
+                <p className="text-gray-600 text-sm leading-relaxed">Revenue charts, outstanding balances, and job stats so you always know where your business stands.</p>
               </div>
             </div>
 
             {/* Feature 6: Team Management */}
-            <div className="bg-white rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1">
-              <div className="bg-gradient-to-b from-sky-300 via-cyan-200 to-sky-50 px-6 pt-6 pb-4">
-                <div className="text-center mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Team Management</h3>
-                  <p className="text-sm text-gray-600 mt-0.5">4 members · All active</p>
+            <div className="bg-gradient-to-br from-sky-100 via-cyan-50 to-sky-100 rounded-3xl border border-sky-200/60 overflow-hidden hover:shadow-xl hover:shadow-sky-100 transition-all duration-300 hover:-translate-y-1 relative">
+              <div className="absolute top-3 right-3 w-20 h-20 bg-sky-200/50 rounded-full" />
+              <div className="absolute bottom-24 left-2 w-12 h-12 bg-cyan-200/40 rounded-full" />
+              <div className="mx-5 mt-6 bg-white rounded-2xl shadow-lg overflow-hidden relative z-10">
+                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
+                  <span className="font-bold text-gray-900">Your Team</span>
+                  <span className="text-xs px-2.5 py-1 rounded-full border border-sky-400 text-sky-600 font-medium">4 active</span>
                 </div>
-                <div className="bg-white rounded-2xl shadow-md overflow-hidden">
+                <div className="px-4 py-2 space-y-1.5">
                   {[
-                    { initials: 'AW', name: 'Alex Wilson',  role: 'Owner',     jobs: 8,  avatarCls: 'bg-sky-100 text-sky-700',          badgeCls: 'bg-sky-100 text-sky-700' },
-                    { initials: 'JR', name: 'Jake Rivera',  role: 'Crew Lead', jobs: 5,  avatarCls: 'bg-emerald-100 text-emerald-700',   badgeCls: 'bg-emerald-100 text-emerald-700' },
-                    { initials: 'TM', name: 'Tina Moore',   role: 'Crew',      jobs: 4,  avatarCls: 'bg-purple-100 text-purple-700',     badgeCls: 'bg-gray-100 text-gray-500' },
-                    { initials: 'DS', name: 'Dan Shaw',     role: 'Crew',      jobs: 3,  avatarCls: 'bg-orange-100 text-orange-700',     badgeCls: 'bg-gray-100 text-gray-500' },
-                  ].map((m, i, arr) => (
-                    <div key={m.initials} className={`flex items-center gap-3 px-5 py-3 ${i < arr.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                      <div className={`w-10 h-10 rounded-full ${m.avatarCls} flex items-center justify-center shrink-0`}>
-                        <span className="text-sm font-bold">{m.initials}</span>
+                    { initials: 'AW', name: 'Alex Wilson',  role: 'Owner',     jobs: 8,  ic: 'bg-sky-100 text-sky-700',          bc: 'bg-sky-100 text-sky-700 border-sky-200',    rb: 'bg-sky-50 border-sky-100' },
+                    { initials: 'JR', name: 'Jake Rivera',  role: 'Crew Lead', jobs: 5,  ic: 'bg-emerald-100 text-emerald-700',   bc: 'bg-emerald-100 text-emerald-700 border-emerald-200', rb: 'bg-sky-50 border-sky-100' },
+                    { initials: 'TM', name: 'Tina Moore',   role: 'Crew',      jobs: 4,  ic: 'bg-purple-100 text-purple-700',     bc: 'bg-gray-100 text-gray-500 border-gray-200', rb: 'bg-sky-50 border-sky-100' },
+                    { initials: 'DS', name: 'Dan Shaw',     role: 'Crew',      jobs: 3,  ic: 'bg-orange-100 text-orange-700',     bc: 'bg-gray-100 text-gray-500 border-gray-200', rb: 'bg-sky-50 border-sky-100' },
+                  ].map((m) => (
+                    <div key={m.initials} className={`flex items-center gap-3 px-3 py-2.5 ${m.rb} border rounded-xl`}>
+                      <div className={`w-8 h-8 rounded-full ${m.ic} flex items-center justify-center shrink-0`}>
+                        <span className="text-xs font-bold">{m.initials}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-semibold text-gray-800">{m.name}</div>
                         <div className="text-xs text-gray-400">{m.jobs} jobs today</div>
                       </div>
-                      <span className={`text-xs px-2.5 py-1 rounded-full ${m.badgeCls} font-semibold shrink-0`}>{m.role}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${m.bc} font-semibold shrink-0`}>{m.role}</span>
                     </div>
                   ))}
                 </div>
+                <div className="h-3" />
               </div>
-              <div className="px-6 py-5">
-                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center mb-3">
-                  <Shield className="w-5 h-5 text-primary" />
+              <div className="px-6 pt-5 pb-6 relative z-10">
+                <div className="w-10 h-10 bg-sky-200 rounded-xl flex items-center justify-center mb-3">
+                  <Shield className="w-5 h-5 text-sky-700" />
                 </div>
-                <h3 className="text-lg font-bold mb-1">Team Management</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Add crew members, assign jobs, set permissions, and see who's doing what — all from one place.</p>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Team Management</h3>
+                <p className="text-gray-600 text-sm leading-relaxed">Add crew members, assign jobs, set permissions, and see who's doing what — all from one place.</p>
               </div>
             </div>
 
