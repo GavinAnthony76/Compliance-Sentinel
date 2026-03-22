@@ -162,6 +162,7 @@ export function AdminCompanyDetailPage() {
                 <select className="w-full h-9 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm" value={company.subscriptionPlan || ''} onChange={async (e) => {
                   if (!e.target.value) return;
                   await planMut.mutateAsync({ id: company.id, data: { plan: e.target.value as any } });
+                  await qc.invalidateQueries({ queryKey: [`/api/admin/companies/${company.id}`] });
                   toast({ title: 'Plan updated' });
                 }}>
                   <option value="">Select plan...</option>
@@ -173,11 +174,13 @@ export function AdminCompanyDetailPage() {
               {company.isActive ? (
                 <Button size="sm" variant="destructive" className="w-full" onClick={async () => {
                   await suspendMut.mutateAsync({ id: company.id });
+                  await qc.invalidateQueries({ queryKey: [`/api/admin/companies/${company.id}`] });
                   toast({ title: 'Company suspended' });
                 }}>Suspend Company</Button>
               ) : (
                 <Button size="sm" className="w-full" onClick={async () => {
                   await activateMut.mutateAsync({ id: company.id });
+                  await qc.invalidateQueries({ queryKey: [`/api/admin/companies/${company.id}`] });
                   toast({ title: 'Company activated' });
                 }}>Activate Company</Button>
               )}

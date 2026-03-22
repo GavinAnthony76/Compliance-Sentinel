@@ -47,10 +47,17 @@ window.fetch = async (...args) => {
     const token = localStorage.getItem(isAdminRoute ? ADMIN_TOKEN_KEY : TOKEN_KEY);
     
     if (token) {
-      const newConfig = { ...config } || {};
-      newConfig.headers = {
-        ...newConfig.headers,
-        Authorization: `Bearer ${token}`
+      // Properly convert Headers instance to a plain object so existing
+      // headers (e.g. Content-Type) are preserved when spreading
+      const existingHeaders = config?.headers instanceof Headers
+        ? Object.fromEntries((config.headers as Headers).entries())
+        : (config?.headers ?? {});
+      const newConfig = {
+        ...config,
+        headers: {
+          ...existingHeaders,
+          Authorization: `Bearer ${token}`,
+        },
       };
       return originalFetch(resource, newConfig);
     }

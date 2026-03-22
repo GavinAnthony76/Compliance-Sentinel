@@ -123,8 +123,8 @@ router.post("/companies/:id/activate", async (req: any, res) => {
 
 router.put("/companies/:id/plan", async (req: any, res) => {
   const id = Number(req.params.id);
-  const { plan } = req.body;
-  if (!["starter", "growth", "pro"].includes(plan)) return res.status(400).json({ error: "InvalidPlan" });
+  const plan = req.body?.plan;
+  if (!plan || !["starter", "growth", "pro"].includes(plan)) return res.status(400).json({ error: "InvalidPlan", message: "Valid plan required: starter, growth, or pro" });
   await db.update(companiesTable).set({ subscriptionPlan: plan, updatedAt: new Date() }).where(eq(companiesTable.id, id));
   await logActivity({ adminId: req.admin.adminId, action: "admin.company_plan_changed", entityType: "company", entityId: id, metadata: { plan } });
   return res.json({ success: true });
@@ -132,7 +132,8 @@ router.put("/companies/:id/plan", async (req: any, res) => {
 
 router.put("/companies/:id/notes", async (req: any, res) => {
   const id = Number(req.params.id);
-  await db.update(companiesTable).set({ internalNotes: req.body.notes, updatedAt: new Date() }).where(eq(companiesTable.id, id));
+  const notes = req.body?.notes ?? null;
+  await db.update(companiesTable).set({ internalNotes: notes, updatedAt: new Date() }).where(eq(companiesTable.id, id));
   return res.json({ success: true });
 });
 
