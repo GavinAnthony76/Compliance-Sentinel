@@ -1,22 +1,57 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 1.0.0
+  description: GreenSync Lawn Care SaaS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: companies
+    description: Company management
+  - name: customers
+    description: Customer management
+  - name: properties
+    description: Property management
+  - name: services
+    description: Service management
+  - name: appointments
+    description: Appointment management
+  - name: recurring-plans
+    description: Recurring service plans
+  - name: invoices
+    description: Invoice management
+  - name: estimates
+    description: Estimate management
+  - name: routes
+    description: Route management
+  - name: review-requests
+    description: Review request management
+  - name: automations
+    description: Automation rules
+  - name: team
+    description: Team member management
+  - name: billing
+    description: Stripe billing
+  - name: admin
+    description: Super admin operations
+  - name: booking
+    description: Public booking page
+  - name: dashboard
+    description: Dashboard data
+  - name: activity
+    description: Activity logs
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +59,1716 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── AUTH ────────────────────────────────────────────────────────────────────
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new company and owner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in as company user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ─── DASHBOARD ───────────────────────────────────────────────────────────────
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get dashboard stats for current company
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardData"
+
+  # ─── CUSTOMERS ───────────────────────────────────────────────────────────────
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: List customers
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Customer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerListResponse"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get customer details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDetail"
+    put:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    delete:
+      operationId: deleteCustomer
+      tags: [customers]
+      summary: Delete a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── PROPERTIES ──────────────────────────────────────────────────────────────
+  /properties:
+    get:
+      operationId: listProperties
+      tags: [properties]
+      summary: List properties
+      parameters:
+        - name: customerId
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Property list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyListResponse"
+    post:
+      operationId: createProperty
+      tags: [properties]
+      summary: Create a property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePropertyRequest"
+      responses:
+        "201":
+          description: Property created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+  /properties/{id}:
+    get:
+      operationId: getProperty
+      tags: [properties]
+      summary: Get property
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Property detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+    put:
+      operationId: updateProperty
+      tags: [properties]
+      summary: Update a property
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePropertyRequest"
+      responses:
+        "200":
+          description: Property updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+    delete:
+      operationId: deleteProperty
+      tags: [properties]
+      summary: Delete a property
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── SERVICES ────────────────────────────────────────────────────────────────
+  /services:
+    get:
+      operationId: listServices
+      tags: [services]
+      summary: List services
+      responses:
+        "200":
+          description: Service list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceListResponse"
+    post:
+      operationId: createService
+      tags: [services]
+      summary: Create a service
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "201":
+          description: Service created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+
+  /services/{id}:
+    put:
+      operationId: updateService
+      tags: [services]
+      summary: Update a service
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+    delete:
+      operationId: deleteService
+      tags: [services]
+      summary: Delete a service
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── APPOINTMENTS ─────────────────────────────────────────────────────────────
+  /appointments:
+    get:
+      operationId: listAppointments
+      tags: [appointments]
+      summary: List appointments
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+        - name: endDate
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: assignedUserId
+          in: query
+          schema:
+            type: integer
+        - name: customerId
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Appointment list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentListResponse"
+    post:
+      operationId: createAppointment
+      tags: [appointments]
+      summary: Create an appointment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentRequest"
+      responses:
+        "201":
+          description: Appointment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
+  /appointments/{id}:
+    get:
+      operationId: getAppointment
+      tags: [appointments]
+      summary: Get appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Appointment detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentDetail"
+    put:
+      operationId: updateAppointment
+      tags: [appointments]
+      summary: Update an appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppointmentRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+    delete:
+      operationId: deleteAppointment
+      tags: [appointments]
+      summary: Delete an appointment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /appointments/{id}/complete:
+    post:
+      operationId: completeAppointment
+      tags: [appointments]
+      summary: Mark appointment as complete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                completionNotes:
+                  type: string
+      responses:
+        "200":
+          description: Appointment completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+
+  # ─── RECURRING PLANS ─────────────────────────────────────────────────────────
+  /recurring-plans:
+    get:
+      operationId: listRecurringPlans
+      tags: [recurring-plans]
+      summary: List recurring plans
+      responses:
+        "200":
+          description: Recurring plan list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringPlanListResponse"
+    post:
+      operationId: createRecurringPlan
+      tags: [recurring-plans]
+      summary: Create a recurring plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecurringPlanRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringPlan"
+
+  /recurring-plans/{id}:
+    put:
+      operationId: updateRecurringPlan
+      tags: [recurring-plans]
+      summary: Update a recurring plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRecurringPlanRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecurringPlan"
+    delete:
+      operationId: deleteRecurringPlan
+      tags: [recurring-plans]
+      summary: Delete a recurring plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── INVOICES ────────────────────────────────────────────────────────────────
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List invoices
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: customerId
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceListResponse"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create an invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceRequest"
+      responses:
+        "201":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    put:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInvoiceRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    delete:
+      operationId: deleteInvoice
+      tags: [invoices]
+      summary: Delete an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /invoices/{id}/send:
+    post:
+      operationId: sendInvoice
+      tags: [invoices]
+      summary: Send invoice to customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}/mark-paid:
+    post:
+      operationId: markInvoicePaid
+      tags: [invoices]
+      summary: Mark invoice as paid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                paymentMethod:
+                  type: string
+      responses:
+        "200":
+          description: Invoice marked paid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  # ─── ESTIMATES ────────────────────────────────────────────────────────────────
+  /estimates:
+    get:
+      operationId: listEstimates
+      tags: [estimates]
+      summary: List estimates
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: customerId
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Estimate list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EstimateListResponse"
+    post:
+      operationId: createEstimate
+      tags: [estimates]
+      summary: Create an estimate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEstimateRequest"
+      responses:
+        "201":
+          description: Estimate created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Estimate"
+
+  /estimates/{id}:
+    get:
+      operationId: getEstimate
+      tags: [estimates]
+      summary: Get estimate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Estimate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Estimate"
+    put:
+      operationId: updateEstimate
+      tags: [estimates]
+      summary: Update estimate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEstimateRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Estimate"
+    delete:
+      operationId: deleteEstimate
+      tags: [estimates]
+      summary: Delete estimate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── ROUTES ──────────────────────────────────────────────────────────────────
+  /routes:
+    get:
+      operationId: listRoutes
+      tags: [routes]
+      summary: List routes
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Route list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteListResponse"
+    post:
+      operationId: createRoute
+      tags: [routes]
+      summary: Create a route
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRouteRequest"
+      responses:
+        "201":
+          description: Route created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Route"
+
+  /routes/{id}:
+    get:
+      operationId: getRoute
+      tags: [routes]
+      summary: Get route with stops
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Route detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteDetail"
+    put:
+      operationId: updateRoute
+      tags: [routes]
+      summary: Update route
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRouteRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Route"
+    delete:
+      operationId: deleteRoute
+      tags: [routes]
+      summary: Delete route
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /routes/{id}/stops:
+    post:
+      operationId: addRouteStop
+      tags: [routes]
+      summary: Add stop to route
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRouteStopRequest"
+      responses:
+        "201":
+          description: Stop added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteStop"
+
+  /routes/{routeId}/stops/{stopId}:
+    delete:
+      operationId: deleteRouteStop
+      tags: [routes]
+      summary: Remove stop from route
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── REVIEW REQUESTS ─────────────────────────────────────────────────────────
+  /review-requests:
+    get:
+      operationId: listReviewRequests
+      tags: [review-requests]
+      summary: List review requests
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Review request list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewRequestListResponse"
+    post:
+      operationId: sendReviewRequest
+      tags: [review-requests]
+      summary: Send a review request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReviewRequestRequest"
+      responses:
+        "201":
+          description: Review request sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReviewRequest"
+
+  # ─── AUTOMATIONS ─────────────────────────────────────────────────────────────
+  /automations:
+    get:
+      operationId: listAutomations
+      tags: [automations]
+      summary: List automation rules
+      responses:
+        "200":
+          description: Automation list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomationListResponse"
+    post:
+      operationId: createAutomation
+      tags: [automations]
+      summary: Create automation rule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAutomationRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Automation"
+
+  /automations/{id}:
+    put:
+      operationId: updateAutomation
+      tags: [automations]
+      summary: Update automation rule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAutomationRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Automation"
+    delete:
+      operationId: deleteAutomation
+      tags: [automations]
+      summary: Delete automation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /automations/{id}/toggle:
+    post:
+      operationId: toggleAutomation
+      tags: [automations]
+      summary: Toggle automation active state
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Toggled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Automation"
+
+  # ─── TEAM ────────────────────────────────────────────────────────────────────
+  /team:
+    get:
+      operationId: listTeam
+      tags: [team]
+      summary: List team members
+      responses:
+        "200":
+          description: Team list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamListResponse"
+    post:
+      operationId: inviteTeamMember
+      tags: [team]
+      summary: Invite a team member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteTeamMemberRequest"
+      responses:
+        "201":
+          description: Team member invited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+
+  /team/{id}:
+    put:
+      operationId: updateTeamMember
+      tags: [team]
+      summary: Update team member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTeamMemberRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+    delete:
+      operationId: removeTeamMember
+      tags: [team]
+      summary: Remove team member
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── SETTINGS ────────────────────────────────────────────────────────────────
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [companies]
+      summary: Get company settings
+      responses:
+        "200":
+          description: Company settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+    put:
+      operationId: updateSettings
+      tags: [companies]
+      summary: Update company settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  # ─── BILLING ─────────────────────────────────────────────────────────────────
+  /billing/plans:
+    get:
+      operationId: getBillingPlans
+      tags: [billing]
+      summary: Get available billing plans
+      responses:
+        "200":
+          description: Billing plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingPlansResponse"
+
+  /billing/subscribe:
+    post:
+      operationId: createSubscription
+      tags: [billing]
+      summary: Create a Stripe subscription checkout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubscriptionRequest"
+      responses:
+        "200":
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutResponse"
+
+  /billing/portal:
+    post:
+      operationId: createBillingPortal
+      tags: [billing]
+      summary: Create Stripe billing portal session
+      responses:
+        "200":
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortalResponse"
+
+  /billing/status:
+    get:
+      operationId: getBillingStatus
+      tags: [billing]
+      summary: Get current subscription status
+      responses:
+        "200":
+          description: Billing status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingStatus"
+
+  /billing/webhook:
+    post:
+      operationId: stripeWebhook
+      tags: [billing]
+      summary: Stripe webhook handler
+      responses:
+        "200":
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── ACTIVITY LOGS ────────────────────────────────────────────────────────────
+  /activity:
+    get:
+      operationId: listActivity
+      tags: [activity]
+      summary: List activity logs
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Activity log list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityListResponse"
+
+  # ─── PUBLIC BOOKING ──────────────────────────────────────────────────────────
+  /public/book/{slug}:
+    get:
+      operationId: getBookingPage
+      tags: [booking]
+      summary: Get public booking page for a company
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Booking page info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingPageInfo"
+        "404":
+          description: Company not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /public/book/{slug}/submit:
+    post:
+      operationId: submitBookingRequest
+      tags: [booking]
+      summary: Submit a booking request
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookingRequest"
+      responses:
+        "201":
+          description: Booking submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BookingConfirmation"
+
+  # ─── SUPER ADMIN AUTH ─────────────────────────────────────────────────────────
+  /admin/auth/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Admin logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/auth/me:
+    get:
+      operationId: adminGetMe
+      tags: [admin]
+      summary: Get current admin user
+      responses:
+        "200":
+          description: Admin user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/auth/logout:
+    post:
+      operationId: adminLogout
+      tags: [admin]
+      summary: Admin logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ─── SUPER ADMIN ─────────────────────────────────────────────────────────────
+  /admin/dashboard:
+    get:
+      operationId: adminGetDashboard
+      tags: [admin]
+      summary: Admin dashboard stats
+      responses:
+        "200":
+          description: Admin dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+
+  /admin/companies:
+    get:
+      operationId: adminListCompanies
+      tags: [admin]
+      summary: List all companies
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: plan
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Companies list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCompanyListResponse"
+
+  /admin/companies/{id}:
+    get:
+      operationId: adminGetCompany
+      tags: [admin]
+      summary: Get company details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Company detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminCompanyDetail"
+
+  /admin/companies/{id}/suspend:
+    post:
+      operationId: adminSuspendCompany
+      tags: [admin]
+      summary: Suspend a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Company suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/companies/{id}/activate:
+    post:
+      operationId: adminActivateCompany
+      tags: [admin]
+      summary: Activate a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Company activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/companies/{id}/plan:
+    put:
+      operationId: adminUpdateCompanyPlan
+      tags: [admin]
+      summary: Update company plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan:
+                  type: string
+                  enum: [starter, growth, pro]
+      responses:
+        "200":
+          description: Plan updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/companies/{id}/notes:
+    put:
+      operationId: adminUpdateCompanyNotes
+      tags: [admin]
+      summary: Update internal notes for a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        "200":
+          description: Notes updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/activity:
+    get:
+      operationId: adminListActivity
+      tags: [admin]
+      summary: List all platform activity
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Activity logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityListResponse"
+
+  /admin/admins:
+    get:
+      operationId: adminListAdmins
+      tags: [admin]
+      summary: List platform admins
+      responses:
+        "200":
+          description: Admin list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminListResponse"
+    post:
+      operationId: adminCreateAdmin
+      tags: [admin]
+      summary: Create a platform admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminRequest"
+      responses:
+        "201":
+          description: Admin created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/admins/{id}:
+    delete:
+      operationId: adminDeleteAdmin
+      tags: [admin]
+      summary: Delete a platform admin
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /admin/seed:
+    post:
+      operationId: adminSeedDemo
+      tags: [admin]
+      summary: Seed demo data
+      responses:
+        "200":
+          description: Demo data seeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +1776,1457 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required: [success]
+
+    # ─── AUTH SCHEMAS ──────────────────────────────────────────────────────────
+    RegisterRequest:
+      type: object
+      required: [firstName, lastName, email, password, companyName]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        companyName:
+          type: string
+        phone:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, staff]
+        phone:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        company:
+          $ref: "#/components/schemas/Company"
+      required: [id, companyId, firstName, lastName, email, role, isActive]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        token:
+          type: string
+      required: [user, token]
+
+    # ─── COMPANY SCHEMAS ───────────────────────────────────────────────────────
+    Company:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        logoUrl:
+          type: string
+          nullable: true
+        primaryColor:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        subscriptionPlan:
+          type: string
+          enum: [starter, growth, pro]
+          nullable: true
+        subscriptionStatus:
+          type: string
+          nullable: true
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        reviewUrl:
+          type: string
+          nullable: true
+        internalNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, slug, createdAt]
+
+    UpdateSettingsRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        website:
+          type: string
+        timezone:
+          type: string
+        primaryColor:
+          type: string
+        reviewUrl:
+          type: string
+
+    # ─── DASHBOARD ─────────────────────────────────────────────────────────────
+    DashboardData:
+      type: object
+      properties:
+        todayAppointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        upcomingAppointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        recentCustomers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        revenueThisMonth:
+          type: number
+        unpaidInvoicesCount:
+          type: integer
+        unpaidInvoicesTotal:
+          type: number
+        recurringJobsCount:
+          type: integer
+        totalCustomers:
+          type: integer
+        pendingReviewRequests:
+          type: integer
+      required: [todayAppointments, upcomingAppointments, recentCustomers, revenueThisMonth, unpaidInvoicesCount, unpaidInvoicesTotal, recurringJobsCount, totalCustomers, pendingReviewRequests]
+
+    # ─── CUSTOMER SCHEMAS ──────────────────────────────────────────────────────
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        addressLine1:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        leadSource:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, firstName, lastName, createdAt]
+
+    CustomerDetail:
+      type: object
+      properties:
+        customer:
+          $ref: "#/components/schemas/Customer"
+        properties:
+          type: array
+          items:
+            $ref: "#/components/schemas/Property"
+        recentAppointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        recentInvoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
+      required: [customer, properties, recentAppointments, recentInvoices]
+
+    CustomerListResponse:
+      type: object
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [customers, total, page, limit]
+
+    CreateCustomerRequest:
+      type: object
+      required: [firstName, lastName]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        notes:
+          type: string
+        leadSource:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    # ─── PROPERTY SCHEMAS ──────────────────────────────────────────────────────
+    Property:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        customerId:
+          type: integer
+        propertyName:
+          type: string
+          nullable: true
+        addressLine1:
+          type: string
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        gateNotes:
+          type: string
+          nullable: true
+        yardSize:
+          type: string
+          nullable: true
+        propertyNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, customerId, addressLine1, createdAt]
+
+    PropertyListResponse:
+      type: object
+      properties:
+        properties:
+          type: array
+          items:
+            $ref: "#/components/schemas/Property"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [properties, total, page, limit]
+
+    CreatePropertyRequest:
+      type: object
+      required: [customerId, addressLine1]
+      properties:
+        customerId:
+          type: integer
+        propertyName:
+          type: string
+        addressLine1:
+          type: string
+        addressLine2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        gateNotes:
+          type: string
+        yardSize:
+          type: string
+        propertyNotes:
+          type: string
+
+    # ─── SERVICE SCHEMAS ───────────────────────────────────────────────────────
+    Service:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        durationMinutes:
+          type: integer
+          nullable: true
+        basePrice:
+          type: number
+          nullable: true
+        isActive:
+          type: boolean
+        category:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, name, isActive, createdAt]
+
+    ServiceListResponse:
+      type: object
+      properties:
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/Service"
+      required: [services]
+
+    CreateServiceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        durationMinutes:
+          type: integer
+        basePrice:
+          type: number
+        isActive:
+          type: boolean
+        category:
+          type: string
+
+    # ─── APPOINTMENT SCHEMAS ───────────────────────────────────────────────────
+    Appointment:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+          nullable: true
+        serviceId:
+          type: integer
+          nullable: true
+        assignedUserId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [pending, confirmed, in_progress, completed, cancelled, no_show]
+        scheduledStart:
+          type: string
+          format: date-time
+        scheduledEnd:
+          type: string
+          format: date-time
+          nullable: true
+        price:
+          type: number
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        internalNotes:
+          type: string
+          nullable: true
+        completionNotes:
+          type: string
+          nullable: true
+        reminderSent:
+          type: boolean
+        customerName:
+          type: string
+          nullable: true
+        serviceName:
+          type: string
+          nullable: true
+        assignedUserName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, customerId, status, scheduledStart, reminderSent, createdAt]
+
+    AppointmentDetail:
+      type: object
+      properties:
+        appointment:
+          $ref: "#/components/schemas/Appointment"
+        customer:
+          $ref: "#/components/schemas/Customer"
+        property:
+          $ref: "#/components/schemas/Property"
+        service:
+          $ref: "#/components/schemas/Service"
+      required: [appointment, customer]
+
+    AppointmentListResponse:
+      type: object
+      properties:
+        appointments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appointment"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [appointments, total, page, limit]
+
+    CreateAppointmentRequest:
+      type: object
+      required: [customerId, scheduledStart, status]
+      properties:
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+        serviceId:
+          type: integer
+        assignedUserId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, in_progress, completed, cancelled, no_show]
+        scheduledStart:
+          type: string
+          format: date-time
+        scheduledEnd:
+          type: string
+          format: date-time
+        price:
+          type: number
+        notes:
+          type: string
+        internalNotes:
+          type: string
+
+    UpdateAppointmentRequest:
+      type: object
+      properties:
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+        serviceId:
+          type: integer
+        assignedUserId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, in_progress, completed, cancelled, no_show]
+        scheduledStart:
+          type: string
+          format: date-time
+        scheduledEnd:
+          type: string
+          format: date-time
+        price:
+          type: number
+        notes:
+          type: string
+        internalNotes:
+          type: string
+        completionNotes:
+          type: string
+
+    # ─── RECURRING PLAN SCHEMAS ────────────────────────────────────────────────
+    RecurringPlan:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+          nullable: true
+        serviceId:
+          type: integer
+          nullable: true
+        frequencyType:
+          type: string
+          enum: [weekly, biweekly, monthly, custom]
+        intervalValue:
+          type: integer
+          nullable: true
+        dayOfWeek:
+          type: integer
+          nullable: true
+        dayOfMonth:
+          type: integer
+          nullable: true
+        nextRunAt:
+          type: string
+          format: date-time
+          nullable: true
+        isActive:
+          type: boolean
+        price:
+          type: number
+          nullable: true
+        customerName:
+          type: string
+          nullable: true
+        serviceName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, customerId, frequencyType, isActive, createdAt]
+
+    RecurringPlanListResponse:
+      type: object
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecurringPlan"
+      required: [plans]
+
+    CreateRecurringPlanRequest:
+      type: object
+      required: [customerId, frequencyType]
+      properties:
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+        serviceId:
+          type: integer
+        frequencyType:
+          type: string
+          enum: [weekly, biweekly, monthly, custom]
+        intervalValue:
+          type: integer
+        dayOfWeek:
+          type: integer
+        dayOfMonth:
+          type: integer
+        nextRunAt:
+          type: string
+          format: date-time
+        isActive:
+          type: boolean
+        price:
+          type: number
+
+    # ─── INVOICE SCHEMAS ───────────────────────────────────────────────────────
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        customerId:
+          type: integer
+        appointmentId:
+          type: integer
+          nullable: true
+        invoiceNumber:
+          type: string
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, paid, overdue, cancelled]
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        paidAt:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        customerName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, customerId, invoiceNumber, subtotal, tax, total, status, createdAt]
+
+    InvoiceListResponse:
+      type: object
+      properties:
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [invoices, total, page, limit]
+
+    CreateInvoiceRequest:
+      type: object
+      required: [customerId, subtotal, total]
+      properties:
+        customerId:
+          type: integer
+        appointmentId:
+          type: integer
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, paid, overdue, cancelled]
+        dueDate:
+          type: string
+          format: date-time
+        notes:
+          type: string
+
+    UpdateInvoiceRequest:
+      type: object
+      properties:
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, paid, overdue, cancelled]
+        dueDate:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        paidAt:
+          type: string
+          format: date-time
+
+    # ─── ESTIMATE SCHEMAS ──────────────────────────────────────────────────────
+    Estimate:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+          nullable: true
+        estimateNumber:
+          type: string
+        status:
+          type: string
+          enum: [draft, sent, accepted, rejected, expired]
+        total:
+          type: number
+        notes:
+          type: string
+          nullable: true
+        customerName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, customerId, estimateNumber, status, total, createdAt]
+
+    EstimateListResponse:
+      type: object
+      properties:
+        estimates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Estimate"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [estimates, total, page, limit]
+
+    CreateEstimateRequest:
+      type: object
+      required: [customerId, total]
+      properties:
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+        status:
+          type: string
+          enum: [draft, sent, accepted, rejected, expired]
+        total:
+          type: number
+        notes:
+          type: string
+
+    # ─── ROUTE SCHEMAS ─────────────────────────────────────────────────────────
+    Route:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        routeDate:
+          type: string
+          format: date-time
+        assignedUserId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        stopsCount:
+          type: integer
+          nullable: true
+        assignedUserName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, routeDate, createdAt]
+
+    RouteStop:
+      type: object
+      properties:
+        id:
+          type: integer
+        routeId:
+          type: integer
+        appointmentId:
+          type: integer
+        stopOrder:
+          type: integer
+        estimatedArrival:
+          type: string
+          format: date-time
+          nullable: true
+        appointment:
+          $ref: "#/components/schemas/Appointment"
+      required: [id, routeId, appointmentId, stopOrder]
+
+    RouteDetail:
+      type: object
+      properties:
+        route:
+          $ref: "#/components/schemas/Route"
+        stops:
+          type: array
+          items:
+            $ref: "#/components/schemas/RouteStop"
+      required: [route, stops]
+
+    RouteListResponse:
+      type: object
+      properties:
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Route"
+      required: [routes]
+
+    CreateRouteRequest:
+      type: object
+      required: [routeDate]
+      properties:
+        routeDate:
+          type: string
+          format: date-time
+        assignedUserId:
+          type: integer
+        status:
+          type: string
+        notes:
+          type: string
+
+    CreateRouteStopRequest:
+      type: object
+      required: [appointmentId, stopOrder]
+      properties:
+        appointmentId:
+          type: integer
+        stopOrder:
+          type: integer
+        estimatedArrival:
+          type: string
+          format: date-time
+
+    # ─── REVIEW REQUEST SCHEMAS ────────────────────────────────────────────────
+    ReviewRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        customerId:
+          type: integer
+        appointmentId:
+          type: integer
+          nullable: true
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        channel:
+          type: string
+          enum: [sms, email]
+        status:
+          type: string
+        reviewUrl:
+          type: string
+          nullable: true
+        customerName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, customerId, channel, status, createdAt]
+
+    ReviewRequestListResponse:
+      type: object
+      properties:
+        reviewRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewRequest"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [reviewRequests, total, page, limit]
+
+    CreateReviewRequestRequest:
+      type: object
+      required: [customerId, channel]
+      properties:
+        customerId:
+          type: integer
+        appointmentId:
+          type: integer
+        channel:
+          type: string
+          enum: [sms, email]
+
+    # ─── AUTOMATION SCHEMAS ────────────────────────────────────────────────────
+    Automation:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        name:
+          type: string
+        triggerType:
+          type: string
+        actionType:
+          type: string
+        configJson:
+          type: object
+          nullable: true
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, name, triggerType, actionType, isActive, createdAt]
+
+    AutomationListResponse:
+      type: object
+      properties:
+        automations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Automation"
+      required: [automations]
+
+    CreateAutomationRequest:
+      type: object
+      required: [name, triggerType, actionType]
+      properties:
+        name:
+          type: string
+        triggerType:
+          type: string
+        actionType:
+          type: string
+        configJson:
+          type: object
+        isActive:
+          type: boolean
+
+    # ─── TEAM SCHEMAS ──────────────────────────────────────────────────────────
+    TeamMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, staff]
+        phone:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, companyId, firstName, lastName, email, role, isActive, createdAt]
+
+    TeamListResponse:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamMember"
+      required: [members]
+
+    InviteTeamMemberRequest:
+      type: object
+      required: [firstName, lastName, email, password, role]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        role:
+          type: string
+          enum: [admin, staff]
+        phone:
+          type: string
+
+    UpdateTeamMemberRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+          enum: [admin, staff]
+        phone:
+          type: string
+        isActive:
+          type: boolean
+
+    # ─── BILLING SCHEMAS ───────────────────────────────────────────────────────
+    BillingPlan:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        interval:
+          type: string
+        features:
+          type: array
+          items:
+            type: string
+        stripePriceId:
+          type: string
+          nullable: true
+      required: [id, name, price, interval, features]
+
+    BillingPlansResponse:
+      type: object
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillingPlan"
+      required: [plans]
+
+    CreateSubscriptionRequest:
+      type: object
+      required: [planId]
+      properties:
+        planId:
+          type: string
+          enum: [starter, growth, pro]
+
+    CheckoutResponse:
+      type: object
+      properties:
+        url:
+          type: string
+      required: [url]
+
+    PortalResponse:
+      type: object
+      properties:
+        url:
+          type: string
+      required: [url]
+
+    BillingStatus:
+      type: object
+      properties:
+        plan:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          nullable: true
+        cancelAtPeriodEnd:
+          type: boolean
+          nullable: true
+      required: []
+
+    # ─── ACTIVITY SCHEMAS ──────────────────────────────────────────────────────
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        companyId:
+          type: integer
+          nullable: true
+        userId:
+          type: integer
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+          nullable: true
+        entityId:
+          type: integer
+          nullable: true
+        metadataJson:
+          type: object
+          nullable: true
+        userName:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, action, createdAt]
+
+    ActivityListResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityLog"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [logs, total, page, limit]
+
+    # ─── PUBLIC BOOKING SCHEMAS ────────────────────────────────────────────────
+    BookingPageInfo:
+      type: object
+      properties:
+        companyName:
+          type: string
+        logoUrl:
+          type: string
+          nullable: true
+        primaryColor:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        services:
+          type: array
+          items:
+            $ref: "#/components/schemas/Service"
+      required: [companyName, services]
+
+    BookingRequest:
+      type: object
+      required: [firstName, lastName, phone, addressLine1, serviceId]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        addressLine1:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zip:
+          type: string
+        serviceId:
+          type: integer
+        preferredDate:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        gateNotes:
+          type: string
+        yardSize:
+          type: string
+
+    BookingConfirmation:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        appointmentId:
+          type: integer
+          nullable: true
+      required: [success, message]
+
+    # ─── ADMIN SCHEMAS ─────────────────────────────────────────────────────────
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        role:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, email, firstName, lastName, role, isActive, createdAt]
+
+    AdminAuthResponse:
+      type: object
+      properties:
+        admin:
+          $ref: "#/components/schemas/AdminUser"
+        token:
+          type: string
+      required: [admin, token]
+
+    AdminDashboard:
+      type: object
+      properties:
+        totalCompanies:
+          type: integer
+        activeSubscriptions:
+          type: integer
+        trialingAccounts:
+          type: integer
+        canceledAccounts:
+          type: integer
+        totalAppointments:
+          type: integer
+        totalInvoices:
+          type: integer
+        recentSignups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Company"
+        mrr:
+          type: number
+      required: [totalCompanies, activeSubscriptions, trialingAccounts, canceledAccounts, totalAppointments, totalInvoices, recentSignups, mrr]
+
+    AdminCompany:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        subscriptionPlan:
+          type: string
+          nullable: true
+        subscriptionStatus:
+          type: string
+          nullable: true
+        trialEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        isActive:
+          type: boolean
+        customersCount:
+          type: integer
+          nullable: true
+        appointmentsCount:
+          type: integer
+          nullable: true
+        ownerName:
+          type: string
+          nullable: true
+        ownerEmail:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, slug, isActive, createdAt]
+
+    AdminCompanyListResponse:
+      type: object
+      properties:
+        companies:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminCompany"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [companies, total, page, limit]
+
+    AdminCompanyDetail:
+      type: object
+      properties:
+        company:
+          $ref: "#/components/schemas/AdminCompany"
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamMember"
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityLog"
+      required: [company, users, recentActivity]
+
+    AdminListResponse:
+      type: object
+      properties:
+        admins:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminUser"
+      required: [admins]
+
+    CreateAdminRequest:
+      type: object
+      required: [firstName, lastName, email, password]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        role:
+          type: string

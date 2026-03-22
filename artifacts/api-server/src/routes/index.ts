@@ -1,8 +1,46 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import authRouter from "./auth";
+import customersRouter from "./customers";
+import propertiesRouter from "./properties";
+import servicesRouter from "./services";
+import appointmentsRouter from "./appointments";
+import recurringPlansRouter from "./recurring-plans";
+import invoicesRouter from "./invoices";
+import estimatesRouter from "./estimates";
+import routesRouter from "./routes-mgmt";
+import reviewRequestsRouter from "./review-requests";
+import automationsRouter from "./automations";
+import teamRouter from "./team";
+import settingsRouter from "./settings";
+import dashboardRouter from "./dashboard";
+import activityRouter from "./activity";
+import billingRouter from "./billing";
+import adminAuthRouter from "./admin-auth";
+import adminRouter from "./admin";
+import publicBookingRouter from "./public-booking";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/auth", authRouter);
+router.use("/customers", customersRouter);
+router.use("/properties", propertiesRouter);
+router.use("/services", servicesRouter);
+router.use("/appointments", appointmentsRouter);
+router.use("/recurring-plans", recurringPlansRouter);
+router.use("/invoices", invoicesRouter);
+router.use("/estimates", estimatesRouter);
+router.use("/routes", routesRouter);
+router.use("/review-requests", reviewRequestsRouter);
+router.use("/automations", automationsRouter);
+router.use("/team", teamRouter);
+router.use("/settings", settingsRouter);
+router.use("/dashboard", dashboardRouter);
+router.use("/activity", activityRouter);
+router.use("/billing", billingRouter);
+router.use("/admin/auth", adminAuthRouter);
+router.use("/admin", adminRouter);
+router.use("/public", publicBookingRouter);
 
 export default router;

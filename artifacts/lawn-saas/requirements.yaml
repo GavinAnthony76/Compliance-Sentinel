@@ -1,0 +1,20 @@
+packages:
+  "date-fns": "Formatting dates and times for appointments and invoices"
+  "recharts": "Analytics charts for the dashboard"
+  "clsx": "Utility for constructing className strings conditionally"
+  "tailwind-merge": "Utility to cleanly merge Tailwind classes in components"
+  "react-hook-form": "Managing complex forms for registration and entity creation"
+  "@hookform/resolvers": "Zod validation resolver for react-hook-form"
+
+images:
+  - path: "artifacts/lawn-saas/public/images/landing-hero.png"
+    description: "Beautiful, sunny, perfectly manicured suburban lawn with modern house in background, soft morning light, highly professional and aspirational, clean composition, lots of negative space for text overlays"
+    aspect_ratio: "16:9"
+  - path: "artifacts/lawn-saas/public/images/logo-icon.png"
+    description: "Minimalist modern tech logo mark featuring a stylized geometric leaf or grass blade in vibrant emerald green, transparent background, solid flat colors"
+    aspect_ratio: "1:1"
+
+notes:
+  - Assuming the `customFetch` used by generated api-client-react automatically reads auth tokens from localStorage, or we will globally patch fetch in App.tsx to ensure Authorization headers are sent to /api endpoints.
+  - Using wouter for routing.
+  - Using Lucide React for all iconography.

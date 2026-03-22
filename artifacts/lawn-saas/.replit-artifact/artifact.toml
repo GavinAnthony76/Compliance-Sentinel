@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "GreenSync - Lawn Care SaaS"
+version = "1.0.0"
+id = "artifacts/lawn-saas"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26093
+
+[services.development]
+run = "pnpm --filter @workspace/lawn-saas run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lawn-saas", "run", "build" ]
+publicDir = "artifacts/lawn-saas/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26093"
+BASE_PATH = "/"
