@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, estimatesTable, customersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireFeature("estimates"));
 
 async function nextEstimateNumber(companyId: number): Promise<string> {
   const [result] = await db.select({ count: sql<number>`count(*)` }).from(estimatesTable).where(eq(estimatesTable.companyId, companyId));

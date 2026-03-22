@@ -3,32 +3,55 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, CalendarDays, MapPin, Wrench, 
   Clock, RotateCw, FileText, CreditCard, Route as RouteIcon, 
-  Star, Zap, Users2, Settings, LogOut, Menu, Leaf
+  Zap, Users2, Settings, LogOut, Menu, Leaf, Lock
 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Button } from './ui';
 import { cn } from '@/lib/utils';
+
+const PLAN_ORDER: Record<string, number> = { starter: 0, growth: 1, pro: 2 };
+
+function planHasFeature(currentPlan: string | null | undefined, requiredPlan: 'growth' | 'pro' | null): boolean {
+  if (!requiredPlan) return true;
+  if (!currentPlan) return false;
+  return (PLAN_ORDER[currentPlan] ?? -1) >= (PLAN_ORDER[requiredPlan] ?? 99);
+}
 
 interface NavItemProps {
   href: string;
   icon: React.ElementType;
   label: string;
   isActive: boolean;
+  requiredPlan?: 'growth' | 'pro' | null;
+  currentPlan?: string | null;
 }
 
-function NavItem({ href, icon: Icon, label, isActive }: NavItemProps) {
+function NavItem({ href, icon: Icon, label, isActive, requiredPlan, currentPlan }: NavItemProps) {
+  const locked = requiredPlan && !planHasFeature(currentPlan, requiredPlan);
+  const badgeColors = requiredPlan === 'pro'
+    ? 'bg-violet-100 text-violet-700'
+    : 'bg-emerald-100 text-emerald-700';
+
   return (
-    <Link 
-      href={href} 
+    <Link
+      href={href}
       className={cn(
         "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium group",
-        isActive 
-          ? "bg-primary text-primary-foreground shadow-md shadow-primary/25" 
+        isActive
+          ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
           : "text-muted-foreground hover:bg-accent hover:text-foreground"
       )}
     >
-      <Icon className={cn("w-5 h-5", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")} />
-      {label}
+      <Icon className={cn("w-5 h-5 shrink-0", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")} />
+      <span className="flex-1 truncate">{label}</span>
+      {locked && requiredPlan && (
+        <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 capitalize", badgeColors)}>
+          {requiredPlan === 'pro' ? 'Pro' : 'Growth'}
+        </span>
+      )}
+      {locked && (
+        <Lock className="w-3.5 h-3.5 shrink-0 text-muted-foreground/50" />
+      )}
     </Link>
   );
 }
@@ -37,20 +60,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuthState();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+  const plan = user?.company?.subscriptionPlan;
 
-  const navItems = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { href: '/calendar', icon: CalendarDays, label: 'Calendar' },
-    { href: '/customers', icon: Users, label: 'Customers' },
-    { href: '/properties', icon: MapPin, label: 'Properties' },
-    { href: '/services', icon: Wrench, label: 'Services' },
-    { href: '/appointments', icon: Clock, label: 'Appointments' },
-    { href: '/invoices', icon: CreditCard, label: 'Invoices' },
-    { href: '/recurring', icon: RotateCw, label: 'Recurring Plans' },
-    { href: '/estimates', icon: FileText, label: 'Estimates' },
-    { href: '/routes', icon: RouteIcon, label: 'Routes' },
-    { href: '/team', icon: Users2, label: 'Team' },
-    { href: '/settings', icon: Settings, label: 'Settings' },
+  const navItems: { href: string; icon: React.ElementType; label: string; requiredPlan?: 'growth' | 'pro' | null }[] = [
+    { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
+    { href: '/calendar',     icon: CalendarDays,    label: 'Calendar' },
+    { href: '/customers',    icon: Users,            label: 'Customers' },
+    { href: '/properties',   icon: MapPin,           label: 'Properties' },
+    { href: '/services',     icon: Wrench,           label: 'Services' },
+    { href: '/appointments', icon: Clock,            label: 'Appointments' },
+    { href: '/invoices',     icon: CreditCard,       label: 'Invoices' },
+    { href: '/recurring',    icon: RotateCw,         label: 'Recurring Plans', requiredPlan: 'growth' },
+    { href: '/estimates',    icon: FileText,         label: 'Estimates',       requiredPlan: 'growth' },
+    { href: '/routes',       icon: RouteIcon,        label: 'Routes',          requiredPlan: 'growth' },
+    { href: '/team',         icon: Users2,           label: 'Team',            requiredPlan: 'growth' },
+    { href: '/automations',  icon: Zap,              label: 'Automations',     requiredPlan: 'pro' },
+    { href: '/settings',     icon: Settings,         label: 'Settings' },
   ];
 
   return (
@@ -78,28 +103,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           GreenSync
         </div>
 
-        <div className="px-6 py-2">
-          <div className="p-4 rounded-xl bg-accent border border-primary/10 mb-6">
+        <div className="px-4 py-2">
+          <div className="p-4 rounded-xl bg-accent border border-primary/10 mb-4">
             <p className="text-sm font-semibold text-foreground truncate">{user?.company?.name || 'My Company'}</p>
-            <p className="text-xs text-muted-foreground capitalize mt-1 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
-              {user?.company?.subscriptionPlan || 'Free'} Plan
-            </p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-muted-foreground capitalize flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                {plan || 'Free'} Plan
+              </p>
+              <Link href="/billing" className="text-[10px] font-semibold text-primary hover:underline">Upgrade</Link>
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1 scrollbar-hide">
+        <div className="flex-1 overflow-y-auto px-4 py-1 space-y-0.5 scrollbar-hide">
           {navItems.map((item) => (
-            <NavItem 
-              key={item.href} 
-              {...item} 
-              isActive={location.startsWith(item.href)} 
+            <NavItem
+              key={item.href}
+              {...item}
+              isActive={location.startsWith(item.href)}
+              currentPlan={plan}
             />
           ))}
         </div>
 
         <div className="p-4 mt-auto border-t border-border">
-          <button 
+          <button
             onClick={logout}
             className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors font-medium"
           >
@@ -120,7 +149,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Overlay */}
       {isMobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-30 md:hidden"
           onClick={() => setIsMobileOpen(false)}
         />

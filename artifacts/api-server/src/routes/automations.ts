@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, automationRulesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireFeature("automations"));
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;

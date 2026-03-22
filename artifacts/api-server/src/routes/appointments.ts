@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, appointmentsTable, customersTable, servicesTable, usersTable } from "@workspace/db";
+import { db, appointmentsTable, customersTable, servicesTable, usersTable, automationRulesTable, invoicesTable } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
@@ -135,6 +135,40 @@ router.post("/:id/complete", async (req: any, res) => {
     updatedAt: new Date(),
   }).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "appointment.completed", entityType: "appointment", entityId: id });
+
+  // Fire automations: create_invoice on appointment_completed
+  try {
+    const activeRules = await db.select().from(automationRulesTable).where(
+      and(
+        eq(automationRulesTable.companyId, companyId),
+        eq(automationRulesTable.triggerType, "appointment_completed"),
+        eq(automationRulesTable.actionType, "create_invoice"),
+        eq(automationRulesTable.isActive, true),
+      )
+    );
+    if (activeRules.length > 0 && existing.customerId) {
+      const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(invoicesTable).where(eq(invoicesTable.companyId, companyId));
+      const invoiceNum = `INV-${String(Number(countResult.count) + 1).padStart(4, "0")}`;
+      const price = existing.price ? Number(existing.price) : 0;
+      const dueAt = new Date();
+      dueAt.setDate(dueAt.getDate() + 14);
+      await db.insert(invoicesTable).values({
+        companyId,
+        customerId: existing.customerId,
+        invoiceNumber: invoiceNum,
+        subtotal: String(price),
+        tax: "0",
+        total: String(price),
+        status: "unpaid",
+        dueAt,
+        notes: `Auto-generated for appointment #${id}${existing.serviceId ? "" : ""}`,
+      });
+      await logActivity({ companyId, userId, action: "invoice.auto_created", entityType: "appointment", entityId: id });
+    }
+  } catch (_err) {
+    // Non-fatal: automation failure should not block the completion response
+  }
+
   return res.json(fmtAppt(updated));
 });
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useListRecurringPlans, useCreateRecurringPlan, useUpdateRecurringPlan, useDeleteRecurringPlan, useListCustomers, useListServices } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
+import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, RotateCw, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -92,6 +93,7 @@ export function RecurringPage() {
 
   return (
     <AppLayout>
+      <PlanGate feature="recurring_plans">
       {(creating || editing) && <PlanModal plan={editing} onClose={() => { setEditing(null); setCreating(false); }} />}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -145,6 +147,7 @@ export function RecurringPage() {
           ))}
         </div>
       )}
+      </PlanGate>
     </AppLayout>
   );
 }

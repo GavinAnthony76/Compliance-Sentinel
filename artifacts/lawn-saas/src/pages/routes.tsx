@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useListRoutes, useCreateRoute, useUpdateRoute, useDeleteRoute } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
+import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, Route as RouteIcon, Sparkles, MapPin, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +34,7 @@ export function RoutesPage() {
 
   return (
     <AppLayout>
+      <PlanGate feature="routes">
       {showNew && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6">
@@ -124,6 +126,7 @@ export function RoutesPage() {
           ))}
         </div>
       )}
+      </PlanGate>
     </AppLayout>
   );
 }

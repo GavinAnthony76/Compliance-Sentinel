@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useListTeam, useInviteTeamMember, useUpdateTeamMember, useRemoveTeamMember } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
+import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, Users2, Mail, Phone, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -87,6 +88,7 @@ export function TeamPage() {
 
   return (
     <AppLayout>
+      <PlanGate feature="multi_staff">
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -141,6 +143,7 @@ export function TeamPage() {
           ))}
         </div>
       )}
+      </PlanGate>
     </AppLayout>
   );
 }

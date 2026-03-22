@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useListAutomations, useCreateAutomation, useUpdateAutomation, useDeleteAutomation, useToggleAutomation } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
+import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -79,6 +80,7 @@ export function AutomationsPage() {
 
   return (
     <AppLayout>
+      <PlanGate feature="automations">
       {(creating || editing) && <AutomationModal automation={editing} onClose={() => { setEditing(null); setCreating(false); }} />}
       <div className="flex items-center justify-between mb-8">
         <div>
@@ -142,6 +144,7 @@ export function AutomationsPage() {
           ))}
         </div>
       )}
+      </PlanGate>
     </AppLayout>
   );
 }

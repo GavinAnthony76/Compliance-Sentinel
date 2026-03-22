@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, usersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, requireRole, hashPassword } from "../lib/auth";
+import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
@@ -24,7 +25,7 @@ router.get("/", async (req: any, res) => {
   return res.json({ members });
 });
 
-router.post("/", requireRole("owner", "admin"), async (req: any, res) => {
+router.post("/", requireRole("owner", "admin"), requireFeature("multi_staff"), async (req: any, res) => {
   const { companyId, userId } = req.user;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, req.body.email)).limit(1);
@@ -60,7 +61,7 @@ router.post("/", requireRole("owner", "admin"), async (req: any, res) => {
   });
 });
 
-router.put("/:id", requireRole("owner", "admin"), async (req: any, res) => {
+router.put("/:id", requireRole("owner", "admin"), requireFeature("multi_staff"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   const [existing] = await db.select().from(usersTable).where(and(eq(usersTable.id, id), eq(usersTable.companyId, companyId))).limit(1);
@@ -89,7 +90,7 @@ router.put("/:id", requireRole("owner", "admin"), async (req: any, res) => {
   });
 });
 
-router.delete("/:id", requireRole("owner"), async (req: any, res) => {
+router.delete("/:id", requireRole("owner"), requireFeature("multi_staff"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   if (id === req.user.userId) return res.status(400).json({ error: "Cannot remove yourself" });
