@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { useListTeam, useInviteTeamMember, useUpdateTeamMember, useRemoveTeamMember } from '@workspace/api-client-react';
+import { useListTeam, useInviteTeamMember, useRemoveTeamMember, getListTeamQueryKey } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
-import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, Users2, Mail, Phone, Shield } from 'lucide-react';
+import { Plus, Users2, Mail, Phone, Shield, Lock, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { getListTeamQueryKey } from '@workspace/api-client-react';
+import { useAuthState } from '@/hooks/use-auth-state';
 import { format } from 'date-fns';
+import { Link } from 'wouter';
 
 const ROLE_COLORS: Record<string, string> = {
   owner: 'bg-purple-100 text-purple-700',
@@ -85,65 +85,93 @@ export function TeamPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const removeMut = useRemoveTeamMember();
+  const { user } = useAuthState();
+  const plan = user?.company?.subscriptionPlan ?? 'starter';
+  const canAddTeam = plan === 'growth' || plan === 'pro';
 
   return (
     <AppLayout>
-      <PlanGate feature="multi_staff">
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} />}
+
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold">Team</h1>
           <p className="text-muted-foreground mt-1">Manage your staff and permissions</p>
         </div>
-        <Button onClick={() => setShowInvite(true)}><Plus className="w-4 h-4 mr-2" />Add Member</Button>
+        {canAddTeam && (
+          <Button onClick={() => setShowInvite(true)}><Plus className="w-4 h-4 mr-2" />Add Member</Button>
+        )}
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
-      ) : data?.members.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-4"><Users2 className="w-8 h-8 text-muted-foreground" /></div>
-          <h3 className="text-xl font-semibold mb-2">No team members</h3>
-          <Button onClick={() => setShowInvite(true)} className="mt-4"><Plus className="w-4 h-4 mr-2" />Add First Member</Button>
-        </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {data?.members.map(member => (
-            <Card key={member.id} className="border-border/50 hover:shadow-md transition-all">
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                      {member.firstName[0]}{member.lastName[0]}
+        <>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {data?.members.map(member => (
+              <Card key={member.id} className="border-border/50 hover:shadow-md transition-all">
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                        {member.firstName[0]}{member.lastName[0]}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize inline-flex items-center gap-1 ${ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-600'}`}>
+                          <Shield className="w-2.5 h-2.5" />{member.role}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[member.role] || 'bg-gray-100 text-gray-600'}`}>
-                        <Shield className="w-2.5 h-2.5 inline mr-1" />{member.role}
-                      </span>
-                    </div>
+                    <span className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${member.isActive ? 'bg-green-500' : 'bg-gray-300'}`} title={member.isActive ? 'Active' : 'Inactive'} />
                   </div>
-                  <span className={`w-2.5 h-2.5 rounded-full mt-1 ${member.isActive ? 'bg-green-500' : 'bg-gray-300'}`} title={member.isActive ? 'Active' : 'Inactive'} />
+                  <div className="space-y-1.5 mb-4">
+                    <p className="text-sm text-muted-foreground flex items-center gap-2"><Mail className="w-3.5 h-3.5" />{member.email}</p>
+                    {member.phone && <p className="text-sm text-muted-foreground flex items-center gap-2"><Phone className="w-3.5 h-3.5" />{member.phone}</p>}
+                    {member.lastLoginAt && <p className="text-xs text-muted-foreground">Last login: {format(new Date(member.lastLoginAt), 'MMM d, yyyy')}</p>}
+                  </div>
+                  {member.role !== 'owner' && canAddTeam && (
+                    <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 w-full" onClick={async () => {
+                      if (!confirm('Remove team member?')) return;
+                      await removeMut.mutateAsync({ id: member.id });
+                      qc.invalidateQueries({ queryKey: getListTeamQueryKey() });
+                      toast({ title: 'Team member removed' });
+                    }}>Remove</Button>
+                  )}
                 </div>
-                <div className="space-y-1.5 mb-4">
-                  <p className="text-sm text-muted-foreground flex items-center gap-2"><Mail className="w-3.5 h-3.5" />{member.email}</p>
-                  {member.phone && <p className="text-sm text-muted-foreground flex items-center gap-2"><Phone className="w-3.5 h-3.5" />{member.phone}</p>}
-                  {member.lastLoginAt && <p className="text-xs text-muted-foreground">Last login: {format(new Date(member.lastLoginAt), 'MMM d, yyyy')}</p>}
+              </Card>
+            ))}
+          </div>
+
+          {/* Upgrade CTA for Starter */}
+          {!canAddTeam && (
+            <Card className="mt-6 border-dashed border-2 border-emerald-200 bg-emerald-50/50">
+              <div className="p-8 text-center">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+                  <Lock className="w-7 h-7 text-emerald-600" />
                 </div>
-                {member.role !== 'owner' && (
-                  <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 w-full" onClick={async () => {
-                    if (!confirm('Remove team member?')) return;
-                    await removeMut.mutateAsync({ id: member.id });
-                    qc.invalidateQueries({ queryKey: getListTeamQueryKey() });
-                    toast({ title: 'Team member removed' });
-                  }}>Remove</Button>
-                )}
+                <h3 className="text-lg font-semibold mb-2">Add team members on Growth</h3>
+                <p className="text-muted-foreground text-sm max-w-md mx-auto mb-6">
+                  Upgrade to Growth to invite crew members, assign them to jobs, and manage roles and permissions across your team.
+                </p>
+                <Link href="/billing">
+                  <Button className="bg-emerald-600 hover:bg-emerald-700">
+                    Upgrade to Growth <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+                </Link>
               </div>
             </Card>
-          ))}
-        </div>
+          )}
+
+          {canAddTeam && data?.members.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20">
+              <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-4"><Users2 className="w-8 h-8 text-muted-foreground" /></div>
+              <h3 className="text-xl font-semibold mb-2">No team members yet</h3>
+              <Button onClick={() => setShowInvite(true)} className="mt-4"><Plus className="w-4 h-4 mr-2" />Add First Member</Button>
+            </div>
+          )}
+        </>
       )}
-      </PlanGate>
     </AppLayout>
   );
 }

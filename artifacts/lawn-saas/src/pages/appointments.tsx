@@ -26,6 +26,95 @@ import { getListAppointmentsQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 import { Link } from 'wouter';
 
+function EditAppointmentModal({ appointment, onClose }: { appointment: any; onClose: () => void }) {
+  const [form, setForm] = useState({
+    serviceId: appointment.serviceId?.toString() ?? '',
+    scheduledStart: appointment.scheduledStart ? new Date(appointment.scheduledStart).toISOString().slice(0, 16) : '',
+    scheduledEnd: appointment.scheduledEnd ? new Date(appointment.scheduledEnd).toISOString().slice(0, 16) : '',
+    status: appointment.status ?? 'pending',
+    notes: appointment.notes ?? '',
+    price: appointment.price?.toString() ?? '',
+  });
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const updateMut = useUpdateAppointment();
+  const { data: services } = useListServices();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateMut.mutateAsync({
+        id: appointment.id,
+        data: {
+          serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          scheduledStart: new Date(form.scheduledStart).toISOString(),
+          scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
+          status: form.status as any,
+          notes: form.notes || undefined,
+          price: form.price ? Number(form.price) : undefined,
+        },
+      });
+      toast({ title: 'Appointment updated' });
+      qc.invalidateQueries({ queryKey: getListAppointmentsQueryKey() });
+      onClose();
+    } catch {
+      toast({ title: 'Error updating appointment', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h2 className="text-xl font-bold mb-6">Edit Appointment</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Service</label>
+            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+              <option value="">No service</option>
+              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Start Date/Time *</label>
+              <Input type="datetime-local" value={form.scheduledStart} onChange={e => setForm(f => ({ ...f, scheduledStart: e.target.value }))} required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">End Date/Time</label>
+              <Input type="datetime-local" value={form.scheduledEnd} onChange={e => setForm(f => ({ ...f, scheduledEnd: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Status</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="no_show">No Show</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Price ($)</label>
+              <Input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Notes</label>
+            <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special instructions..." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button type="submit" className="flex-1" isLoading={updateMut.isPending}>Save Changes</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function NewAppointmentModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
     customerId: '',
@@ -122,6 +211,7 @@ function NewAppointmentModal({ onClose }: { onClose: () => void }) {
 
 export function AppointmentsPage() {
   const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const { data, isLoading } = useListAppointments({ status: statusFilter || undefined, page: 1, limit: 50 } as any);
   const { toast } = useToast();
@@ -136,6 +226,7 @@ export function AppointmentsPage() {
   return (
     <AppLayout>
       {showNew && <NewAppointmentModal onClose={() => setShowNew(false)} />}
+      {editing && <EditAppointmentModal appointment={editing} onClose={() => setEditing(null)} />}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold">Appointments</h1>
@@ -198,6 +289,9 @@ export function AppointmentsPage() {
                       <td className="p-4 text-sm">{apt.price ? `$${Number(apt.price).toFixed(2)}` : '—'}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-2 justify-end">
+                          <Button size="sm" variant="outline" onClick={() => setEditing(apt)}>
+                            Edit
+                          </Button>
                           {apt.status !== 'completed' && apt.status !== 'cancelled' && (
                             <Button
                               size="sm"

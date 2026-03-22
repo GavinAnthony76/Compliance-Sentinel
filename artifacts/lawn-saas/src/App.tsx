@@ -16,6 +16,7 @@ import NotFound from "@/pages/not-found";
 // Company dashboard pages
 import { DashboardPage } from "@/pages/dashboard";
 import { CustomersPage } from "@/pages/customers";
+import { CustomerDetailPage } from "@/pages/customer-detail";
 import { CalendarPage } from "@/pages/calendar";
 import { PropertiesPage } from "@/pages/properties";
 import { ServicesPage } from "@/pages/services";
@@ -110,6 +111,7 @@ function Router() {
       <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
       <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
       <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
+      <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>
       <Route path="/properties"><ProtectedRoute component={PropertiesPage} /></Route>
       <Route path="/services"><ProtectedRoute component={ServicesPage} /></Route>
       <Route path="/appointments"><ProtectedRoute component={AppointmentsPage} /></Route>

@@ -1,0 +1,699 @@
+import { useState } from 'react';
+import { useRoute, Link, useLocation } from 'wouter';
+import {
+  useGetCustomer, useUpdateCustomer, useDeleteCustomer,
+  useCreateProperty, useUpdateProperty, useDeleteProperty,
+  useCreateAppointment, useCompleteAppointment, useDeleteAppointment,
+  useCreateInvoice, useMarkInvoicePaid, useDeleteInvoice,
+  useListServices,
+  getListCustomersQueryKey,
+} from '@workspace/api-client-react';
+import { AppLayout } from '@/components/layout';
+import { Card, CardContent, Button, Input } from '@/components/ui';
+import { AppointmentStatusBadge } from '@/components/status-badge';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import {
+  ArrowLeft, User, MapPin, Phone, Mail, Globe, Edit2, Trash2,
+  Plus, Calendar, FileText, Check, Home, Tag,
+} from 'lucide-react';
+import { formatCurrency, formatDate } from '@/lib/utils';
+
+const STATUS_COLORS: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-600',
+  sent: 'bg-blue-100 text-blue-700',
+  paid: 'bg-green-100 text-green-700',
+  overdue: 'bg-red-100 text-red-700',
+  cancelled: 'bg-gray-100 text-gray-500',
+};
+
+function EditCustomerModal({ customer, onClose }: { customer: any; onClose: () => void }) {
+  const [form, setForm] = useState({
+    firstName: customer.firstName ?? '',
+    lastName: customer.lastName ?? '',
+    email: customer.email ?? '',
+    phone: customer.phone ?? '',
+    addressLine1: customer.addressLine1 ?? '',
+    city: customer.city ?? '',
+    state: customer.state ?? '',
+    zip: customer.zip ?? '',
+    notes: customer.notes ?? '',
+  });
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const updateMut = useUpdateCustomer();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateMut.mutateAsync({ id: customer.id, data: form });
+      qc.invalidateQueries({ queryKey: [`/api/customers/${customer.id}`] });
+      qc.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+      toast({ title: 'Customer updated' });
+      onClose();
+    } catch {
+      toast({ title: 'Error updating customer', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h2 className="text-xl font-bold mb-6">Edit Customer</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">First Name *</label>
+              <Input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} placeholder="Jane" required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Last Name *</label>
+              <Input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Smith" required />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Email</label>
+              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" icon={<Mail className="w-4 h-4" />} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Phone</label>
+              <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="(555) 000-0000" icon={<Phone className="w-4 h-4" />} />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Street Address</label>
+            <Input value={form.addressLine1} onChange={e => setForm(f => ({ ...f, addressLine1: e.target.value }))} placeholder="123 Oak St" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1 col-span-1">
+              <label className="text-sm font-medium">City</label>
+              <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Austin" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">State</label>
+              <Input value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="TX" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">ZIP</label>
+              <Input value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} placeholder="78701" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Notes</label>
+            <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any special notes about this customer..." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button type="submit" className="flex-1" isLoading={updateMut.isPending}>Save Changes</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AddPropertyModal({ customerId, onClose }: { customerId: number; onClose: () => void }) {
+  const [form, setForm] = useState({ propertyName: '', addressLine1: '', city: '', state: '', zip: '', gateNotes: '', yardSize: '' });
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const createMut = useCreateProperty();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createMut.mutateAsync({ data: { ...form, customerId } });
+      qc.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      toast({ title: 'Property added' });
+      onClose();
+    } catch {
+      toast({ title: 'Error adding property', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h2 className="text-xl font-bold mb-6">Add Property</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Property Name</label>
+            <Input value={form.propertyName} onChange={e => setForm(f => ({ ...f, propertyName: e.target.value }))} placeholder="Main Residence, Rental Property..." icon={<Home className="w-4 h-4" />} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Street Address *</label>
+            <Input value={form.addressLine1} onChange={e => setForm(f => ({ ...f, addressLine1: e.target.value }))} placeholder="123 Oak Street" required icon={<MapPin className="w-4 h-4" />} />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1 col-span-1">
+              <label className="text-sm font-medium">City</label>
+              <Input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Austin" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">State</label>
+              <Input value={form.state} onChange={e => setForm(f => ({ ...f, state: e.target.value }))} placeholder="TX" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">ZIP</label>
+              <Input value={form.zip} onChange={e => setForm(f => ({ ...f, zip: e.target.value }))} placeholder="78701" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Gate / Access Notes</label>
+            <Input value={form.gateNotes} onChange={e => setForm(f => ({ ...f, gateNotes: e.target.value }))} placeholder="Gate code, dog in backyard..." />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Yard Size</label>
+            <Input value={form.yardSize} onChange={e => setForm(f => ({ ...f, yardSize: e.target.value }))} placeholder="1/4 acre, small, large..." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button type="submit" className="flex-1" isLoading={createMut.isPending}>Add Property</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function NewAppointmentModal({ customerId, onClose }: { customerId: number; onClose: () => void }) {
+  const [form, setForm] = useState({ serviceId: '', scheduledStart: '', scheduledEnd: '', status: 'pending', notes: '', price: '' });
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const createMut = useCreateAppointment();
+  const { data: services } = useListServices();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createMut.mutateAsync({
+        data: {
+          customerId,
+          serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          scheduledStart: new Date(form.scheduledStart).toISOString(),
+          scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
+          status: form.status as any,
+          notes: form.notes || undefined,
+          price: form.price ? Number(form.price) : undefined,
+        },
+      });
+      qc.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      toast({ title: 'Appointment scheduled' });
+      onClose();
+    } catch {
+      toast({ title: 'Error creating appointment', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h2 className="text-xl font-bold mb-6">Schedule Appointment</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Service</label>
+            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+              <option value="">No service selected</option>
+              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Start Date/Time *</label>
+              <Input type="datetime-local" value={form.scheduledStart} onChange={e => setForm(f => ({ ...f, scheduledStart: e.target.value }))} required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">End Date/Time</label>
+              <Input type="datetime-local" value={form.scheduledEnd} onChange={e => setForm(f => ({ ...f, scheduledEnd: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Status</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Price ($)</label>
+              <Input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Notes</label>
+            <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Special instructions..." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button type="submit" className="flex-1" isLoading={createMut.isPending}>Schedule</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function NewInvoiceModal({ customerId, onClose }: { customerId: number; onClose: () => void }) {
+  const [form, setForm] = useState({ subtotal: '', tax: '0', notes: '', dueDate: '' });
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const createMut = useCreateInvoice();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createMut.mutateAsync({
+        data: {
+          customerId,
+          subtotal: Number(form.subtotal),
+          tax: Number(form.tax),
+          total: Number(form.subtotal) + Number(form.tax),
+          notes: form.notes || undefined,
+          dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
+        },
+      });
+      qc.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      toast({ title: 'Invoice created' });
+      onClose();
+    } catch {
+      toast({ title: 'Error creating invoice', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <h2 className="text-xl font-bold mb-6">New Invoice</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Subtotal ($) *</label>
+              <Input type="number" step="0.01" value={form.subtotal} onChange={e => setForm(f => ({ ...f, subtotal: e.target.value }))} placeholder="0.00" required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Tax ($)</label>
+              <Input type="number" step="0.01" value={form.tax} onChange={e => setForm(f => ({ ...f, tax: e.target.value }))} placeholder="0.00" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Due Date</label>
+            <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Notes</label>
+            <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button type="submit" className="flex-1" isLoading={createMut.isPending}>Create Invoice</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+type Tab = 'overview' | 'appointments' | 'invoices' | 'properties';
+
+export function CustomerDetailPage() {
+  const [, params] = useRoute('/customers/:id');
+  const [, setLocation] = useLocation();
+  const id = Number(params?.id);
+  const { data, isLoading, error } = useGetCustomer(id);
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const [tab, setTab] = useState<Tab>('overview');
+  const [showEdit, setShowEdit] = useState(false);
+  const [showAddProperty, setShowAddProperty] = useState(false);
+  const [showNewAppt, setShowNewAppt] = useState(false);
+  const [showNewInvoice, setShowNewInvoice] = useState(false);
+
+  const deleteMut = useDeleteCustomer();
+  const deletePropertyMut = useDeleteProperty();
+  const completeApptMut = useCompleteAppointment();
+  const deleteApptMut = useDeleteAppointment();
+  const markPaidMut = useMarkInvoicePaid();
+  const deleteInvoiceMut = useDeleteInvoice();
+
+  if (isLoading) return (
+    <AppLayout>
+      <div className="flex h-[50vh] items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    </AppLayout>
+  );
+
+  if (error || !data) return (
+    <AppLayout>
+      <div className="p-8 text-center">
+        <p className="text-destructive mb-4">Customer not found.</p>
+        <Link href="/customers"><Button variant="outline"><ArrowLeft className="w-4 h-4 mr-2" />Back to Customers</Button></Link>
+      </div>
+    </AppLayout>
+  );
+
+  const { customer, properties, recentAppointments, recentInvoices } = data;
+  const fullName = `${customer.firstName} ${customer.lastName}`;
+  const initials = `${customer.firstName[0] ?? ''}${customer.lastName[0] ?? ''}`.toUpperCase();
+  const totalRevenue = recentInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.total), 0);
+  const outstandingBalance = recentInvoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((s, i) => s + Number(i.total), 0);
+
+  const handleDeleteCustomer = async () => {
+    if (!confirm(`Delete ${fullName}? This cannot be undone.`)) return;
+    await deleteMut.mutateAsync({ id });
+    qc.invalidateQueries({ queryKey: getListCustomersQueryKey() });
+    toast({ title: 'Customer deleted' });
+    setLocation('/customers');
+  };
+
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'appointments', label: 'Appointments', count: recentAppointments.length },
+    { id: 'invoices', label: 'Invoices', count: recentInvoices.length },
+    { id: 'properties', label: 'Properties', count: properties.length },
+  ];
+
+  return (
+    <AppLayout>
+      {showEdit && <EditCustomerModal customer={customer} onClose={() => setShowEdit(false)} />}
+      {showAddProperty && <AddPropertyModal customerId={id} onClose={() => setShowAddProperty(false)} />}
+      {showNewAppt && <NewAppointmentModal customerId={id} onClose={() => setShowNewAppt(false)} />}
+      {showNewInvoice && <NewInvoiceModal customerId={id} onClose={() => setShowNewInvoice(false)} />}
+
+      {/* Back link */}
+      <Link href="/customers" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+        <ArrowLeft className="w-4 h-4" />Back to Customers
+      </Link>
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-6 mb-8">
+        <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-bold text-3xl shrink-0">
+          {initials}
+        </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-3xl font-display font-bold text-foreground">{fullName}</h1>
+          <div className="flex flex-wrap gap-3 mt-2">
+            {customer.email && (
+              <a href={`mailto:${customer.email}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Mail className="w-4 h-4" />{customer.email}
+              </a>
+            )}
+            {customer.phone && (
+              <a href={`tel:${customer.phone}`} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors">
+                <Phone className="w-4 h-4" />{customer.phone}
+              </a>
+            )}
+            {customer.addressLine1 && (
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <MapPin className="w-4 h-4" />{customer.addressLine1}{customer.city ? `, ${customer.city}` : ''}
+              </span>
+            )}
+          </div>
+          {customer.notes && (
+            <p className="text-sm text-muted-foreground mt-2 italic">{customer.notes}</p>
+          )}
+          {customer.tags && customer.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {customer.tags.map(tag => (
+                <span key={tag} className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                  <Tag className="w-2.5 h-2.5" />{tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
+            <Edit2 className="w-4 h-4 mr-2" />Edit
+          </Button>
+          <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={handleDeleteCustomer} isLoading={deleteMut.isPending}>
+            <Trash2 className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        {[
+          { label: 'Total Revenue', value: formatCurrency(totalRevenue), color: 'text-green-600' },
+          { label: 'Outstanding', value: formatCurrency(outstandingBalance), color: 'text-orange-600' },
+          { label: 'Appointments', value: recentAppointments.length.toString(), color: 'text-blue-600' },
+          { label: 'Properties', value: properties.length.toString(), color: 'text-purple-600' },
+        ].map(stat => (
+          <Card key={stat.label} className="border-border/50">
+            <CardContent className="p-4">
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
+              <p className={`text-xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <Button size="sm" onClick={() => setShowNewAppt(true)}><Calendar className="w-4 h-4 mr-2" />New Appointment</Button>
+        <Button size="sm" variant="outline" onClick={() => setShowNewInvoice(true)}><FileText className="w-4 h-4 mr-2" />New Invoice</Button>
+        <Button size="sm" variant="outline" onClick={() => setShowAddProperty(true)}><MapPin className="w-4 h-4 mr-2" />Add Property</Button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-border mb-6">
+        {tabs.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-sm font-medium transition-all border-b-2 -mb-px ${
+              tab === t.id ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t.label}
+            {t.count !== undefined && t.count > 0 && (
+              <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === t.id ? 'bg-primary/10' : 'bg-muted'}`}>{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab: Overview */}
+      {tab === 'overview' && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Card className="border-border/50">
+            <CardContent className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2"><User className="w-4 h-4 text-primary" />Contact Details</h3>
+              <dl className="space-y-3 text-sm">
+                {[
+                  { label: 'Full Name', value: fullName },
+                  { label: 'Email', value: customer.email || '—' },
+                  { label: 'Phone', value: customer.phone || '—' },
+                  { label: 'Address', value: [customer.addressLine1, customer.city, customer.state, customer.zip].filter(Boolean).join(', ') || '—' },
+                  { label: 'Customer Since', value: formatDate(customer.createdAt) },
+                ].map(row => (
+                  <div key={row.label} className="flex gap-4">
+                    <dt className="w-32 shrink-0 text-muted-foreground">{row.label}</dt>
+                    <dd className="text-foreground">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <Button variant="outline" size="sm" className="mt-4" onClick={() => setShowEdit(true)}>
+                <Edit2 className="w-3.5 h-3.5 mr-1.5" />Edit Contact
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/50">
+            <CardContent className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2"><MapPin className="w-4 h-4 text-primary" />Properties</h3>
+              {properties.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <MapPin className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No properties on file</p>
+                  <Button size="sm" variant="outline" className="mt-3" onClick={() => setShowAddProperty(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />Add Property
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {properties.map(p => (
+                    <div key={p.id} className="flex items-start gap-3 p-3 rounded-xl bg-accent/40">
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <Home className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">{p.propertyName || p.addressLine1}</p>
+                        <p className="text-xs text-muted-foreground">{[p.addressLine1, p.city, p.state].filter(Boolean).join(', ')}</p>
+                        {p.gateNotes && <p className="text-xs text-amber-600 mt-0.5">🔑 {p.gateNotes}</p>}
+                      </div>
+                      <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 shrink-0" onClick={async () => {
+                        if (!confirm('Delete this property?')) return;
+                        await deletePropertyMut.mutateAsync({ id: p.id });
+                        qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                        toast({ title: 'Property deleted' });
+                      }}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button size="sm" variant="outline" className="w-full mt-1" onClick={() => setShowAddProperty(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" />Add Another Property
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Tab: Appointments */}
+      {tab === 'appointments' && (
+        <Card className="border-border/50 overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <p className="text-sm font-medium text-muted-foreground">{recentAppointments.length} appointment{recentAppointments.length !== 1 ? 's' : ''}</p>
+            <Button size="sm" onClick={() => setShowNewAppt(true)}><Plus className="w-4 h-4 mr-1.5" />Schedule</Button>
+          </div>
+          {recentAppointments.length === 0 ? (
+            <div className="p-12 text-center">
+              <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground mb-4">No appointments yet</p>
+              <Button onClick={() => setShowNewAppt(true)}><Plus className="w-4 h-4 mr-2" />Schedule First Appointment</Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {recentAppointments.map(appt => (
+                <div key={appt.id} className="p-4 hover:bg-accent/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-sm">{appt.serviceName || 'No service'}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {format(new Date(appt.scheduledStart), 'EEEE, MMM d yyyy · h:mm a')}
+                    </p>
+                    {appt.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{appt.notes}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 sm:ml-auto">
+                    <AppointmentStatusBadge status={appt.status} />
+                    {appt.price && <span className="text-sm font-medium">{formatCurrency(Number(appt.price))}</span>}
+                    {appt.status !== 'completed' && appt.status !== 'cancelled' && (
+                      <Button size="sm" variant="outline" className="text-green-600 border-green-200 hover:bg-green-50" onClick={async () => {
+                        await completeApptMut.mutateAsync({ id: appt.id, data: {} });
+                        qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                        toast({ title: 'Job marked complete' });
+                      }}>
+                        <Check className="w-3.5 h-3.5 mr-1" />Complete
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={async () => {
+                      if (!confirm('Delete this appointment?')) return;
+                      await deleteApptMut.mutateAsync({ id: appt.id });
+                      qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                      toast({ title: 'Appointment deleted' });
+                    }}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Tab: Invoices */}
+      {tab === 'invoices' && (
+        <Card className="border-border/50 overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <p className="text-sm font-medium text-muted-foreground">{recentInvoices.length} invoice{recentInvoices.length !== 1 ? 's' : ''}</p>
+            <Button size="sm" onClick={() => setShowNewInvoice(true)}><Plus className="w-4 h-4 mr-1.5" />New Invoice</Button>
+          </div>
+          {recentInvoices.length === 0 ? (
+            <div className="p-12 text-center">
+              <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground mb-4">No invoices yet</p>
+              <Button onClick={() => setShowNewInvoice(true)}><Plus className="w-4 h-4 mr-2" />Create First Invoice</Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {recentInvoices.map(inv => (
+                <div key={inv.id} className="p-4 hover:bg-accent/30 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-sm font-medium">{inv.invoiceNumber}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {inv.dueDate ? `Due ${format(new Date(inv.dueDate), 'MMM d, yyyy')}` : 'No due date'}
+                    </p>
+                    {inv.notes && <p className="text-xs text-muted-foreground italic mt-0.5">{inv.notes}</p>}
+                  </div>
+                  <div className="flex items-center gap-2 sm:ml-auto">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] || 'bg-gray-100'}`}>
+                      {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                    </span>
+                    <span className="text-sm font-bold">{formatCurrency(Number(inv.total))}</span>
+                    {['sent', 'overdue'].includes(inv.status) && (
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={async () => {
+                        await markPaidMut.mutateAsync({ id: inv.id, data: {} });
+                        qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                        toast({ title: 'Marked as paid' });
+                      }}>
+                        <Check className="w-3.5 h-3.5 mr-1" />Mark Paid
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={async () => {
+                      if (!confirm('Delete this invoice?')) return;
+                      await deleteInvoiceMut.mutateAsync({ id: inv.id });
+                      qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                      toast({ title: 'Invoice deleted' });
+                    }}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Tab: Properties */}
+      {tab === 'properties' && (
+        <Card className="border-border/50 overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <p className="text-sm font-medium text-muted-foreground">{properties.length} propert{properties.length !== 1 ? 'ies' : 'y'}</p>
+            <Button size="sm" onClick={() => setShowAddProperty(true)}><Plus className="w-4 h-4 mr-1.5" />Add Property</Button>
+          </div>
+          {properties.length === 0 ? (
+            <div className="p-12 text-center">
+              <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="text-muted-foreground mb-4">No properties on file</p>
+              <Button onClick={() => setShowAddProperty(true)}><Plus className="w-4 h-4 mr-2" />Add Property</Button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {properties.map(p => (
+                <div key={p.id} className="p-4 hover:bg-accent/30 transition-colors flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Home className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{p.propertyName || p.addressLine1}</p>
+                      <p className="text-sm text-muted-foreground">{[p.addressLine1, p.city, p.state, p.zip].filter(Boolean).join(', ')}</p>
+                      {p.gateNotes && <p className="text-sm text-amber-600 mt-1">🔑 {p.gateNotes}</p>}
+                      {p.yardSize && <p className="text-xs text-muted-foreground mt-0.5">Yard: {p.yardSize}</p>}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 shrink-0" onClick={async () => {
+                    if (!confirm('Delete this property?')) return;
+                    await deletePropertyMut.mutateAsync({ id: p.id });
+                    qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                    toast({ title: 'Property deleted' });
+                  }}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+    </AppLayout>
+  );
+}
