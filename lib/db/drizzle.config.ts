@@ -12,6 +12,5 @@ export default defineConfig({
   dialect: "postgresql",
   dbCredentials: {
     url: dbUrl,
-    ssl: process.env.NEON_DATABASE_URL ? "require" : undefined,
-  } as any,
+  },
 });
