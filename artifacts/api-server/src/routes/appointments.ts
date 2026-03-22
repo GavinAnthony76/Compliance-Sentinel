@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, appointmentsTable, customersTable, servicesTable, usersTable, automationRulesTable, invoicesTable } from "@workspace/db";
-import { eq, and, gte, lte, sql, desc } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 
@@ -40,9 +40,9 @@ router.get("/", async (req: any, res) => {
   const userIds = [...new Set(appointments.map(a => a.assignedUserId).filter(Boolean))] as number[];
 
   const [customers, services, users] = await Promise.all([
-    customerIds.length > 0 ? db.select().from(customersTable).where(sql`${customersTable.id} = ANY(${customerIds})`) : [],
-    serviceIds.length > 0 ? db.select().from(servicesTable).where(sql`${servicesTable.id} = ANY(${serviceIds})`) : [],
-    userIds.length > 0 ? db.select().from(usersTable).where(sql`${usersTable.id} = ANY(${userIds})`) : [],
+    customerIds.length > 0 ? db.select().from(customersTable).where(inArray(customersTable.id, customerIds)) : [],
+    serviceIds.length > 0 ? db.select().from(servicesTable).where(inArray(servicesTable.id, serviceIds)) : [],
+    userIds.length > 0 ? db.select().from(usersTable).where(inArray(usersTable.id, userIds)) : [],
   ]);
 
   const customerMap = Object.fromEntries(customers.map(c => [c.id, `${c.firstName} ${c.lastName}`]));
@@ -159,7 +159,7 @@ router.post("/:id/complete", async (req: any, res) => {
         subtotal: String(price),
         tax: "0",
         total: String(price),
-        status: "unpaid",
+        status: "sent",
         dueAt,
         notes: `Auto-generated for appointment #${id}${existing.serviceId ? "" : ""}`,
       });

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, routesTable, routeStopsTable, appointmentsTable, usersTable } from "@workspace/db";
-import { eq, and, sql, desc, gte, lte } from "drizzle-orm";
+import { eq, and, sql, desc, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -14,7 +14,7 @@ router.get("/", async (req: any, res) => {
   const routes = await db.select().from(routesTable).where(eq(routesTable.companyId, companyId)).orderBy(desc(routesTable.routeDate));
 
   const userIds = [...new Set(routes.map(r => r.assignedUserId).filter(Boolean))] as number[];
-  const users = userIds.length > 0 ? await db.select().from(usersTable).where(sql`${usersTable.id} = ANY(${userIds})`) : [];
+  const users = userIds.length > 0 ? await db.select().from(usersTable).where(inArray(usersTable.id, userIds)) : [];
   const userMap = Object.fromEntries(users.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
 
   const stopsCountResult = await Promise.all(
@@ -53,7 +53,7 @@ router.get("/:id", async (req: any, res) => {
 
   const appointmentIds = stops.map(s => s.appointmentId);
   const appointments = appointmentIds.length > 0
-    ? await db.select().from(appointmentsTable).where(sql`${appointmentsTable.id} = ANY(${appointmentIds})`)
+    ? await db.select().from(appointmentsTable).where(inArray(appointmentsTable.id, appointmentIds))
     : [];
   const apptMap = Object.fromEntries(appointments.map(a => [a.id, a]));
 

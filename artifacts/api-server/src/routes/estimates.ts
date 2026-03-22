@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, estimatesTable, customersTable } from "@workspace/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -29,7 +29,7 @@ router.get("/", async (req: any, res) => {
   ]);
 
   const customerIds = [...new Set(estimates.map(e => e.customerId))];
-  const customers = customerIds.length > 0 ? await db.select().from(customersTable).where(sql`${customersTable.id} = ANY(${customerIds})`) : [];
+  const customers = customerIds.length > 0 ? await db.select().from(customersTable).where(inArray(customersTable.id, customerIds)) : [];
   const customerMap = Object.fromEntries(customers.map(c => [c.id, `${c.firstName} ${c.lastName}`]));
 
   return res.json({ estimates: estimates.map(e => ({ ...e, total: Number(e.total), customerName: customerMap[e.customerId] ?? null })), total: Number(total[0].count), page, limit });

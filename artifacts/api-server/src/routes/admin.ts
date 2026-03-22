@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, companiesTable, usersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable } from "@workspace/db";
-import { eq, sql, desc, ilike, and } from "drizzle-orm";
+import { eq, sql, desc, ilike, and, inArray } from "drizzle-orm";
 import { requireAdminAuth, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
@@ -241,7 +241,7 @@ router.get("/activity", async (req, res) => {
   ]);
 
   const userIds = [...new Set(logs.map(l => l.userId).filter(Boolean))] as number[];
-  const users = userIds.length > 0 ? await db.select().from(usersTable).where(sql`${usersTable.id} = ANY(${userIds})`) : [];
+  const users = userIds.length > 0 ? await db.select().from(usersTable).where(inArray(usersTable.id, userIds)) : [];
   const userMap = Object.fromEntries(users.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
 
   return res.json({ logs: logs.map(l => ({ ...l, userName: l.userId ? userMap[l.userId] ?? null : null })), total: Number(total[0].count), page, limit });

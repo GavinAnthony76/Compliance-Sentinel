@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, recurringPlansTable, customersTable, servicesTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -17,8 +17,8 @@ router.get("/", async (req: any, res) => {
   const serviceIds = [...new Set(plans.map(p => p.serviceId).filter(Boolean))] as number[];
 
   const [customers, services] = await Promise.all([
-    customerIds.length > 0 ? db.select().from(customersTable).where(sql`${customersTable.id} = ANY(${customerIds})`) : [],
-    serviceIds.length > 0 ? db.select().from(servicesTable).where(sql`${servicesTable.id} = ANY(${serviceIds})`) : [],
+    customerIds.length > 0 ? db.select().from(customersTable).where(inArray(customersTable.id, customerIds)) : [],
+    serviceIds.length > 0 ? db.select().from(servicesTable).where(inArray(servicesTable.id, serviceIds)) : [],
   ]);
 
   const customerMap = Object.fromEntries(customers.map(c => [c.id, `${c.firstName} ${c.lastName}`]));
