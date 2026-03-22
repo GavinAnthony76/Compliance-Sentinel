@@ -1,6 +1,6 @@
 import { Link } from 'wouter';
 import { Button } from '@/components/ui';
-import { Leaf, CheckCircle2, Calendar, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, Navigation, DollarSign, Clock, Star, Phone, Home, ArrowUpRight, Shield } from 'lucide-react';
+import { Leaf, CheckCircle2, Calendar, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, Navigation, DollarSign, Clock } from 'lucide-react';
 
 export function LandingPage() {
   return (
@@ -219,129 +219,25 @@ export function LandingPage() {
               </div>
             </div>
 
-            {/* Feature 4: Customer CRM */}
-            <div className="bg-background rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group">
-              <div className="bg-gradient-to-br from-violet-50 to-purple-100 p-5 relative overflow-hidden">
-                <div className="bg-white rounded-2xl shadow-lg shadow-black/10 p-4 mx-2">
-                  <div className="flex items-center gap-3 mb-3 pb-3 border-b border-gray-100">
-                    <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-violet-600">MH</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-gray-800">Margaret Harris</div>
-                      <div className="text-xs text-gray-400 flex items-center gap-1"><Phone className="w-3 h-3" />(555) 248-0193</div>
-                    </div>
-                    <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">Active</span>
-                  </div>
-                  <div className="space-y-1.5 mb-3">
-                    <div className="flex items-start gap-2">
-                      <Home className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
-                      <span className="text-xs text-gray-600">142 Maple Drive · Gate code: 4821</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Star className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-                      <span className="text-xs text-gray-600">Prefers morning visits · Dog in backyard</span>
-                    </div>
-                  </div>
-                  <div className="bg-gray-50 rounded-xl p-2.5">
-                    <div className="text-xs font-semibold text-gray-500 mb-1.5">Recent Services</div>
-                    {[['Lawn Mowing', 'Jun 10'], ['Fertilization', 'May 28'], ['Edge Trim', 'May 14']].map(([svc, date]) => (
-                      <div key={svc} className="flex justify-between text-xs py-0.5">
-                        <span className="text-gray-700">{svc}</span>
-                        <span className="text-gray-400">{date}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="absolute -top-5 -right-5 w-20 h-20 bg-violet-200/40 rounded-full" />
-                <div className="absolute -bottom-4 -left-4 w-14 h-14 bg-purple-200/30 rounded-full" />
-              </div>
-              <div className="p-7">
-                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
-                  <Users className="w-5 h-5 text-primary" />
-                </div>
-                <h3 className="text-xl font-bold mb-2">Customer CRM</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Track every property, gate code, pet, and preference. Full service history always at your fingertips.</p>
-              </div>
-            </div>
+          </div>
 
-            {/* Feature 5: Growth Analytics */}
-            <div className="bg-background rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group">
-              <div className="bg-gradient-to-br from-amber-50 to-orange-100 p-5 relative overflow-hidden">
-                <div className="bg-white rounded-2xl shadow-lg shadow-black/10 p-4 mx-2">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-bold text-sm text-gray-800">Revenue</span>
-                    <span className="text-xs text-emerald-600 font-semibold flex items-center gap-0.5"><ArrowUpRight className="w-3.5 h-3.5" />+18% this month</span>
-                  </div>
-                  <div className="text-2xl font-bold text-gray-900 mb-1">$12,480</div>
-                  <div className="text-xs text-gray-400 mb-3">June 2025</div>
-                  {/* Bar chart */}
-                  <div className="flex items-end gap-1.5 h-16 mb-3">
-                    {[40, 65, 50, 80, 70, 90, 75, 95, 85, 100, 88, 72].map((h, i) => (
-                      <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${h}%`, background: i === 10 ? '#22c55e' : i === 11 ? '#16a34a' : `rgba(34,197,94,${0.2 + i * 0.06})` }} />
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[['Jobs Done', '47'], ['Outstanding', '$1,840'], ['Avg Job', '$265']].map(([label, val]) => (
-                      <div key={label} className="bg-gray-50 rounded-lg p-2 text-center">
-                        <div className="text-xs font-bold text-gray-800">{val}</div>
-                        <div className="text-xs text-gray-400 leading-tight">{label}</div>
-                      </div>
-                    ))}
-                  </div>
+          {/* Secondary features - small cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-8">
+            {[
+              { icon: Users, title: 'Customer CRM', desc: 'Properties, gate codes, notes, and full service history.' },
+              { icon: TrendingUp, title: 'Growth Analytics', desc: 'Revenue, outstanding balances, and job stats in real time.' },
+              { icon: Settings, title: 'Team Management', desc: 'Assign jobs to crews, track time, and control access permissions.' },
+            ].map((f, i) => (
+              <div key={i} className="bg-background rounded-2xl p-6 border border-border/50 hover:shadow-md hover:shadow-primary/5 transition-all duration-300 flex gap-4 items-start">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+                  <f.icon className="w-5 h-5 text-primary" />
                 </div>
-                <div className="absolute -top-5 -right-5 w-20 h-20 bg-orange-200/40 rounded-full" />
-                <div className="absolute -bottom-4 -left-4 w-14 h-14 bg-amber-200/30 rounded-full" />
-              </div>
-              <div className="p-7">
-                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
-                  <TrendingUp className="w-5 h-5 text-primary" />
+                <div>
+                  <h3 className="font-bold mb-1 text-sm">{f.title}</h3>
+                  <p className="text-muted-foreground text-xs leading-relaxed">{f.desc}</p>
                 </div>
-                <h3 className="text-xl font-bold mb-2">Growth Analytics</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Real-time revenue charts, outstanding balances, and job stats so you always know where your business stands.</p>
               </div>
-            </div>
-
-            {/* Feature 6: Team Management */}
-            <div className="bg-background rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group">
-              <div className="bg-gradient-to-br from-sky-50 to-cyan-100 p-5 relative overflow-hidden">
-                <div className="bg-white rounded-2xl shadow-lg shadow-black/10 p-4 mx-2">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-bold text-sm text-gray-800">Your Team</span>
-                    <span className="text-xs text-sky-600 font-semibold">4 members online</span>
-                  </div>
-                  <div className="space-y-2.5">
-                    {[
-                      { initials: 'AW', name: 'Alex Wilson', role: 'Owner', color: 'bg-sky-100 text-sky-700', jobs: '8 jobs today', badge: 'bg-sky-100 text-sky-700' },
-                      { initials: 'JR', name: 'Jake Rivera', role: 'Crew Lead', color: 'bg-emerald-100 text-emerald-700', jobs: '5 jobs today', badge: 'bg-emerald-100 text-emerald-700' },
-                      { initials: 'TM', name: 'Tina Moore', role: 'Crew', color: 'bg-purple-100 text-purple-700', jobs: '4 jobs today', badge: 'bg-gray-100 text-gray-600' },
-                      { initials: 'DS', name: 'Dan Shaw', role: 'Crew', color: 'bg-orange-100 text-orange-700', jobs: '3 jobs today', badge: 'bg-gray-100 text-gray-600' },
-                    ].map((m) => (
-                      <div key={m.initials} className="flex items-center gap-2.5">
-                        <div className={`w-8 h-8 rounded-full ${m.color} flex items-center justify-center shrink-0`}>
-                          <span className="text-xs font-bold">{m.initials}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-semibold text-gray-800 truncate">{m.name}</div>
-                          <div className="text-xs text-gray-400">{m.jobs}</div>
-                        </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${m.badge} font-medium shrink-0`}>{m.role}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="absolute -top-5 -right-5 w-20 h-20 bg-sky-200/40 rounded-full" />
-                <div className="absolute -bottom-4 -left-4 w-14 h-14 bg-cyan-200/30 rounded-full" />
-              </div>
-              <div className="p-7">
-                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
-                  <Shield className="w-5 h-5 text-primary" />
-                </div>
-                <h3 className="text-xl font-bold mb-2">Team Management</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed">Add crew members, assign jobs, set permissions, and see who's doing what — all in one place.</p>
-              </div>
-            </div>
-
+            ))}
           </div>
         </div>
       </section>
