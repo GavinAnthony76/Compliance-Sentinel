@@ -8,7 +8,7 @@ const connectionString = process.env.NEON_DATABASE_URL || process.env.DATABASE_U
 
 if (!connectionString) {
   throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
+    "NEON_DATABASE_URL or DATABASE_URL must be set. Did you forget to provision a database?",
   );
 }
 
