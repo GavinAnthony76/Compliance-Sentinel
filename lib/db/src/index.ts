@@ -14,7 +14,7 @@ if (!connectionString) {
 
 const poolOptions: pg.PoolConfig = { connectionString };
 if (process.env.NEON_DATABASE_URL) {
-  poolOptions.ssl = { rejectUnauthorized: false };
+  poolOptions.ssl = true;
 }
 
 export const pool = new Pool(poolOptions);
