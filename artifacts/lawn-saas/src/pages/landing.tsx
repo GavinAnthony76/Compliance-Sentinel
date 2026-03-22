@@ -1,6 +1,6 @@
 import { Link } from 'wouter';
 import { Button } from '@/components/ui';
-import { Leaf, CheckCircle2, Calendar, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, Navigation, DollarSign, Clock, Phone, Home, Star, ArrowUpRight, Shield } from 'lucide-react';
+import { Leaf, CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield } from 'lucide-react';
 
 export function LandingPage() {
   return (
@@ -165,49 +165,13 @@ export function LandingPage() {
 
             {/* Feature 3: Smart Route Planning */}
             <div className="bg-background rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group">
-              {/* Mini UI Mockup */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-5 relative overflow-hidden">
-                <div className="bg-white rounded-2xl shadow-lg shadow-black/10 p-4 mx-2">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-bold text-sm text-gray-800">Today's Route</span>
-                    <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1"><Clock className="w-3 h-3" />Save 28 min</span>
-                  </div>
-                  {/* Route stops */}
-                  <div className="space-y-2 mb-3">
-                    {[
-                      { name: 'Anderson Property', time: '8:00 AM', color: 'bg-emerald-500' },
-                      { name: 'Brooks Residence', time: '9:30 AM', color: 'bg-blue-500' },
-                      { name: 'Chen Estate', time: '11:00 AM', color: 'bg-purple-500' },
-                      { name: 'Davis Home', time: '1:30 PM', color: 'bg-orange-500' },
-                    ].map((stop, i) => (
-                      <div key={i} className="flex items-center gap-2.5">
-                        <div className={`w-2 h-2 rounded-full ${stop.color} shrink-0`} />
-                        <div className="flex-1">
-                          <span className="text-xs font-medium text-gray-800">{stop.name}</span>
-                        </div>
-                        <span className="text-xs text-gray-400">{stop.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Mini map placeholder */}
-                  <div className="rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 h-16 flex items-center justify-center relative overflow-hidden">
-                    <div className="absolute inset-0 opacity-20">
-                      {/* Grid lines */}
-                      {[0,1,2,3,4].map(i => <div key={i} className="absolute border-slate-400" style={{ left: `${i * 25}%`, top: 0, bottom: 0, borderLeftWidth: 1 }} />)}
-                      {[0,1,2].map(i => <div key={i} className="absolute border-slate-400" style={{ top: `${i * 50}%`, left: 0, right: 0, borderTopWidth: 1 }} />)}
-                    </div>
-                    {/* Route dots */}
-                    {[{ x: '15%', y: '25%', c: 'bg-emerald-500' }, { x: '35%', y: '55%', c: 'bg-blue-500' }, { x: '62%', y: '30%', c: 'bg-purple-500' }, { x: '82%', y: '65%', c: 'bg-orange-500' }].map((pt, i) => (
-                      <div key={i} className={`absolute w-3 h-3 rounded-full ${pt.c} border-2 border-white shadow`} style={{ left: pt.x, top: pt.y }} />
-                    ))}
-                    {/* Route line */}
-                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 80">
-                      <polyline points="30,20 70,44 124,24 164,52" fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,2" opacity="0.6" />
-                    </svg>
-                    <Navigation className="w-5 h-5 text-blue-600 relative z-10 opacity-30" />
-                  </div>
-                </div>
-                <div className="absolute -top-4 -right-4 w-20 h-20 bg-blue-200/40 rounded-full" />
+              {/* Image Mockup */}
+              <div className="bg-gradient-to-br from-sky-100 to-blue-200 relative overflow-hidden">
+                <img
+                  src={`${import.meta.env.BASE_URL}images/smartroute.png`}
+                  alt="Smart Route Planning"
+                  className="w-full object-cover object-center"
+                />
               </div>
               {/* Text */}
               <div className="p-7">
