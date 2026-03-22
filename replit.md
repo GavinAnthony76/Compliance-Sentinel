@@ -129,8 +129,22 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Pro**: $199/mo — everything + automations, advanced analytics
 
 ## Demo Credentials
-- Company: `alex@greenscapes.com` / `Demo1234!`
+- Company: `alex@greenscapes.com` / `Demo1234!` (Growth plan)
 - Admin: `admin@greensync.com` / `Admin1234!`
+- Public booking: `/book/greenscapes-demo`
+
+## Demo Data (seeded)
+- 6 customers (James Harrison, Maria Santos, David Chen, Rachel Thompson, Tom Williams, Linda Garcia)
+- 5 services (Lawn Mowing $65, Fertilization $89, Hedge Trimming $120, Aeration $150, Leaf Removal $175)
+- 10 appointments (5 completed, 2 today scheduled, 3 upcoming)
+- 6 invoices (3 paid, 2 sent, 1 draft)
+- 3 estimates, 3 recurring plans, 3 review requests, 3 automation rules
+
+## Plan Feature Gating
+- **review_requests** route requires Growth plan (enforced in backend + sidebar badge)
+- Sidebar badges: `Growth` on Recurring, Estimates, Routes, Reviews, Team; `Pro` on Automations
+- `PlanGate` component wraps pages to show upgrade wall for insufficient plan
+- `requireFeature()` in backend enforces plan gating per route
 
 ## Environment Variables
 - `DATABASE_URL` — PostgreSQL connection (auto-provided by Replit)

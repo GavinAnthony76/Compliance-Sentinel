@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 export function PublicBookingPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
-  const { data, isLoading, error } = useGetBookingPage({ slug });
+  const { data, isLoading, error } = useGetBookingPage(slug);
   const submitMut = useSubmitBookingRequest();
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);

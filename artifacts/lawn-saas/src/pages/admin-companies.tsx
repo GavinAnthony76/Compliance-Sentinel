@@ -100,7 +100,7 @@ export function AdminCompaniesPage() {
 
 export function AdminCompanyDetailPage() {
   const params = useParams<{ id: string }>();
-  const { data, isLoading } = useAdminGetCompany({ id: Number(params.id) });
+  const { data, isLoading } = useAdminGetCompany(Number(params.id));
   const { toast } = useToast();
   const qc = useQueryClient();
   const suspendMut = useAdminSuspendCompany();

@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { db, reviewRequestsTable, customersTable, companiesTable } from "@workspace/db";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { sendReviewRequestNotification } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireFeature("review_requests"));
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;
@@ -20,7 +22,7 @@ router.get("/", async (req: any, res) => {
   ]);
 
   const customerIds = [...new Set(requests.map(r => r.customerId))];
-  const customers = customerIds.length > 0 ? await db.select().from(customersTable).where(sql`${customersTable.id} = ANY(${customerIds})`) : [];
+  const customers = customerIds.length > 0 ? await db.select().from(customersTable).where(inArray(customersTable.id, customerIds)) : [];
   const customerMap = Object.fromEntries(customers.map(c => [c.id, `${c.firstName} ${c.lastName}`]));
 
   return res.json({ reviewRequests: requests.map(r => ({ ...r, customerName: customerMap[r.customerId] ?? null })), total: Number(total[0].count), page, limit });
