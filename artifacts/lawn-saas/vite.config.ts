@@ -3,6 +3,22 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { readFileSync, existsSync } from "node:fs";
+
+// Load .env for local development.
+// On Replit these vars are injected by the runtime, so this is a no-op there.
+const localEnvFile = path.resolve(import.meta.dirname, ".env");
+if (existsSync(localEnvFile)) {
+  for (const line of readFileSync(localEnvFile, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (!(key in process.env)) process.env[key] = val;
+  }
+}
 
 const rawPort = process.env.PORT;
 
@@ -62,6 +78,16 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    // Proxy /api requests to the API server when running locally.
+    // On Replit, REPL_ID is set and Replit's own routing layer handles this.
+    ...(process.env.REPL_ID === undefined && {
+      proxy: {
+        "/api": {
+          target: `http://localhost:${process.env.API_PORT ?? "8080"}`,
+          changeOrigin: true,
+        },
+      },
+    }),
     fs: {
       strict: true,
       deny: ["**/.*"],

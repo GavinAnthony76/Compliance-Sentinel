@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, companiesTable, usersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable } from "@workspace/db";
+import { db, companiesTable, usersTable, customersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable } from "@workspace/db";
 import { eq, sql, desc, ilike, and, inArray } from "drizzle-orm";
 import { requireAdminAuth, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
@@ -78,7 +78,7 @@ router.get("/companies", async (req, res) => {
   const enriched = await Promise.all(companies.map(async (c) => {
     const [owner, custCount, apptCount] = await Promise.all([
       db.select().from(usersTable).where(and(eq(usersTable.companyId, c.id), eq(usersTable.role, "owner"))).limit(1),
-      db.select({ count: sql<number>`count(*)` }).from(usersTable).where(eq(usersTable.companyId, c.id)),
+      db.select({ count: sql<number>`count(*)` }).from(customersTable).where(eq(customersTable.companyId, c.id)),
       db.select({ count: sql<number>`count(*)` }).from(appointmentsTable).where(eq(appointmentsTable.companyId, c.id)),
     ]);
     return {
@@ -104,7 +104,7 @@ router.get("/companies/:id", async (req, res) => {
   ]);
 
   const [custCount, apptCount, owner] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(usersTable).where(eq(usersTable.companyId, id)),
+    db.select({ count: sql<number>`count(*)` }).from(customersTable).where(eq(customersTable.companyId, id)),
     db.select({ count: sql<number>`count(*)` }).from(appointmentsTable).where(eq(appointmentsTable.companyId, id)),
     db.select().from(usersTable).where(and(eq(usersTable.companyId, id), eq(usersTable.role, "owner"))).limit(1),
   ]);
@@ -285,6 +285,7 @@ router.delete("/admins/:id", async (req: any, res) => {
   const id = Number(req.params.id);
   if (id === req.admin.adminId) return res.status(400).json({ error: "Cannot delete yourself" });
   await db.delete(platformAdminsTable).where(eq(platformAdminsTable.id, id));
+  await logActivity({ adminId: req.admin.adminId, action: "admin.admin_deleted", entityType: "admin", entityId: id });
   return res.json({ success: true });
 });
 
