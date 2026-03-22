@@ -1,13 +1,13 @@
 import { useAdminGetDashboard } from '@workspace/api-client-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Card, CardContent, Button } from '@/components/ui';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { Building2, Users, CreditCard, TrendingUp, LogOut, Shield, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { adminUser, adminLogout } = useAuthState();
-  const [location] = [typeof window !== 'undefined' ? window.location.pathname : '/'];
+  const [location] = useLocation();
 
   const nav = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: TrendingUp },
@@ -65,11 +65,11 @@ export function AdminDashboardPage() {
         <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
               { label: 'Total Companies', value: data?.totalCompanies, icon: Building2, color: 'text-blue-400', bg: 'bg-blue-400/10' },
               { label: 'Active Subscriptions', value: data?.activeSubscriptions, icon: CreditCard, color: 'text-green-400', bg: 'bg-green-400/10' },
-              { label: 'Trialing', value: data?.trialingAccounts, icon: Users, color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+              { label: 'Total Users', value: data?.totalUsers, icon: Users, color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
               { label: 'MRR', value: `$${((data?.mrr ?? 0) / 100).toFixed(0)}`, icon: TrendingUp, color: 'text-purple-400', bg: 'bg-purple-400/10' },
             ].map((stat, i) => (
               <div key={i} className="bg-slate-900 rounded-xl p-5 border border-slate-800">
@@ -81,6 +81,20 @@ export function AdminDashboardPage() {
               </div>
             ))}
           </div>
+
+          {data?.planBreakdown && (
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              {(['starter', 'growth', 'pro'] as const).map(plan => (
+                <div key={plan} className="bg-slate-900 rounded-xl p-4 border border-slate-800 flex items-center gap-3">
+                  <div className={`px-2 py-1 rounded-lg text-xs font-bold capitalize ${plan === 'starter' ? 'bg-blue-400/10 text-blue-400' : plan === 'growth' ? 'bg-green-400/10 text-green-400' : 'bg-purple-400/10 text-purple-400'}`}>{plan}</div>
+                  <div>
+                    <p className="text-white font-bold text-lg">{data.planBreakdown[plan] ?? 0}</p>
+                    <p className="text-slate-400 text-xs">active companies</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
             <div className="flex items-center justify-between mb-4">

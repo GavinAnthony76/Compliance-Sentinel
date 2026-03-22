@@ -2,7 +2,19 @@ import { useState } from 'react';
 import { useListInvoices, useCreateInvoice, useMarkInvoicePaid, useSendInvoice, useDeleteInvoice, useListCustomers } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, FileText, DollarSign } from 'lucide-react';
+import { Plus, FileText, DollarSign, Download } from 'lucide-react';
+import { useAuthState } from '@/hooks/use-auth-state';
+
+function downloadExport(path: string, filename: string) {
+  fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
+    .then(r => r.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    });
+}
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListInvoicesQueryKey } from '@workspace/api-client-react';
@@ -93,6 +105,8 @@ export function InvoicesPage() {
   const markPaidMut = useMarkInvoicePaid();
   const sendMut = useSendInvoice();
   const deleteMut = useDeleteInvoice();
+  const { user } = useAuthState();
+  const plan = user?.company?.subscriptionPlan ?? 'starter';
 
   const totalUnpaid = data?.invoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + Number(i.total), 0) ?? 0;
   const totalPaid = data?.invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0) ?? 0;
@@ -105,7 +119,14 @@ export function InvoicesPage() {
           <h1 className="text-3xl font-display font-bold">Invoices</h1>
           <p className="text-muted-foreground mt-1">Track payments and billing</p>
         </div>
-        <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Invoice</Button>
+        <div className="flex gap-2">
+          {plan === 'pro' && (
+            <Button variant="outline" onClick={() => downloadExport('/api/export/invoices', 'invoices.csv')}>
+              <Download className="w-4 h-4 mr-2" />Export CSV
+            </Button>
+          )}
+          <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Invoice</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-6">

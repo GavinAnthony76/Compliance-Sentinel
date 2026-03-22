@@ -2,13 +2,31 @@ import { useState } from 'react';
 import { useListCustomers } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input, Badge } from '@/components/ui';
-import { Search, Plus, MapPin, Phone, Mail } from 'lucide-react';
+import { Search, Plus, MapPin, Phone, Mail, Download } from 'lucide-react';
 import { Link } from 'wouter';
 import { formatDate } from '@/lib/utils';
+import { useAuthState } from '@/hooks/use-auth-state';
+
+function usePlan() {
+  const { user } = useAuthState();
+  return user?.company?.subscriptionPlan ?? 'starter';
+}
+
+function downloadExport(path: string, filename: string) {
+  fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
+    .then(r => r.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    });
+}
 
 export function CustomersPage() {
   const [search, setSearch] = useState('');
   const { data, isLoading } = useListCustomers({ search, limit: 50 });
+  const plan = usePlan();
 
   return (
     <AppLayout>
@@ -17,7 +35,14 @@ export function CustomersPage() {
           <h1 className="text-3xl font-display font-bold text-foreground">Customers</h1>
           <p className="text-muted-foreground mt-1">Manage your client base and their properties.</p>
         </div>
-        <Button><Plus className="w-4 h-4 mr-2"/> Add Customer</Button>
+        <div className="flex gap-2">
+          {plan === 'pro' && (
+            <Button variant="outline" onClick={() => downloadExport('/api/export/customers', 'customers.csv')}>
+              <Download className="w-4 h-4 mr-2" />Export CSV
+            </Button>
+          )}
+          <Button><Plus className="w-4 h-4 mr-2"/> Add Customer</Button>
+        </div>
       </div>
 
       <Card className="overflow-hidden border-border/50">

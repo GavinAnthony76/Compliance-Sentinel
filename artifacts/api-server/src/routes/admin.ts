@@ -6,6 +6,8 @@ import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 import { z } from "zod";
 
+const PLAN_MRR: Record<string, number> = { starter: 4900, growth: 9900, pro: 19900 };
+
 const router = Router();
 router.use(requireAdminAuth);
 
@@ -18,6 +20,8 @@ router.get("/dashboard", async (_req, res) => {
     totalAppointments,
     totalInvoices,
     recentSignups,
+    planBreakdown,
+    totalUsers,
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(companiesTable),
     db.select({ count: sql<number>`count(*)` }).from(companiesTable).where(eq(companiesTable.subscriptionStatus, "active")),
@@ -26,7 +30,16 @@ router.get("/dashboard", async (_req, res) => {
     db.select({ count: sql<number>`count(*)` }).from(appointmentsTable),
     db.select({ count: sql<number>`count(*)` }).from(invoicesTable),
     db.select().from(companiesTable).orderBy(desc(companiesTable.createdAt)).limit(5),
+    db.select({ plan: companiesTable.subscriptionPlan, count: sql<number>`count(*)` })
+      .from(companiesTable)
+      .where(eq(companiesTable.subscriptionStatus, "active"))
+      .groupBy(companiesTable.subscriptionPlan),
+    db.select({ count: sql<number>`count(*)` }).from(usersTable),
   ]);
+
+  const mrr = planBreakdown.reduce((sum, row) => {
+    return sum + (PLAN_MRR[row.plan ?? ""] ?? 0) * Number(row.count);
+  }, 0);
 
   return res.json({
     totalCompanies: Number(totalCompanies[0].count),
@@ -35,8 +48,10 @@ router.get("/dashboard", async (_req, res) => {
     canceledAccounts: Number(canceledAccounts[0].count),
     totalAppointments: Number(totalAppointments[0].count),
     totalInvoices: Number(totalInvoices[0].count),
+    totalUsers: Number(totalUsers[0].count),
     recentSignups,
-    mrr: Number(activeSubscriptions[0].count) * 99,
+    mrr,
+    planBreakdown: Object.fromEntries(planBreakdown.map(p => [p.plan, Number(p.count)])),
   });
 });
 
@@ -134,6 +149,84 @@ router.put("/companies/:id/notes", async (req: any, res) => {
   const id = Number(req.params.id);
   const notes = req.body?.notes ?? null;
   await db.update(companiesTable).set({ internalNotes: notes, updatedAt: new Date() }).where(eq(companiesTable.id, id));
+  return res.json({ success: true });
+});
+
+const createCompanySchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+  plan: z.enum(["starter", "growth", "pro"]).default("starter"),
+  ownerFirstName: z.string().min(1),
+  ownerLastName: z.string().min(1),
+  ownerEmail: z.string().email(),
+  ownerPassword: z.string().min(8),
+});
+
+router.post("/companies", async (req: any, res) => {
+  const parsed = createCompanySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const { name, email, phone, address, city, state, zip, plan, ownerFirstName, ownerLastName, ownerEmail, ownerPassword } = parsed.data;
+
+  const existingEmail = await db.select().from(usersTable).where(eq(usersTable.email, ownerEmail)).limit(1);
+  if (existingEmail.length > 0) return res.status(409).json({ error: "ConflictError", message: "Owner email already in use" });
+
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + "-" + Date.now().toString(36);
+
+  const [company] = await db.insert(companiesTable).values({
+    name,
+    slug,
+    email,
+    phone: phone ?? null,
+    address: address ?? null,
+    city: city ?? null,
+    state: state ?? null,
+    zip: zip ?? null,
+    subscriptionPlan: plan,
+    subscriptionStatus: "active",
+    isActive: true,
+  }).returning();
+
+  const passwordHash = await hashPassword(ownerPassword);
+  const [owner] = await db.insert(usersTable).values({
+    companyId: company.id,
+    firstName: ownerFirstName,
+    lastName: ownerLastName,
+    email: ownerEmail,
+    passwordHash,
+    role: "owner",
+    isActive: true,
+  }).returning();
+
+  await logActivity({ adminId: req.admin.adminId, action: "admin.company_created", entityType: "company", entityId: company.id });
+
+  return res.status(201).json({ company, owner: { id: owner.id, email: owner.email, firstName: owner.firstName, lastName: owner.lastName } });
+});
+
+router.put("/companies/:id/users/:userId/toggle", async (req: any, res) => {
+  const companyId = Number(req.params.id);
+  const userId = Number(req.params.userId);
+  const [user] = await db.select().from(usersTable).where(and(eq(usersTable.id, userId), eq(usersTable.companyId, companyId))).limit(1);
+  if (!user) return res.status(404).json({ error: "NotFound" });
+  if (user.role === "owner") return res.status(400).json({ error: "Cannot deactivate the company owner" });
+  const [updated] = await db.update(usersTable).set({ isActive: !user.isActive, updatedAt: new Date() }).where(eq(usersTable.id, userId)).returning();
+  await logActivity({ adminId: req.admin.adminId, action: `admin.user_${updated.isActive ? "activated" : "deactivated"}`, entityType: "user", entityId: userId });
+  return res.json({ success: true, isActive: updated.isActive });
+});
+
+router.delete("/companies/:id/users/:userId", async (req: any, res) => {
+  const companyId = Number(req.params.id);
+  const userId = Number(req.params.userId);
+  const [user] = await db.select().from(usersTable).where(and(eq(usersTable.id, userId), eq(usersTable.companyId, companyId))).limit(1);
+  if (!user) return res.status(404).json({ error: "NotFound" });
+  if (user.role === "owner") return res.status(400).json({ error: "Cannot delete the company owner" });
+  await db.delete(usersTable).where(and(eq(usersTable.id, userId), eq(usersTable.companyId, companyId)));
+  await logActivity({ adminId: req.admin.adminId, action: "admin.user_deleted", entityType: "user", entityId: userId });
   return res.json({ success: true });
 });
 

@@ -27,6 +27,7 @@ import { RoutesPage } from "@/pages/routes";
 import { ReviewsPage } from "@/pages/reviews";
 import { AutomationsPage } from "@/pages/automations";
 import { TeamPage } from "@/pages/team";
+import { ReportingPage } from "@/pages/reporting";
 import { SettingsPage } from "@/pages/settings";
 import { BillingPage } from "@/pages/billing";
 
@@ -119,6 +120,7 @@ function Router() {
       <Route path="/reviews"><ProtectedRoute component={ReviewsPage} /></Route>
       <Route path="/automations"><ProtectedRoute component={AutomationsPage} /></Route>
       <Route path="/team"><ProtectedRoute component={TeamPage} /></Route>
+      <Route path="/reporting"><ProtectedRoute component={ReportingPage} /></Route>
       <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
       <Route path="/billing"><ProtectedRoute component={BillingPage} /></Route>
 

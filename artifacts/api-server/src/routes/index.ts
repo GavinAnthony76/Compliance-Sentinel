@@ -19,6 +19,8 @@ import billingRouter from "./billing";
 import adminAuthRouter from "./admin-auth";
 import adminRouter from "./admin";
 import publicBookingRouter from "./public-booking";
+import exportRouter from "./export";
+import reportingRouter from "./reporting";
 
 const router: IRouter = Router();
 
@@ -42,5 +44,7 @@ router.use("/billing", billingRouter);
 router.use("/admin/auth", adminAuthRouter);
 router.use("/admin", adminRouter);
 router.use("/public", publicBookingRouter);
+router.use("/export", exportRouter);
+router.use("/reporting", reportingRouter);
 
 export default router;

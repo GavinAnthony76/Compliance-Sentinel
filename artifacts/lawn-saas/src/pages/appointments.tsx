@@ -2,7 +2,19 @@ import { useState } from 'react';
 import { useListAppointments, useCreateAppointment, useUpdateAppointment, useDeleteAppointment, useCompleteAppointment, useListCustomers, useListServices } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, Calendar, Filter, ChevronDown } from 'lucide-react';
+import { Plus, Calendar, Filter, ChevronDown, Download } from 'lucide-react';
+import { useAuthState } from '@/hooks/use-auth-state';
+
+function downloadExport(path: string, filename: string) {
+  fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
+    .then(r => r.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    });
+}
 import { AppointmentStatusBadge } from '@/components/status-badge';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -112,6 +124,8 @@ export function AppointmentsPage() {
   const qc = useQueryClient();
   const deleteMut = useDeleteAppointment();
   const completeMut = useCompleteAppointment();
+  const { user } = useAuthState();
+  const plan = user?.company?.subscriptionPlan ?? 'starter';
 
   const statuses = ['', 'pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'];
 
@@ -123,7 +137,14 @@ export function AppointmentsPage() {
           <h1 className="text-3xl font-display font-bold">Appointments</h1>
           <p className="text-muted-foreground mt-1">Schedule and manage your jobs</p>
         </div>
-        <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Appointment</Button>
+        <div className="flex gap-2">
+          {plan === 'pro' && (
+            <Button variant="outline" onClick={() => downloadExport('/api/export/appointments', 'appointments.csv')}>
+              <Download className="w-4 h-4 mr-2" />Export CSV
+            </Button>
+          )}
+          <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Appointment</Button>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-6 flex-wrap">

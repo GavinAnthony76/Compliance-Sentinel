@@ -1,13 +1,106 @@
 import { useState } from 'react';
 import { useAdminListCompanies, useAdminGetCompany, useAdminSuspendCompany, useAdminActivateCompany, useAdminUpdateCompanyPlan } from '@workspace/api-client-react';
 import { AdminLayout } from './admin-dashboard';
-import { Button } from '@/components/ui';
-import { Search, Building2, ChevronRight } from 'lucide-react';
+import { Button, Input } from '@/components/ui';
+import { Search, Building2, ChevronRight, Plus, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAdminListCompaniesQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useParams, useLocation } from 'wouter';
+
+function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [form, setForm] = useState({
+    name: '', email: '', phone: '', city: '', state: '',
+    plan: 'starter', ownerFirstName: '', ownerLastName: '', ownerEmail: '', ownerPassword: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('greensync_admin_token');
+      const res = await fetch('/api/admin/companies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Failed to create company');
+      }
+      toast({ title: 'Company created successfully' });
+      onCreated();
+      onClose();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const field = (key: keyof typeof form, label: string, opts?: { type?: string; required?: boolean; placeholder?: string }) => (
+    <div>
+      <label className="text-xs font-medium text-slate-400">{label}{opts?.required !== false ? ' *' : ''}</label>
+      <input
+        type={opts?.type ?? 'text'}
+        className="w-full mt-1 h-10 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary"
+        placeholder={opts?.placeholder ?? label}
+        value={form[key]}
+        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+        required={opts?.required !== false}
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 rounded-2xl w-full max-w-lg border border-slate-700 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+          <h2 className="text-lg font-bold text-white">Create New Company</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Company Info</p>
+          {field('name', 'Company Name')}
+          {field('email', 'Company Email', { type: 'email' })}
+          <div className="grid grid-cols-2 gap-3">
+            {field('phone', 'Phone', { required: false })}
+            <div>
+              <label className="text-xs font-medium text-slate-400">Plan *</label>
+              <select className="w-full mt-1 h-10 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-primary" value={form.plan} onChange={e => setForm(f => ({ ...f, plan: e.target.value }))}>
+                <option value="starter">Starter ($49/mo)</option>
+                <option value="growth">Growth ($99/mo)</option>
+                <option value="pro">Pro ($199/mo)</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {field('city', 'City', { required: false })}
+            {field('state', 'State', { required: false })}
+          </div>
+
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider pt-2">Owner Account</p>
+          <div className="grid grid-cols-2 gap-3">
+            {field('ownerFirstName', 'First Name')}
+            {field('ownerLastName', 'Last Name')}
+          </div>
+          {field('ownerEmail', 'Owner Email', { type: 'email' })}
+          {field('ownerPassword', 'Password', { type: 'password', placeholder: 'Min 8 characters' })}
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 h-10 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-medium transition-colors">Cancel</button>
+            <button type="submit" disabled={isLoading} className="flex-1 h-10 rounded-xl bg-primary text-white text-sm font-medium transition-colors hover:bg-primary/90 disabled:opacity-60">
+              {isLoading ? 'Creating...' : 'Create Company'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 const PLAN_COLORS: Record<string, string> = {
   starter: 'bg-blue-400/10 text-blue-400',
@@ -25,13 +118,18 @@ const STATUS_COLORS: Record<string, string> = {
 export function AdminCompaniesPage() {
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('');
-  const { data, isLoading } = useAdminListCompanies({ search: search || undefined, plan: planFilter || undefined, page: 1, limit: 50 } as any);
+  const [showCreate, setShowCreate] = useState(false);
+  const { data, isLoading, refetch } = useAdminListCompanies({ search: search || undefined, plan: planFilter || undefined, page: 1, limit: 50 } as any);
   const [, setLocation] = useLocation();
 
   return (
     <AdminLayout>
+      {showCreate && <CreateCompanyModal onClose={() => setShowCreate(false)} onCreated={() => refetch()} />}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-white">Companies</h1>
+        <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors">
+          <Plus className="w-4 h-4" />New Company
+        </button>
       </div>
 
       <div className="flex gap-3 mb-6">
