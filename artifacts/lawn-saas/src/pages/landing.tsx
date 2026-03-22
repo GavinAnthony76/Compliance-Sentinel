@@ -1,6 +1,6 @@
 import { Link } from 'wouter';
 import { Button } from '@/components/ui';
-import { Leaf, CheckCircle2, Calendar, CreditCard, Users, Settings, TrendingUp, RotateCw } from 'lucide-react';
+import { Leaf, CheckCircle2, Calendar, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, Navigation, DollarSign, Clock } from 'lucide-react';
 
 export function LandingPage() {
   return (
@@ -79,21 +79,163 @@ export function LandingPage() {
             <p className="text-lg text-muted-foreground">Ditch the spreadsheets and disconnected apps. GreenSync brings your entire operation into one place.</p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              { icon: Calendar, title: 'Smart Scheduling', desc: 'Drag-and-drop calendar with auto-routing to minimize drive time.' },
-              { icon: CreditCard, title: 'Automated Invoicing', desc: 'Get paid faster with automated invoices and one-click credit card payments.' },
-              { icon: RotateCw, title: 'Recurring Plans', desc: 'Set up weekly or bi-weekly mowing schedules that generate jobs automatically.' },
-              { icon: Users, title: 'Customer CRM', desc: 'Keep track of properties, gate codes, notes, and service history.' },
-              { icon: TrendingUp, title: 'Growth Analytics', desc: 'Real-time dashboard showing revenue, outstanding balances, and job stats.' },
-              { icon: Settings, title: 'Team Management', desc: 'Assign jobs to crews, track time, and control access permissions.' }
-            ].map((f, i) => (
-              <div key={i} className="bg-background rounded-3xl p-8 border border-border/50 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1">
-                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-6">
-                  <f.icon className="w-7 h-7 text-primary" />
+          <div className="grid md:grid-cols-3 gap-8">
+
+            {/* Feature 1: Recurring Plans */}
+            <div className="bg-background rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group">
+              {/* Mini UI Mockup */}
+              <div className="bg-gradient-to-br from-emerald-50 to-green-100 p-5 relative overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-lg shadow-black/10 p-4 mx-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-bold text-sm text-gray-800">Recurring Plans</span>
+                    <span className="text-xs text-gray-400">Auto-scheduling</span>
+                  </div>
+                  {/* Frequency toggle */}
+                  <div className="flex items-center justify-between bg-gray-50 rounded-xl p-2.5 mb-3">
+                    <span className="text-xs font-medium text-gray-600">Weekly</span>
+                    <div className="w-10 h-5 bg-primary rounded-full relative flex items-center px-0.5">
+                      <div className="w-4 h-4 bg-white rounded-full shadow ml-auto" />
+                    </div>
+                    <span className="text-xs text-gray-400">Bi-Weekly</span>
+                  </div>
+                  {/* Upcoming jobs list */}
+                  <div className="space-y-1.5">
+                    {['Mon, Jun 16', 'Wed, Jun 18', 'Mon, Jun 23', 'Wed, Jun 25'].map((d, i) => (
+                      <div key={i} className="flex items-center gap-2.5 py-1">
+                        <div className="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3 text-white" />
+                        </div>
+                        <span className="text-xs text-gray-700">{d}</span>
+                        <span className="ml-auto text-xs text-primary font-medium">Lawn Mowing</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold mb-3">{f.title}</h3>
-                <p className="text-muted-foreground leading-relaxed">{f.desc}</p>
+                {/* Decorative blobs */}
+                <div className="absolute -top-6 -right-6 w-24 h-24 bg-primary/10 rounded-full" />
+                <div className="absolute -bottom-4 -left-4 w-16 h-16 bg-emerald-200/50 rounded-full" />
+              </div>
+              {/* Text */}
+              <div className="p-7">
+                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
+                  <RotateCw className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Recurring Plans</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">Set up weekly or bi-weekly mowing schedules that generate jobs automatically — no manual rescheduling needed.</p>
+              </div>
+            </div>
+
+            {/* Feature 2: Automated Invoicing */}
+            <div className="bg-background rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group">
+              {/* Mini UI Mockup */}
+              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 relative overflow-hidden">
+                <div className="bg-slate-700/50 rounded-2xl p-4 mx-2 border border-slate-600/50">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-slate-300 font-medium">Invoice #1042</span>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-medium">Unpaid</span>
+                  </div>
+                  <div className="text-2xl font-bold text-white mb-1">$285.00</div>
+                  <div className="text-xs text-slate-400 mb-4">Green Horizons · Due Jun 30</div>
+                  {/* Line items */}
+                  <div className="space-y-1.5 mb-4 border-t border-slate-600/50 pt-3">
+                    {[['Lawn Mowing (2×)', '$160'], ['Edge Trimming', '$65'], ['Fertilization', '$60']].map(([item, price]) => (
+                      <div key={item} className="flex justify-between text-xs">
+                        <span className="text-slate-300">{item}</span>
+                        <span className="text-white font-medium">{price}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Pay button */}
+                  <button className="w-full py-2.5 bg-primary rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2">
+                    <DollarSign className="w-3.5 h-3.5" />Pay Now — One Click
+                  </button>
+                </div>
+                {/* Glow effect */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-primary/20 rounded-full blur-3xl" />
+              </div>
+              {/* Text */}
+              <div className="p-7">
+                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Automated Invoicing</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">Get paid faster with auto-generated invoices after every job. Customers pay instantly online — no chasing checks.</p>
+              </div>
+            </div>
+
+            {/* Feature 3: Smart Route Planning */}
+            <div className="bg-background rounded-3xl border border-border/50 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 hover:-translate-y-1 group">
+              {/* Mini UI Mockup */}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-5 relative overflow-hidden">
+                <div className="bg-white rounded-2xl shadow-lg shadow-black/10 p-4 mx-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-bold text-sm text-gray-800">Today's Route</span>
+                    <span className="text-xs text-emerald-600 font-semibold flex items-center gap-1"><Clock className="w-3 h-3" />Save 28 min</span>
+                  </div>
+                  {/* Route stops */}
+                  <div className="space-y-2 mb-3">
+                    {[
+                      { name: 'Anderson Property', time: '8:00 AM', color: 'bg-emerald-500' },
+                      { name: 'Brooks Residence', time: '9:30 AM', color: 'bg-blue-500' },
+                      { name: 'Chen Estate', time: '11:00 AM', color: 'bg-purple-500' },
+                      { name: 'Davis Home', time: '1:30 PM', color: 'bg-orange-500' },
+                    ].map((stop, i) => (
+                      <div key={i} className="flex items-center gap-2.5">
+                        <div className={`w-2 h-2 rounded-full ${stop.color} shrink-0`} />
+                        <div className="flex-1">
+                          <span className="text-xs font-medium text-gray-800">{stop.name}</span>
+                        </div>
+                        <span className="text-xs text-gray-400">{stop.time}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Mini map placeholder */}
+                  <div className="rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 h-16 flex items-center justify-center relative overflow-hidden">
+                    <div className="absolute inset-0 opacity-20">
+                      {/* Grid lines */}
+                      {[0,1,2,3,4].map(i => <div key={i} className="absolute border-slate-400" style={{ left: `${i * 25}%`, top: 0, bottom: 0, borderLeftWidth: 1 }} />)}
+                      {[0,1,2].map(i => <div key={i} className="absolute border-slate-400" style={{ top: `${i * 50}%`, left: 0, right: 0, borderTopWidth: 1 }} />)}
+                    </div>
+                    {/* Route dots */}
+                    {[{ x: '15%', y: '25%', c: 'bg-emerald-500' }, { x: '35%', y: '55%', c: 'bg-blue-500' }, { x: '62%', y: '30%', c: 'bg-purple-500' }, { x: '82%', y: '65%', c: 'bg-orange-500' }].map((pt, i) => (
+                      <div key={i} className={`absolute w-3 h-3 rounded-full ${pt.c} border-2 border-white shadow`} style={{ left: pt.x, top: pt.y }} />
+                    ))}
+                    {/* Route line */}
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 80">
+                      <polyline points="30,20 70,44 124,24 164,52" fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,2" opacity="0.6" />
+                    </svg>
+                    <Navigation className="w-5 h-5 text-blue-600 relative z-10 opacity-30" />
+                  </div>
+                </div>
+                <div className="absolute -top-4 -right-4 w-20 h-20 bg-blue-200/40 rounded-full" />
+              </div>
+              {/* Text */}
+              <div className="p-7">
+                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
+                  <MapPin className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">Smart Route Planning</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">Auto-optimize your daily routes to cut drive time and fuel costs. More jobs done, less time in the truck.</p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Secondary features - small cards */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-8">
+            {[
+              { icon: Users, title: 'Customer CRM', desc: 'Properties, gate codes, notes, and full service history.' },
+              { icon: TrendingUp, title: 'Growth Analytics', desc: 'Revenue, outstanding balances, and job stats in real time.' },
+              { icon: Settings, title: 'Team Management', desc: 'Assign crews, control access, and track job progress.' },
+            ].map((f, i) => (
+              <div key={i} className="bg-background rounded-2xl p-6 border border-border/50 hover:shadow-md hover:shadow-primary/5 transition-all duration-300 flex gap-4 items-start">
+                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+                  <f.icon className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-bold mb-1 text-sm">{f.title}</h3>
+                  <p className="text-muted-foreground text-xs leading-relaxed">{f.desc}</p>
+                </div>
               </div>
             ))}
           </div>
