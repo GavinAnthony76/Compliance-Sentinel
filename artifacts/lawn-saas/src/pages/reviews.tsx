@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useListReviewRequests, useSendReviewRequest, useListCustomers } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button } from '@/components/ui';
-import { Star, Plus, Mail, MessageSquare } from 'lucide-react';
+import { Star, Plus, Mail, MessageSquare, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListReviewRequestsQueryKey } from '@workspace/api-client-react';
@@ -63,13 +63,32 @@ export function ReviewsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-display font-bold">Reviews</h1>
           <p className="text-muted-foreground mt-1">Request and track customer reviews</p>
         </div>
         <Button onClick={() => setShowSend(true)}><Plus className="w-4 h-4 mr-2" />Send Request</Button>
       </div>
+
+      {(data?.reviewRequests?.length ?? 0) > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+          <Card className="p-4 border-border/50">
+            <p className="text-sm text-muted-foreground">Total Sent</p>
+            <p className="text-2xl font-bold">{data?.total ?? 0}</p>
+          </Card>
+          <Card className="p-4 border-border/50">
+            <p className="text-sm text-muted-foreground">This Page</p>
+            <p className="text-2xl font-bold">{data?.reviewRequests.length ?? 0}</p>
+          </Card>
+          <Card className="p-4 border-border/50 hidden sm:block">
+            <p className="text-sm text-muted-foreground">Channels</p>
+            <p className="text-2xl font-bold">
+              {[...new Set(data?.reviewRequests.map(r => r.channel))].join(' / ') || '—'}
+            </p>
+          </Card>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
@@ -90,6 +109,7 @@ export function ReviewsPage() {
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Channel</th>
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Status</th>
                   <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Sent</th>
+                  <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Review Link</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -105,6 +125,13 @@ export function ReviewsPage() {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${r.status === 'sent' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
                     </td>
                     <td className="p-4 text-sm text-muted-foreground">{r.sentAt ? format(new Date(r.sentAt), 'MMM d, yyyy h:mm a') : '—'}</td>
+                    <td className="p-4">
+                      {r.reviewUrl ? (
+                        <a href={r.reviewUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                          Leave Review <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : <span className="text-muted-foreground text-xs">—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

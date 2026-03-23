@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, estimatesTable, customersTable, companiesTable } from "@workspace/db";
+import { db, estimatesTable, estimateLineItemsTable, customersTable, companiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
@@ -14,15 +14,20 @@ router.get("/estimates/:token", async (req, res) => {
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, estimate.customerId)).limit(1);
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, estimate.companyId)).limit(1);
+  const lineItems = await db.select().from(estimateLineItemsTable).where(eq(estimateLineItemsTable.estimateId, estimate.id)).orderBy(estimateLineItemsTable.sortOrder);
 
   return res.json({
     id: estimate.id,
     estimateNumber: estimate.estimateNumber,
     status: estimate.status,
+    subtotal: Number(estimate.subtotal),
+    tax: Number(estimate.tax),
     total: Number(estimate.total),
+    validUntil: estimate.validUntil,
     notes: estimate.notes,
     signedAt: estimate.signedAt,
     signerName: estimate.signerName,
+    lineItems: lineItems.map(li => ({ ...li, quantity: Number(li.quantity), unitPrice: Number(li.unitPrice), total: Number(li.total) })),
     customer: customer ? { firstName: customer.firstName, lastName: customer.lastName, email: customer.email } : null,
     company: company ? { name: company.name, logoUrl: company.logoUrl, primaryColor: company.primaryColor, phone: company.phone } : null,
   });

@@ -122,7 +122,7 @@ export function EstimatesPage() {
   const handleSendForSignature = async (estId: number) => {
     setSendingSignId(estId);
     try {
-      const res = await fetch(`/api/estimates/${estId}/send-for-signature`, { method: 'POST' });
+      const res = await fetch(`/api/estimates/${estId}/send-for-signature`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to send');
       qc.invalidateQueries({ queryKey: getListEstimatesQueryKey() });

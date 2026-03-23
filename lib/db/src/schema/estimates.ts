@@ -11,7 +11,10 @@ export const estimatesTable = pgTable("estimates", {
   propertyId: integer("property_id"),
   estimateNumber: text("estimate_number").notNull(),
   status: text("status").notNull().default("draft"),
+  subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
+  tax: numeric("tax", { precision: 10, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
+  validUntil: timestamp("valid_until"),
   notes: text("notes"),
   // E-signature fields
   publicToken: text("public_token"),
@@ -22,11 +25,26 @@ export const estimatesTable = pgTable("estimates", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const estimateLineItemsTable = pgTable("estimate_line_items", {
+  id: serial("id").primaryKey(),
+  estimateId: integer("estimate_id").notNull().references(() => estimatesTable.id, { onDelete: "cascade" }),
+  companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull().default("0"),
+  total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
 export const insertEstimateSchema = createInsertSchema(estimatesTable).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
+export const insertEstimateLineItemSchema = createInsertSchema(estimateLineItemsTable).omit({ id: true });
+
 export type Estimate = typeof estimatesTable.$inferSelect;
 export type InsertEstimate = z.infer<typeof insertEstimateSchema>;
+export type EstimateLineItem = typeof estimateLineItemsTable.$inferSelect;
+export type InsertEstimateLineItem = z.infer<typeof insertEstimateLineItemSchema>;

@@ -155,16 +155,59 @@ export function EstimateSignPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
+            {estimate.lineItems && estimate.lineItems.length > 0 && (
+              <div className="border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-accent/40 border-b border-border">
+                      <th className="text-left p-3 font-medium">Description</th>
+                      <th className="text-center p-3 font-medium w-16">Qty</th>
+                      <th className="text-right p-3 font-medium w-24">Price</th>
+                      <th className="text-right p-3 font-medium w-24">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {estimate.lineItems.map((li: any, i: number) => (
+                      <tr key={i}>
+                        <td className="p-3">{li.description}</td>
+                        <td className="p-3 text-center text-muted-foreground">{li.quantity}</td>
+                        <td className="p-3 text-right text-muted-foreground">${Number(li.unitPrice).toFixed(2)}</td>
+                        <td className="p-3 text-right font-medium">${Number(li.total).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t-2 border-border bg-accent/20">
+                    {estimate.tax > 0 && (
+                      <tr>
+                        <td colSpan={3} className="p-3 text-right text-muted-foreground text-sm">Subtotal</td>
+                        <td className="p-3 text-right">${Number(estimate.subtotal).toFixed(2)}</td>
+                      </tr>
+                    )}
+                    {estimate.tax > 0 && (
+                      <tr>
+                        <td colSpan={3} className="p-3 text-right text-muted-foreground text-sm">Tax</td>
+                        <td className="p-3 text-right">${Number(estimate.tax).toFixed(2)}</td>
+                      </tr>
+                    )}
+                    <tr>
+                      <td colSpan={3} className="p-3 text-right font-bold">Total</td>
+                      <td className="p-3 text-right font-bold text-primary">${Number(estimate.total).toFixed(2)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
             {estimate.notes && (
               <div className="bg-muted/50 rounded-lg p-3">
-                <p className="text-sm font-medium mb-1">Details</p>
+                <p className="text-sm font-medium mb-1">Notes</p>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{estimate.notes}</p>
               </div>
             )}
-            {estimate.company && (
-              <div className="text-xs text-muted-foreground">
-                {estimate.company.phone && <span>{estimate.company.phone}</span>}
-              </div>
+            {estimate.validUntil && (
+              <p className="text-xs text-muted-foreground">Valid until {new Date(estimate.validUntil).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+            )}
+            {estimate.company?.phone && (
+              <div className="text-xs text-muted-foreground">{estimate.company.phone}</div>
             )}
           </CardContent>
         </Card>

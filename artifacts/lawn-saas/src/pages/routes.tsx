@@ -23,7 +23,7 @@ export function RoutesPage() {
   const handleSendReminders = async () => {
     setSendingReminders(true);
     try {
-      const res = await fetch('/api/routes/send-appointment-reminders', { method: 'POST' });
+      const res = await fetch('/api/routes/send-appointment-reminders', { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } });
       const d = await res.json();
       if (!res.ok) throw new Error(d.message || 'Failed');
       toast({ title: `Reminders sent!`, description: `${d.remindersSent} of ${d.totalTomorrow} tomorrow's appointments notified.` });

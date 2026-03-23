@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, estimatesTable, customersTable } from "@workspace/db";
+import { db, estimatesTable, estimateLineItemsTable, customersTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
@@ -13,6 +13,42 @@ router.use(requireFeature("estimates"));
 async function nextEstimateNumber(companyId: number): Promise<string> {
   const [result] = await db.select({ count: sql<number>`count(*)` }).from(estimatesTable).where(eq(estimatesTable.companyId, companyId));
   return `EST-${String(Number(result.count) + 1).padStart(4, "0")}`;
+}
+
+async function getLineItems(estimateId: number) {
+  return db.select().from(estimateLineItemsTable).where(eq(estimateLineItemsTable.estimateId, estimateId)).orderBy(estimateLineItemsTable.sortOrder);
+}
+
+async function replaceLineItems(estimateId: number, companyId: number, lineItems: any[]) {
+  await db.delete(estimateLineItemsTable).where(eq(estimateLineItemsTable.estimateId, estimateId));
+  if (lineItems.length > 0) {
+    await db.insert(estimateLineItemsTable).values(
+      lineItems.map((li, i) => ({
+        estimateId,
+        companyId,
+        description: li.description,
+        quantity: String(li.quantity ?? 1),
+        unitPrice: String(li.unitPrice ?? 0),
+        total: String(Number(li.quantity ?? 1) * Number(li.unitPrice ?? 0)),
+        sortOrder: i,
+      }))
+    );
+  }
+}
+
+function fmtEst(est: any, lineItems: any[] = []) {
+  return {
+    ...est,
+    subtotal: Number(est.subtotal),
+    tax: Number(est.tax),
+    total: Number(est.total),
+    lineItems: lineItems.map(li => ({
+      ...li,
+      quantity: Number(li.quantity),
+      unitPrice: Number(li.unitPrice),
+      total: Number(li.total),
+    })),
+  };
 }
 
 router.get("/", async (req: any, res) => {
@@ -33,42 +69,61 @@ router.get("/", async (req: any, res) => {
   const customers = customerIds.length > 0 ? await db.select().from(customersTable).where(inArray(customersTable.id, customerIds)) : [];
   const customerMap = Object.fromEntries(customers.map(c => [c.id, `${c.firstName} ${c.lastName}`]));
 
-  return res.json({ estimates: estimates.map(e => ({ ...e, total: Number(e.total), customerName: customerMap[e.customerId] ?? null })), total: Number(total[0].count), page, limit });
+  return res.json({
+    estimates: estimates.map(e => fmtEst({ ...e, customerName: customerMap[e.customerId] ?? null })),
+    total: Number(total[0].count),
+    page,
+    limit,
+  });
 });
 
 router.post("/", async (req: any, res) => {
   const { companyId, userId } = req.user;
   const estimateNumber = await nextEstimateNumber(companyId);
   const publicToken = crypto.randomBytes(32).toString("hex");
+  const lineItems: any[] = req.body.lineItems ?? [];
+  const subtotal = lineItems.length > 0
+    ? lineItems.reduce((s: number, li: any) => s + Number(li.quantity ?? 1) * Number(li.unitPrice ?? 0), 0)
+    : Number(req.body.subtotal ?? req.body.total ?? 0);
+  const tax = Number(req.body.tax ?? 0);
+  const total = subtotal + tax;
+
   const [est] = await db.insert(estimatesTable).values({
     companyId,
     customerId: req.body.customerId,
     propertyId: req.body.propertyId ?? null,
     estimateNumber,
     status: req.body.status ?? "draft",
-    total: String(req.body.total ?? 0),
+    subtotal: String(subtotal),
+    tax: String(tax),
+    total: String(total),
+    validUntil: req.body.validUntil ? new Date(req.body.validUntil) : null,
     notes: req.body.notes ?? null,
     publicToken,
   }).returning();
+
+  if (lineItems.length > 0) {
+    await replaceLineItems(est.id, companyId, lineItems);
+  }
+
+  const items = await getLineItems(est.id);
   await logActivity({ companyId, userId, action: "estimate.created", entityType: "estimate", entityId: est.id });
-  return res.status(201).json({ ...est, total: Number(est.total) });
+  return res.status(201).json(fmtEst(est, items));
 });
 
-// POST /estimates/:id/send-for-signature — send estimate link to customer for e-signing
+// POST /estimates/:id/send-for-signature
 router.post("/:id/send-for-signature", async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   const [est] = await db.select().from(estimatesTable).where(and(eq(estimatesTable.id, id), eq(estimatesTable.companyId, companyId))).limit(1);
   if (!est) return res.status(404).json({ error: "NotFound" });
 
-  // Ensure publicToken exists
   let token = est.publicToken;
   if (!token) {
     token = crypto.randomBytes(32).toString("hex");
     await db.update(estimatesTable).set({ publicToken: token, updatedAt: new Date() }).where(eq(estimatesTable.id, id));
   }
 
-  // Update status to "sent"
   await db.update(estimatesTable).set({ status: "sent", updatedAt: new Date() }).where(eq(estimatesTable.id, id));
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, est.customerId)).limit(1);
@@ -101,7 +156,8 @@ router.get("/:id", async (req: any, res) => {
   const [est] = await db.select().from(estimatesTable).where(and(eq(estimatesTable.id, id), eq(estimatesTable.companyId, companyId))).limit(1);
   if (!est) return res.status(404).json({ error: "NotFound" });
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, est.customerId)).limit(1);
-  return res.json({ ...est, total: Number(est.total), customerName: customer ? `${customer.firstName} ${customer.lastName}` : null });
+  const items = await getLineItems(id);
+  return res.json(fmtEst({ ...est, customerName: customer ? `${customer.firstName} ${customer.lastName}` : null }, items));
 });
 
 router.put("/:id", async (req: any, res) => {
@@ -109,13 +165,31 @@ router.put("/:id", async (req: any, res) => {
   const id = Number(req.params.id);
   const [existing] = await db.select().from(estimatesTable).where(and(eq(estimatesTable.id, id), eq(estimatesTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
+
   const updates: any = { updatedAt: new Date() };
   if (req.body.status) updates.status = req.body.status;
-  if (req.body.total != null) updates.total = String(req.body.total);
   if (req.body.notes !== undefined) updates.notes = req.body.notes;
+  if (req.body.validUntil !== undefined) updates.validUntil = req.body.validUntil ? new Date(req.body.validUntil) : null;
+
+  // Recalculate totals if line items or amounts provided
+  const lineItems: any[] | undefined = req.body.lineItems;
+  if (lineItems !== undefined) {
+    const subtotal = lineItems.reduce((s: number, li: any) => s + Number(li.quantity ?? 1) * Number(li.unitPrice ?? 0), 0);
+    const tax = Number(req.body.tax ?? existing.tax ?? 0);
+    updates.subtotal = String(subtotal);
+    updates.tax = String(tax);
+    updates.total = String(subtotal + tax);
+    await replaceLineItems(id, companyId, lineItems);
+  } else {
+    if (req.body.subtotal != null) updates.subtotal = String(req.body.subtotal);
+    if (req.body.tax != null) updates.tax = String(req.body.tax);
+    if (req.body.total != null) updates.total = String(req.body.total);
+  }
+
   const [updated] = await db.update(estimatesTable).set(updates).where(and(eq(estimatesTable.id, id), eq(estimatesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "estimate.updated", entityType: "estimate", entityId: id });
-  return res.json({ ...updated, total: Number(updated.total) });
+  const items = await getLineItems(id);
+  return res.json(fmtEst(updated, items));
 });
 
 router.delete("/:id", async (req: any, res) => {
