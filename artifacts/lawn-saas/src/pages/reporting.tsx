@@ -9,7 +9,7 @@ function useReporting() {
   return useQuery({
     queryKey: ['/api/reporting'],
     queryFn: async () => {
-      const res = await fetch('/api/reporting');
+      const res = await fetch('/api/reporting', { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } });
       if (!res.ok) throw new Error('Failed to fetch reporting data');
       return res.json();
     },
