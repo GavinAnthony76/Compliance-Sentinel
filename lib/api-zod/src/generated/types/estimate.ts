@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { EstimateStatus } from "./estimateStatus";
+import type { EstimateLineItem } from "./estimateLineItem";
 
 export interface Estimate {
   id: number;
@@ -14,8 +15,14 @@ export interface Estimate {
   propertyId?: number | null;
   estimateNumber: string;
   status: EstimateStatus;
+  subtotal: number;
+  tax: number;
   total: number;
+  validUntil?: string | null;
   notes?: string | null;
+  signedAt?: string | null;
+  signerName?: string | null;
   customerName?: string | null;
+  lineItems: EstimateLineItem[];
   createdAt: Date;
 }

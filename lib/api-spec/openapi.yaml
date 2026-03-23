@@ -2552,6 +2552,25 @@ components:
           format: date-time
 
     # ─── ESTIMATE SCHEMAS ──────────────────────────────────────────────────────
+    EstimateLineItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        estimateId:
+          type: integer
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        total:
+          type: number
+        sortOrder:
+          type: integer
+      required: [id, estimateId, description, quantity, unitPrice, total, sortOrder]
+
     Estimate:
       type: object
       properties:
@@ -2569,18 +2588,37 @@ components:
         status:
           type: string
           enum: [draft, sent, accepted, rejected, expired]
+        subtotal:
+          type: number
+        tax:
+          type: number
         total:
           type: number
+        validUntil:
+          type: string
+          format: date-time
+          nullable: true
         notes:
+          type: string
+          nullable: true
+        signedAt:
+          type: string
+          format: date-time
+          nullable: true
+        signerName:
           type: string
           nullable: true
         customerName:
           type: string
           nullable: true
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/EstimateLineItem"
         createdAt:
           type: string
           format: date-time
-      required: [id, companyId, customerId, estimateNumber, status, total, createdAt]
+      required: [id, companyId, customerId, estimateNumber, status, subtotal, tax, total, createdAt, lineItems]
 
     EstimateListResponse:
       type: object
@@ -2597,9 +2635,22 @@ components:
           type: integer
       required: [estimates, total, page, limit]
 
+    CreateEstimateLineItemRequest:
+      type: object
+      required: [description, quantity, unitPrice]
+      properties:
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        total:
+          type: number
+
     CreateEstimateRequest:
       type: object
-      required: [customerId, total]
+      required: [customerId]
       properties:
         customerId:
           type: integer
@@ -2608,10 +2659,21 @@ components:
         status:
           type: string
           enum: [draft, sent, accepted, rejected, expired]
+        subtotal:
+          type: number
+        tax:
+          type: number
         total:
           type: number
+        validUntil:
+          type: string
+          format: date-time
         notes:
           type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateEstimateLineItemRequest"
 
     # ─── ROUTE SCHEMAS ─────────────────────────────────────────────────────────
     Route:

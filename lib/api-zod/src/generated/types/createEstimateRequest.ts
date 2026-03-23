@@ -7,10 +7,21 @@
  */
 import type { CreateEstimateRequestStatus } from "./createEstimateRequestStatus";
 
+export interface CreateEstimateLineItemRequest {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total?: number;
+}
+
 export interface CreateEstimateRequest {
   customerId: number;
   propertyId?: number;
   status?: CreateEstimateRequestStatus;
-  total: number;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  validUntil?: string;
   notes?: string;
+  lineItems?: CreateEstimateLineItemRequest[];
 }

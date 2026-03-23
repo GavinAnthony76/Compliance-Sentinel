@@ -464,6 +464,16 @@ export const EstimateStatus = {
   expired: "expired",
 } as const;
 
+export interface EstimateLineItem {
+  id: number;
+  estimateId: number;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  sortOrder: number;
+}
+
 export interface Estimate {
   id: number;
   companyId: number;
@@ -471,9 +481,15 @@ export interface Estimate {
   propertyId?: number | null;
   estimateNumber: string;
   status: EstimateStatus;
+  subtotal: number;
+  tax: number;
   total: number;
+  validUntil?: string | null;
   notes?: string | null;
+  signedAt?: string | null;
+  signerName?: string | null;
   customerName?: string | null;
+  lineItems: EstimateLineItem[];
   createdAt: string;
 }
 
@@ -495,12 +511,23 @@ export const CreateEstimateRequestStatus = {
   expired: "expired",
 } as const;
 
+export interface CreateEstimateLineItemRequest {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total?: number;
+}
+
 export interface CreateEstimateRequest {
   customerId: number;
   propertyId?: number;
   status?: CreateEstimateRequestStatus;
-  total: number;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  validUntil?: string;
   notes?: string;
+  lineItems?: CreateEstimateLineItemRequest[];
 }
 
 export interface Route {

@@ -67,6 +67,7 @@ export * from "./customerListResponse";
 export * from "./dashboardData";
 export * from "./errorResponse";
 export * from "./estimate";
+export * from "./estimateLineItem";
 export * from "./estimateListResponse";
 export * from "./estimateStatus";
 export * from "./healthStatus";
