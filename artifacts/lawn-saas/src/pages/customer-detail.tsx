@@ -3,7 +3,7 @@ import { useRoute, Link, useLocation } from 'wouter';
 import {
   useGetCustomer, useUpdateCustomer, useDeleteCustomer,
   useCreateProperty, useUpdateProperty, useDeleteProperty,
-  useCreateAppointment, useCompleteAppointment, useDeleteAppointment,
+  useCreateAppointment, useUpdateAppointment, useCompleteAppointment, useDeleteAppointment,
   useCreateInvoice, useMarkInvoicePaid, useDeleteInvoice,
   useListServices,
   getListCustomersQueryKey,
@@ -16,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   ArrowLeft, User, MapPin, Phone, Mail, Globe, Edit2, Trash2,
-  Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap,
+  Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap, Pencil,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -177,6 +177,98 @@ function AddPropertyModal({ customerId, onClose }: { customerId: number; onClose
   );
 }
 
+function EditAppointmentModal({ appointment, customerId, onClose }: { appointment: any; customerId: number; onClose: () => void }) {
+  const toLocalDT = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+  const [form, setForm] = useState({
+    serviceId: appointment.serviceId ? String(appointment.serviceId) : '',
+    scheduledStart: appointment.scheduledStart ? toLocalDT(appointment.scheduledStart) : '',
+    scheduledEnd: appointment.scheduledEnd ? toLocalDT(appointment.scheduledEnd) : '',
+    status: appointment.status ?? 'pending',
+    notes: appointment.notes ?? '',
+    price: appointment.price != null ? String(appointment.price) : '',
+  });
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const updateMut = useUpdateAppointment();
+  const { data: services } = useListServices();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateMut.mutateAsync({
+        id: appointment.id,
+        data: {
+          serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          scheduledStart: new Date(form.scheduledStart).toISOString(),
+          scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
+          status: form.status as any,
+          notes: form.notes || undefined,
+          price: form.price ? Number(form.price) : undefined,
+        },
+      });
+      qc.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
+      toast({ title: 'Appointment updated' });
+      onClose();
+    } catch {
+      toast({ title: 'Error updating appointment', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <h2 className="text-xl font-bold mb-6">Edit Appointment</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Service</label>
+            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+              <option value="">No service selected</option>
+              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Start Date/Time *</label>
+              <Input type="datetime-local" value={form.scheduledStart} onChange={e => setForm(f => ({ ...f, scheduledStart: e.target.value }))} required />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">End Date/Time</label>
+              <Input type="datetime-local" value={form.scheduledEnd} onChange={e => setForm(f => ({ ...f, scheduledEnd: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Status</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Price ($)</label>
+              <Input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Notes</label>
+            <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Special instructions..." />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button type="submit" className="flex-1" isLoading={updateMut.isPending}>Save Changes</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function NewAppointmentModal({ customerId, onClose }: { customerId: number; onClose: () => void }) {
   const [form, setForm] = useState({ serviceId: '', scheduledStart: '', scheduledEnd: '', status: 'pending', notes: '', price: '' });
   const { toast } = useToast();
@@ -330,6 +422,7 @@ export function CustomerDetailPage() {
   const [showAddProperty, setShowAddProperty] = useState(false);
   const [showNewAppt, setShowNewAppt] = useState(false);
   const [showNewInvoice, setShowNewInvoice] = useState(false);
+  const [editingAppt, setEditingAppt] = useState<any>(null);
 
   const deleteMut = useDeleteCustomer();
   const deletePropertyMut = useDeleteProperty();
@@ -350,7 +443,7 @@ export function CustomerDetailPage() {
     try {
       const res = await fetch('/api/portal/auth/send-invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('greensync_token')}` },
         body: JSON.stringify({ customerId: id }),
       });
       const data = await res.json();
@@ -406,6 +499,7 @@ export function CustomerDetailPage() {
       {showEdit && <EditCustomerModal customer={customer} onClose={() => setShowEdit(false)} />}
       {showAddProperty && <AddPropertyModal customerId={id} onClose={() => setShowAddProperty(false)} />}
       {showNewAppt && <NewAppointmentModal customerId={id} onClose={() => setShowNewAppt(false)} />}
+      {editingAppt && <EditAppointmentModal appointment={editingAppt} customerId={id} onClose={() => setEditingAppt(null)} />}
       {showNewInvoice && <NewInvoiceModal customerId={id} onClose={() => setShowNewInvoice(false)} />}
 
       {/* Back link */}
@@ -591,7 +685,7 @@ export function CustomerDetailPage() {
                     if (!confirm('Remove saved card?')) return;
                     setRemovingCard(true);
                     try {
-                      const res = await fetch(`/api/autopay/customers/${id}/payment-method`, { method: 'DELETE' });
+                      const res = await fetch(`/api/autopay/customers/${id}/payment-method`, { method: 'DELETE', headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } });
                       if (!res.ok) throw new Error();
                       qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
                       toast({ title: 'Card removed' });
@@ -609,7 +703,7 @@ export function CustomerDetailPage() {
                     try {
                       const res = await fetch(`/api/autopay/customers/${id}/autopay`, {
                         method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('greensync_token')}` },
                         body: JSON.stringify({ enabled: customer.autopayEnabled !== 'true' }),
                       });
                       if (!res.ok) throw new Error((await res.json()).message);
@@ -635,7 +729,10 @@ export function CustomerDetailPage() {
       {tab === 'appointments' && (
         <Card className="border-border/50 overflow-hidden">
           <div className="p-4 border-b border-border flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">{recentAppointments.length} appointment{recentAppointments.length !== 1 ? 's' : ''}</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-medium text-muted-foreground">{recentAppointments.length} appointment{recentAppointments.length !== 1 ? 's' : ''}</p>
+              <Link href="/appointments" className="text-xs text-primary hover:underline flex items-center gap-0.5">See all <ExternalLink className="w-3 h-3" /></Link>
+            </div>
             <Button size="sm" onClick={() => setShowNewAppt(true)}><Plus className="w-4 h-4 mr-1.5" />Schedule</Button>
           </div>
           {recentAppointments.length === 0 ? (
@@ -658,6 +755,9 @@ export function CustomerDetailPage() {
                   <div className="flex items-center gap-2 sm:ml-auto">
                     <AppointmentStatusBadge status={appt.status} />
                     {appt.price && <span className="text-sm font-medium">{formatCurrency(Number(appt.price))}</span>}
+                    <Button size="sm" variant="ghost" onClick={() => setEditingAppt(appt)}>
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
                     {appt.status !== 'completed' && appt.status !== 'cancelled' && (
                       <Button size="sm" variant="outline" className="text-green-600 border-green-200 hover:bg-green-50" onClick={async () => {
                         await completeApptMut.mutateAsync({ id: appt.id, data: {} });
@@ -687,7 +787,10 @@ export function CustomerDetailPage() {
       {tab === 'invoices' && (
         <Card className="border-border/50 overflow-hidden">
           <div className="p-4 border-b border-border flex items-center justify-between">
-            <p className="text-sm font-medium text-muted-foreground">{recentInvoices.length} invoice{recentInvoices.length !== 1 ? 's' : ''}</p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-medium text-muted-foreground">{recentInvoices.length} invoice{recentInvoices.length !== 1 ? 's' : ''}</p>
+              <Link href="/invoices" className="text-xs text-primary hover:underline flex items-center gap-0.5">See all <ExternalLink className="w-3 h-3" /></Link>
+            </div>
             <Button size="sm" onClick={() => setShowNewInvoice(true)}><Plus className="w-4 h-4 mr-1.5" />New Invoice</Button>
           </div>
           {recentInvoices.length === 0 ? (
