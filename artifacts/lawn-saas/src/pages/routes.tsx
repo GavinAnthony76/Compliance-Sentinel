@@ -3,7 +3,7 @@ import { useListRoutes, useCreateRoute, useUpdateRoute, useDeleteRoute } from '@
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, Route as RouteIcon, Sparkles, MapPin, Clock } from 'lucide-react';
+import { Plus, Route as RouteIcon, Sparkles, MapPin, Clock, Bell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListRoutesQueryKey } from '@workspace/api-client-react';
@@ -18,6 +18,21 @@ export function RoutesPage() {
   const createMut = useCreateRoute();
   const updateMut = useUpdateRoute();
   const deleteMut = useDeleteRoute();
+  const [sendingReminders, setSendingReminders] = useState(false);
+
+  const handleSendReminders = async () => {
+    setSendingReminders(true);
+    try {
+      const res = await fetch('/api/routes/send-appointment-reminders', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Failed');
+      toast({ title: `Reminders sent!`, description: `${d.remindersSent} of ${d.totalTomorrow} tomorrow's appointments notified.` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingReminders(false);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,7 +81,12 @@ export function RoutesPage() {
           <h1 className="text-3xl font-display font-bold">Routes</h1>
           <p className="text-muted-foreground mt-1">Plan and optimize your daily job routes</p>
         </div>
-        <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Route</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleSendReminders} isLoading={sendingReminders}>
+            <Bell className="w-4 h-4 mr-2" />Send Reminders
+          </Button>
+          <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Route</Button>
+        </div>
       </div>
 
       {isLoading ? (

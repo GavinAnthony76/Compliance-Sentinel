@@ -16,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   ArrowLeft, User, MapPin, Phone, Mail, Globe, Edit2, Trash2,
-  Plus, Calendar, FileText, Check, Home, Tag,
+  Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -337,6 +337,31 @@ export function CustomerDetailPage() {
   const deleteApptMut = useDeleteAppointment();
   const markPaidMut = useMarkInvoicePaid();
   const deleteInvoiceMut = useDeleteInvoice();
+  const [sendingInvite, setSendingInvite] = useState(false);
+  const [togglingAutopay, setTogglingAutopay] = useState(false);
+  const [removingCard, setRemovingCard] = useState(false);
+
+  const handleSendPortalInvite = async () => {
+    if (!customer.email) {
+      toast({ title: 'Customer has no email', description: 'Add an email address first', variant: 'destructive' });
+      return;
+    }
+    setSendingInvite(true);
+    try {
+      const res = await fetch('/api/portal/auth/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId: id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to send invite');
+      toast({ title: 'Portal invite sent!', description: `Invite link sent to ${customer.email}` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingInvite(false);
+    }
+  };
 
   if (isLoading) return (
     <AppLayout>
@@ -425,7 +450,10 @@ export function CustomerDetailPage() {
             </div>
           )}
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex gap-2 shrink-0 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleSendPortalInvite} isLoading={sendingInvite}>
+            <ExternalLink className="w-4 h-4 mr-2" />Portal Invite
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setShowEdit(true)}>
             <Edit2 className="w-4 h-4 mr-2" />Edit
           </Button>
@@ -544,6 +572,63 @@ export function CustomerDetailPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Tab: Overview — Payment & Autopay */}
+      {tab === 'overview' && (
+        <Card className="border-border/50 mt-6">
+          <CardContent className="p-6">
+            <h3 className="font-semibold mb-4 flex items-center gap-2"><CreditCard className="w-4 h-4 text-primary" />Payment & Autopay</h3>
+            {customer.stripePaymentMethodId ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-xl">
+                  <CreditCard className="w-5 h-5 text-green-600" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-green-800">Card on file</p>
+                    <p className="text-xs text-green-600">Saved payment method ready for autopay</p>
+                  </div>
+                  <Button size="sm" variant="ghost" className="text-destructive" isLoading={removingCard} onClick={async () => {
+                    if (!confirm('Remove saved card?')) return;
+                    setRemovingCard(true);
+                    try {
+                      const res = await fetch(`/api/autopay/customers/${id}/payment-method`, { method: 'DELETE' });
+                      if (!res.ok) throw new Error();
+                      qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                      toast({ title: 'Card removed' });
+                    } catch { toast({ title: 'Error removing card', variant: 'destructive' }); }
+                    finally { setRemovingCard(false); }
+                  }}>Remove</Button>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-accent/40 rounded-xl">
+                  <div>
+                    <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4 text-primary" />Autopay</p>
+                    <p className="text-xs text-muted-foreground">Automatically charge invoices when due</p>
+                  </div>
+                  <Button size="sm" variant={customer.autopayEnabled === 'true' ? 'default' : 'outline'} isLoading={togglingAutopay} onClick={async () => {
+                    setTogglingAutopay(true);
+                    try {
+                      const res = await fetch(`/api/autopay/customers/${id}/autopay`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: customer.autopayEnabled !== 'true' }),
+                      });
+                      if (!res.ok) throw new Error((await res.json()).message);
+                      qc.invalidateQueries({ queryKey: [`/api/customers/${id}`] });
+                      toast({ title: customer.autopayEnabled === 'true' ? 'Autopay disabled' : 'Autopay enabled' });
+                    } catch (err: any) { toast({ title: 'Error', description: err.message, variant: 'destructive' }); }
+                    finally { setTogglingAutopay(false); }
+                  }}>{customer.autopayEnabled === 'true' ? 'On' : 'Off'}</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">No saved payment method</p>
+                <p className="text-xs mt-1">Customer can add a card via the customer portal</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Tab: Appointments */}

@@ -4,6 +4,7 @@ import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
+import crypto from "crypto";
 
 const router = Router();
 router.use(requireAuth);
@@ -38,6 +39,7 @@ router.get("/", async (req: any, res) => {
 router.post("/", async (req: any, res) => {
   const { companyId, userId } = req.user;
   const estimateNumber = await nextEstimateNumber(companyId);
+  const publicToken = crypto.randomBytes(32).toString("hex");
   const [est] = await db.insert(estimatesTable).values({
     companyId,
     customerId: req.body.customerId,
@@ -46,9 +48,51 @@ router.post("/", async (req: any, res) => {
     status: req.body.status ?? "draft",
     total: String(req.body.total ?? 0),
     notes: req.body.notes ?? null,
+    publicToken,
   }).returning();
   await logActivity({ companyId, userId, action: "estimate.created", entityType: "estimate", entityId: est.id });
   return res.status(201).json({ ...est, total: Number(est.total) });
+});
+
+// POST /estimates/:id/send-for-signature — send estimate link to customer for e-signing
+router.post("/:id/send-for-signature", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const id = Number(req.params.id);
+  const [est] = await db.select().from(estimatesTable).where(and(eq(estimatesTable.id, id), eq(estimatesTable.companyId, companyId))).limit(1);
+  if (!est) return res.status(404).json({ error: "NotFound" });
+
+  // Ensure publicToken exists
+  let token = est.publicToken;
+  if (!token) {
+    token = crypto.randomBytes(32).toString("hex");
+    await db.update(estimatesTable).set({ publicToken: token, updatedAt: new Date() }).where(eq(estimatesTable.id, id));
+  }
+
+  // Update status to "sent"
+  await db.update(estimatesTable).set({ status: "sent", updatedAt: new Date() }).where(eq(estimatesTable.id, id));
+
+  const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, est.customerId)).limit(1);
+  const { sendEmail, sendSMS } = await import("../lib/notifications");
+  const { companiesTable } = await import("@workspace/db");
+  const { eq: deq } = await import("drizzle-orm");
+  const [company] = await db.select().from(companiesTable).where(deq(companiesTable.id, companyId)).limit(1);
+
+  const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+  const signUrl = `${baseUrl}/estimates/${token}/sign`;
+
+  if (customer?.email) {
+    await sendEmail({
+      to: customer.email,
+      subject: `Estimate ${est.estimateNumber} from ${company?.name || "Your Service Provider"} — Ready to Sign`,
+      body: `Hi ${customer.firstName},\n\nYour estimate ${est.estimateNumber} for $${Number(est.total).toFixed(2)} is ready for your review and signature.\n\nView and sign: ${signUrl}\n\nThank you!`,
+    });
+  }
+  if (customer?.phone) {
+    await sendSMS({ to: customer.phone, body: `${company?.name || "Your service provider"} sent estimate ${est.estimateNumber} for $${Number(est.total).toFixed(2)}. Review & sign: ${signUrl}` });
+  }
+
+  await logActivity({ companyId, userId, action: "estimate.sent_for_signature", entityType: "estimate", entityId: id });
+  return res.json({ success: true, signUrl });
 });
 
 router.get("/:id", async (req: any, res) => {

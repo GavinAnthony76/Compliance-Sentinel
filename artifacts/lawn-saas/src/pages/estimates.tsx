@@ -3,7 +3,7 @@ import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstima
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, FileText } from 'lucide-react';
+import { Plus, FileText, PenLine, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListEstimatesQueryKey } from '@workspace/api-client-react';
@@ -117,6 +117,22 @@ export function EstimatesPage() {
   const qc = useQueryClient();
   const deleteMut = useDeleteEstimate();
   const updateMut = useUpdateEstimate();
+  const [sendingSignId, setSendingSignId] = useState<number | null>(null);
+
+  const handleSendForSignature = async (estId: number) => {
+    setSendingSignId(estId);
+    try {
+      const res = await fetch(`/api/estimates/${estId}/send-for-signature`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to send');
+      qc.invalidateQueries({ queryKey: getListEstimatesQueryKey() });
+      toast({ title: 'Sent for signature!', description: 'Customer will receive email + SMS with signing link.' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingSignId(null);
+    }
+  };
 
   return (
     <AppLayout>
@@ -164,13 +180,18 @@ export function EstimatesPage() {
                       </td>
                       <td className="p-4 text-sm text-muted-foreground">{est.validUntil ? format(new Date(est.validUntil), 'MMM d, yyyy') : '—'}</td>
                       <td className="p-4">
-                        <div className="flex items-center gap-2 justify-end">
+                        <div className="flex items-center gap-2 justify-end flex-wrap">
+                          {(est.status === 'draft' || est.status === 'sent') && !est.signedAt && (
+                            <Button size="sm" variant="outline" onClick={() => handleSendForSignature(est.id)} isLoading={sendingSignId === est.id}>
+                              <PenLine className="w-3.5 h-3.5 mr-1" />Sign
+                            </Button>
+                          )}
                           {est.status === 'draft' && (
                             <Button size="sm" variant="outline" onClick={async () => {
                               await updateMut.mutateAsync({ id: est.id, data: { status: 'sent' } });
                               qc.invalidateQueries({ queryKey: getListEstimatesQueryKey() });
                               toast({ title: 'Estimate sent' });
-                            }}>Send</Button>
+                            }}><Send className="w-3.5 h-3.5 mr-1" />Send</Button>
                           )}
                           <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={async () => {
                             if (!confirm('Delete estimate?')) return;

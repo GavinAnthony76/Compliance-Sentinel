@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { db, routesTable, routeStopsTable, appointmentsTable, usersTable } from "@workspace/db";
+import { db, routesTable, routeStopsTable, appointmentsTable, usersTable, customersTable, servicesTable, companiesTable } from "@workspace/db";
 import { eq, and, sql, desc, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
+import { sendSMS, sendEmail } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
@@ -101,6 +102,93 @@ router.delete("/:routeId/stops/:stopId", async (req: any, res) => {
   const stopId = Number(req.params.stopId);
   await db.delete(routeStopsTable).where(and(eq(routeStopsTable.id, stopId), eq(routeStopsTable.routeId, routeId), eq(routeStopsTable.companyId, companyId)));
   return res.json({ success: true });
+});
+
+// POST /:routeId/stops/:stopId/on-my-way — send "on my way" SMS/email to customer
+router.post("/:routeId/stops/:stopId/on-my-way", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const routeId = Number(req.params.routeId);
+  const stopId = Number(req.params.stopId);
+
+  const [stop] = await db.select().from(routeStopsTable)
+    .where(and(eq(routeStopsTable.id, stopId), eq(routeStopsTable.routeId, routeId), eq(routeStopsTable.companyId, companyId)))
+    .limit(1);
+  if (!stop) return res.status(404).json({ error: "NotFound" });
+
+  const [appt] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, stop.appointmentId)).limit(1);
+  if (!appt) return res.status(404).json({ error: "AppointmentNotFound" });
+
+  const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1);
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  const service = appt.serviceId ? await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1).then(r => r[0]) : null;
+
+  if (!customer) return res.status(404).json({ error: "CustomerNotFound" });
+
+  const companyName = company?.name || "Your service provider";
+  const serviceName = service?.name || "your service";
+  const etaMinutes = req.body.etaMinutes ? Number(req.body.etaMinutes) : null;
+  const etaText = etaMinutes ? ` in approximately ${etaMinutes} minutes` : " shortly";
+
+  const smsMsg = `Hi ${customer.firstName}! Your ${companyName} technician is on the way${etaText} for your ${serviceName} appointment. Reply STOP to opt out.`;
+
+  let notified = false;
+  if (customer.phone) {
+    await sendSMS({ to: customer.phone, body: smsMsg });
+    notified = true;
+  }
+  if (customer.email) {
+    await sendEmail({
+      to: customer.email,
+      subject: `Your ${companyName} technician is on the way!`,
+      body: `Hi ${customer.firstName},\n\nYour ${companyName} technician is on the way${etaText} for your ${serviceName} appointment.\n\nThank you for choosing ${companyName}!`,
+    });
+    notified = true;
+  }
+
+  await logActivity({ companyId, userId, action: "route.on_my_way_sent", entityType: "appointment", entityId: appt.id, metadata: { stopId, etaMinutes } });
+  return res.json({ success: true, notified, customerPhone: customer.phone, customerEmail: customer.email });
+});
+
+// POST /send-appointment-reminders — send 24h-ahead reminders for tomorrow's appointments
+router.post("/send-appointment-reminders", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dayStart = new Date(tomorrow.setHours(0, 0, 0, 0));
+  const dayEnd = new Date(tomorrow.setHours(23, 59, 59, 999));
+
+  const appointments = await db.select().from(appointmentsTable)
+    .where(and(
+      eq(appointmentsTable.companyId, companyId),
+      eq(appointmentsTable.status, "confirmed"),
+      gte(appointmentsTable.scheduledStart, dayStart),
+      lte(appointmentsTable.scheduledStart, dayEnd),
+    ));
+
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  let sent = 0;
+
+  for (const appt of appointments) {
+    try {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1);
+      const service = appt.serviceId ? await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1).then(r => r[0]) : null;
+      if (!customer) continue;
+
+      const { sendReminder } = await import("../lib/notifications");
+      await sendReminder({
+        customerName: `${customer.firstName} ${customer.lastName}`,
+        customerEmail: customer.email || undefined,
+        customerPhone: customer.phone || undefined,
+        scheduledStart: new Date(appt.scheduledStart!),
+        serviceName: service?.name,
+        channel: customer.phone ? "sms" : "email",
+      });
+      sent++;
+    } catch (_err) { /* non-fatal */ }
+  }
+
+  await logActivity({ companyId, userId, action: "appointments.reminders_sent", metadata: { count: sent } });
+  return res.json({ success: true, remindersSent: sent, totalTomorrow: appointments.length });
 });
 
 export default router;

@@ -17,6 +17,9 @@ export const invoicesTable = pgTable("invoices", {
   dueDate: timestamp("due_date"),
   paidAt: timestamp("paid_at"),
   notes: text("notes"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  lastReminderSentAt: timestamp("last_reminder_sent_at"),
+  reminderCount: integer("reminder_count").default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

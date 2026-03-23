@@ -11,6 +11,13 @@ import { LoginPage } from "@/pages/login";
 import { RegisterPage } from "@/pages/register";
 import { AdminLoginPage } from "@/pages/admin-login";
 import { PublicBookingPage } from "@/pages/public-booking";
+import { PortalLoginPage } from "@/pages/portal-login";
+import { PortalSetPasswordPage } from "@/pages/portal-set-password";
+import { PortalDashboardPage } from "@/pages/portal-dashboard";
+import { PortalInvoicesPage } from "@/pages/portal-invoices";
+import { PortalAppointmentsPage } from "@/pages/portal-appointments";
+import { PortalEstimatesPage } from "@/pages/portal-estimates";
+import { EstimateSignPage } from "@/pages/estimate-sign";
 import NotFound from "@/pages/not-found";
 
 // Company dashboard pages
@@ -106,6 +113,17 @@ function Router() {
       <Route path="/register" component={RegisterPage} />
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
+
+      {/* Customer portal routes */}
+      <Route path="/portal/set-password" component={PortalSetPasswordPage} />
+      <Route path="/portal/:slug/login" component={PortalLoginPage} />
+      <Route path="/portal/:slug/invoices" component={PortalInvoicesPage} />
+      <Route path="/portal/:slug/appointments" component={PortalAppointmentsPage} />
+      <Route path="/portal/:slug/estimates" component={PortalEstimatesPage} />
+      <Route path="/portal/:slug" component={PortalDashboardPage} />
+
+      {/* Public e-signature */}
+      <Route path="/estimates/:token/sign" component={EstimateSignPage} />
 
       {/* Company dashboard routes */}
       <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>

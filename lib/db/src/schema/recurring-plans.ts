@@ -16,6 +16,7 @@ export const recurringPlansTable = pgTable("recurring_plans", {
   dayOfMonth: integer("day_of_month"),
   nextRunAt: timestamp("next_run_at"),
   isActive: boolean("is_active").notNull().default(true),
+  autopayEnabled: boolean("autopay_enabled").notNull().default(false),
   price: numeric("price", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

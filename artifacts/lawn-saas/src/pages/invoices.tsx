@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useListInvoices, useCreateInvoice, useMarkInvoicePaid, useSendInvoice, useDeleteInvoice, useListCustomers } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, FileText, DollarSign, Download } from 'lucide-react';
+import { Plus, FileText, DollarSign, Download, Bell } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
+import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 function downloadExport(path: string, filename: string) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
@@ -19,8 +21,6 @@ function downloadExport(path: string, filename: string) {
     })
     .catch(err => console.error('Export error:', err));
 }
-import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
 import { getListInvoicesQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 
@@ -111,6 +111,21 @@ export function InvoicesPage() {
   const deleteMut = useDeleteInvoice();
   const { user } = useAuthState();
   const plan = user?.company?.subscriptionPlan ?? 'starter';
+  const [sendingReminders, setSendingReminders] = useState(false);
+
+  const handleSendReminders = async () => {
+    setSendingReminders(true);
+    try {
+      const res = await fetch('/api/autopay/invoices/send-reminders', { method: 'POST' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Failed');
+      toast({ title: `Reminders sent!`, description: `${d.remindersSent} of ${d.totalOverdue} overdue invoices notified.` });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setSendingReminders(false);
+    }
+  };
 
   const totalUnpaid = data?.invoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + Number(i.total), 0) ?? 0;
   const totalPaid = data?.invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0) ?? 0;
@@ -123,7 +138,10 @@ export function InvoicesPage() {
           <h1 className="text-3xl font-display font-bold">Invoices</h1>
           <p className="text-muted-foreground mt-1">Track payments and billing</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleSendReminders} isLoading={sendingReminders}>
+            <Bell className="w-4 h-4 mr-2" />Send Reminders
+          </Button>
           {plan === 'pro' && (
             <Button variant="outline" onClick={() => downloadExport('/api/export/invoices', 'invoices.csv')}>
               <Download className="w-4 h-4 mr-2" />Export CSV
