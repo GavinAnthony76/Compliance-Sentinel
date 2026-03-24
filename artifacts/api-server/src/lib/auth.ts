@@ -2,8 +2,15 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import type { Request, Response, NextFunction } from "express";
 
-const JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || "greensync-dev-secret-change-in-production";
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || JWT_SECRET + "-admin";
+const JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET;
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("Missing required environment variable: SESSION_SECRET or JWT_SECRET");
+}
+if (!ADMIN_JWT_SECRET) {
+  throw new Error("Missing required environment variable: ADMIN_JWT_SECRET");
+}
 
 export interface UserJWTPayload {
   userId: number;

@@ -1,10 +1,26 @@
 import { Router } from "express";
+import { z } from "zod";
 import { db, appointmentsTable, customersTable, servicesTable, usersTable, companiesTable } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { sendReminder, sendSMS, sendEmail } from "../lib/notifications";
 import { fireAutomations } from "../lib/automations";
+
+const createAppointmentSchema = z.object({
+  customerId: z.number().int().positive(),
+  propertyId: z.number().int().positive().optional().nullable(),
+  serviceId: z.number().int().positive().optional().nullable(),
+  assignedUserId: z.number().int().positive().optional().nullable(),
+  status: z.enum(["pending", "confirmed", "completed", "cancelled"]).optional(),
+  scheduledStart: z.string().datetime(),
+  scheduledEnd: z.string().datetime().optional().nullable(),
+  price: z.number().nonnegative().optional().nullable(),
+  notes: z.string().max(5000).optional().nullable(),
+  internalNotes: z.string().max(5000).optional().nullable(),
+});
+
+const updateAppointmentSchema = createAppointmentSchema.partial();
 
 async function sendAppointmentNotification(appt: any, companyId: number, channel: 'confirmation' | 'reminder') {
   try {
@@ -88,22 +104,25 @@ router.get("/", async (req: any, res) => {
 });
 
 router.post("/", async (req: any, res) => {
+  const parsed = createAppointmentSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  }
   const { companyId, userId } = req.user;
   const [appt] = await db.insert(appointmentsTable).values({
     companyId,
-    customerId: req.body.customerId,
-    propertyId: req.body.propertyId ?? null,
-    serviceId: req.body.serviceId ?? null,
-    assignedUserId: req.body.assignedUserId ?? null,
-    status: req.body.status ?? "pending",
-    scheduledStart: new Date(req.body.scheduledStart),
-    scheduledEnd: req.body.scheduledEnd ? new Date(req.body.scheduledEnd) : null,
-    price: req.body.price != null ? String(req.body.price) : null,
-    notes: req.body.notes ?? null,
-    internalNotes: req.body.internalNotes ?? null,
+    customerId: parsed.data.customerId,
+    propertyId: parsed.data.propertyId ?? null,
+    serviceId: parsed.data.serviceId ?? null,
+    assignedUserId: parsed.data.assignedUserId ?? null,
+    status: parsed.data.status ?? "pending",
+    scheduledStart: new Date(parsed.data.scheduledStart),
+    scheduledEnd: parsed.data.scheduledEnd ? new Date(parsed.data.scheduledEnd) : null,
+    price: parsed.data.price != null ? String(parsed.data.price) : null,
+    notes: parsed.data.notes ?? null,
+    internalNotes: parsed.data.internalNotes ?? null,
   }).returning();
   await logActivity({ companyId, userId, action: "appointment.created", entityType: "appointment", entityId: appt.id });
-  // Send booking confirmation SMS/email in background
   sendAppointmentNotification(appt, companyId, 'confirmation');
   return res.status(201).json(fmtAppt(appt));
 });
@@ -123,23 +142,28 @@ router.get("/:id", async (req: any, res) => {
 });
 
 router.put("/:id", async (req: any, res) => {
+  const parsed = updateAppointmentSchema.extend({ completionNotes: z.string().max(5000).optional().nullable() }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  }
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
 
+  const body = parsed.data;
   const updateData: any = { updatedAt: new Date() };
-  if (req.body.customerId != null) updateData.customerId = req.body.customerId;
-  if (req.body.propertyId !== undefined) updateData.propertyId = req.body.propertyId;
-  if (req.body.serviceId !== undefined) updateData.serviceId = req.body.serviceId;
-  if (req.body.assignedUserId !== undefined) updateData.assignedUserId = req.body.assignedUserId;
-  if (req.body.status) updateData.status = req.body.status;
-  if (req.body.scheduledStart) updateData.scheduledStart = new Date(req.body.scheduledStart);
-  if (req.body.scheduledEnd) updateData.scheduledEnd = new Date(req.body.scheduledEnd);
-  if (req.body.price != null) updateData.price = String(req.body.price);
-  if (req.body.notes !== undefined) updateData.notes = req.body.notes;
-  if (req.body.internalNotes !== undefined) updateData.internalNotes = req.body.internalNotes;
-  if (req.body.completionNotes !== undefined) updateData.completionNotes = req.body.completionNotes;
+  if (body.customerId != null) updateData.customerId = body.customerId;
+  if (body.propertyId !== undefined) updateData.propertyId = body.propertyId;
+  if (body.serviceId !== undefined) updateData.serviceId = body.serviceId;
+  if (body.assignedUserId !== undefined) updateData.assignedUserId = body.assignedUserId;
+  if (body.status) updateData.status = body.status;
+  if (body.scheduledStart) updateData.scheduledStart = new Date(body.scheduledStart);
+  if (body.scheduledEnd) updateData.scheduledEnd = new Date(body.scheduledEnd);
+  if (body.price != null) updateData.price = String(body.price);
+  if (body.notes !== undefined) updateData.notes = body.notes;
+  if (body.internalNotes !== undefined) updateData.internalNotes = body.internalNotes;
+  if (body.completionNotes !== undefined) updateData.completionNotes = body.completionNotes;
 
   const [updated] = await db.update(appointmentsTable).set(updateData).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "appointment.updated", entityType: "appointment", entityId: id });

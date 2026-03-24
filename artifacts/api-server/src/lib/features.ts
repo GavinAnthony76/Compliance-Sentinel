@@ -87,12 +87,13 @@ export function requireFeature(feature: string) {
       const plan = company?.subscriptionPlan;
 
       if (!hasFeature(plan, feature)) {
+        const requiredPlan: Plan = PLAN_FEATURES.growth.has(feature) ? "growth" : "pro";
         return res.status(403).json({
           error: "PlanUpgradeRequired",
           message: `This feature requires a higher subscription plan. Current plan: ${plan || "none"}`,
           feature,
           currentPlan: plan || "none",
-          requiredPlan: ["multi_staff","recurring_plans","sms_reminders","estimates","routes","customer_notes_tags","review_requests","reporting","branded_booking"].includes(feature) ? "growth" : "pro",
+          requiredPlan,
         });
       }
       next();
