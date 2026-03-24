@@ -7,10 +7,10 @@ import { useAuthState } from '@/hooks/use-auth-state';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 
-function downloadExport(path: string, filename: string) {
+function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
     .then(r => {
-      if (!r.ok) throw new Error(`Export failed: ${r.status}`);
+      if (!r.ok) throw new Error(r.status === 403 ? 'CSV export requires the Pro plan.' : `Export failed (${r.status})`);
       return r.blob();
     })
     .then(blob => {
@@ -19,7 +19,7 @@ function downloadExport(path: string, filename: string) {
       a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
     })
-    .catch(err => console.error('Export error:', err));
+    .catch(err => onError(err.message || 'Export failed'));
 }
 import { getListInvoicesQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
@@ -143,7 +143,7 @@ export function InvoicesPage() {
             <Bell className="w-4 h-4 mr-2" />Send Reminders
           </Button>
           {plan === 'pro' && (
-            <Button variant="outline" onClick={() => downloadExport('/api/export/invoices', 'invoices.csv')}>
+            <Button variant="outline" onClick={() => downloadExport('/api/export/invoices', 'invoices.csv', msg => toast({ title: msg, variant: 'destructive' }))}>
               <Download className="w-4 h-4 mr-2" />Export CSV
             </Button>
           )}

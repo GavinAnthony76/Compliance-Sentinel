@@ -15,10 +15,10 @@ function usePlan() {
   return user?.company?.subscriptionPlan ?? 'starter';
 }
 
-function downloadExport(path: string, filename: string) {
+function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
     .then(r => {
-      if (!r.ok) throw new Error(`Export failed: ${r.status}`);
+      if (!r.ok) throw new Error(r.status === 403 ? 'CSV export requires the Pro plan.' : `Export failed (${r.status})`);
       return r.blob();
     })
     .then(blob => {
@@ -27,7 +27,7 @@ function downloadExport(path: string, filename: string) {
       a.href = url; a.download = filename; a.click();
       URL.revokeObjectURL(url);
     })
-    .catch(err => console.error('Export error:', err));
+    .catch(err => onError(err.message || 'Export failed'));
 }
 
 function AddCustomerModal({ onClose }: { onClose: () => void }) {
@@ -115,6 +115,7 @@ export function CustomersPage() {
   const limit = 20;
   const { data, isLoading } = useListCustomers({ search: search || undefined, page, limit });
   const plan = usePlan();
+  const { toast } = useToast();
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
@@ -129,7 +130,7 @@ export function CustomersPage() {
         </div>
         <div className="flex gap-2">
           {plan === 'pro' && (
-            <Button variant="outline" onClick={() => downloadExport('/api/export/customers', 'customers.csv')}>
+            <Button variant="outline" onClick={() => downloadExport('/api/export/customers', 'customers.csv', msg => toast({ title: msg, variant: 'destructive' }))}>
               <Download className="w-4 h-4 mr-2" />Export CSV
             </Button>
           )}

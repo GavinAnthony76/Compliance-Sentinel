@@ -83,10 +83,18 @@ function AutomationModal({ automation, onClose }: { automation?: any; onClose: (
   );
 }
 
+const EXAMPLE_AUTOMATIONS = [
+  { name: 'Send review after job', triggerType: 'appointment_completed', actionType: 'send_review_request', description: 'Automatically ask customers for a review when you complete a job.' },
+  { name: 'Auto-invoice on completion', triggerType: 'appointment_completed', actionType: 'create_invoice', description: 'Create and send an invoice automatically when an appointment is completed.' },
+  { name: 'Follow-up after invoice sent', triggerType: 'invoice_sent', actionType: 'send_follow_up_email', description: 'Send a thank-you email when an invoice is delivered to a customer.' },
+  { name: 'Overdue invoice reminder', triggerType: 'invoice_overdue', actionType: 'send_follow_up_email', description: 'Send a follow-up email when an invoice becomes overdue.' },
+];
+
 export function AutomationsPage() {
   const { data, isLoading } = useListAutomations();
   const [editing, setEditing] = useState<any>(null);
   const [creating, setCreating] = useState(false);
+  const [template, setTemplate] = useState<any>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
   const deleteMut = useDeleteAutomation();
@@ -95,7 +103,7 @@ export function AutomationsPage() {
   return (
     <AppLayout>
       <PlanGate feature="automations">
-      {(creating || editing) && <AutomationModal automation={editing} onClose={() => { setEditing(null); setCreating(false); }} />}
+      {(creating || editing || template) && <AutomationModal automation={editing || template} onClose={() => { setEditing(null); setCreating(false); setTemplate(null); }} />}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold">Automations</h1>
@@ -107,11 +115,39 @@ export function AutomationsPage() {
       {isLoading ? (
         <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
       ) : data?.automations.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4"><Zap className="w-8 h-8 text-primary" /></div>
-          <h3 className="text-xl font-semibold mb-2">No automations yet</h3>
-          <p className="text-muted-foreground mb-6 text-center max-w-sm">Create automation rules to send reminders, follow-ups, and review requests automatically</p>
-          <Button onClick={() => setCreating(true)}><Plus className="w-4 h-4 mr-2" />Create First Automation</Button>
+        <div>
+          <div className="flex flex-col items-center justify-center py-10 mb-8">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4"><Zap className="w-8 h-8 text-primary" /></div>
+            <h3 className="text-xl font-semibold mb-2">No automations yet</h3>
+            <p className="text-muted-foreground mb-6 text-center max-w-sm">Create automation rules to send reminders, follow-ups, and review requests automatically</p>
+            <Button onClick={() => setCreating(true)}><Plus className="w-4 h-4 mr-2" />Create First Automation</Button>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-4">Suggested rules to get started</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {EXAMPLE_AUTOMATIONS.map(ex => (
+                <div key={ex.name} className="border border-border/60 rounded-xl p-4 flex items-start justify-between gap-4 hover:border-primary/40 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                      <Zap className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{ex.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{ex.description}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <span className="px-1.5 py-0.5 rounded bg-accent text-xs">{TRIGGER_LABEL[ex.triggerType]}</span>
+                        <span className="text-xs text-muted-foreground self-center">→</span>
+                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-xs">{ACTION_LABEL[ex.actionType]}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setTemplate({ ...ex, isActive: true })}>
+                    Use
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 gap-4">
