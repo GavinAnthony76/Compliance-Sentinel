@@ -57,7 +57,22 @@ router.get("/:id", async (req: any, res) => {
   const appointments = appointmentIds.length > 0
     ? await db.select().from(appointmentsTable).where(inArray(appointmentsTable.id, appointmentIds))
     : [];
-  const apptMap = Object.fromEntries(appointments.map(a => [a.id, a]));
+
+  const customerIds = [...new Set(appointments.map(a => a.customerId))];
+  const customers = customerIds.length > 0
+    ? await db.select().from(customersTable).where(inArray(customersTable.id, customerIds))
+    : [];
+  const customerMap = Object.fromEntries(customers.map(c => [c.id, c]));
+
+  const apptMap = Object.fromEntries(appointments.map(a => {
+    const customer = customerMap[a.customerId];
+    return [a.id, {
+      ...a,
+      customerName: customer ? `${customer.firstName} ${customer.lastName}` : null,
+      customerAddress: customer?.addressLine1 ?? null,
+      customerCity: customer?.city ?? null,
+    }];
+  }));
 
   return res.json({ route, stops: stops.map(s => ({ ...s, appointment: apptMap[s.appointmentId] ?? null })) });
 });
