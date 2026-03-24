@@ -9,6 +9,7 @@ export type FeatureKey =
   | 'routes'
   | 'estimates'
   | 'multi_staff'
+  | 'review_requests'
   | 'automations'
   | 'advanced_analytics'
   | 'reporting'
@@ -19,6 +20,7 @@ const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   routes: 'growth',
   estimates: 'growth',
   multi_staff: 'growth',
+  review_requests: 'growth',
   reporting: 'growth',
   automations: 'pro',
   advanced_analytics: 'pro',
@@ -84,6 +86,11 @@ const FEATURE_DESCRIPTIONS: Record<FeatureKey, { title: string; description: str
     title: 'Advanced Reporting',
     description: 'Detailed revenue breakdowns, job completion trends, and customer metrics.',
     bullets: ['Revenue by month & service', 'Completion rate trends', 'Customer lifetime value'],
+  },
+  review_requests: {
+    title: 'Review Requests',
+    description: 'Automatically ask happy customers for reviews via email or SMS after completing jobs.',
+    bullets: ['Email & SMS delivery', 'Review link tracking', 'Sent history log'],
   },
   automations: {
     title: 'Automations',
