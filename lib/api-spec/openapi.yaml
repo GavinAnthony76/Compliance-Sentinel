@@ -2683,6 +2683,9 @@ components:
           type: integer
         companyId:
           type: integer
+        name:
+          type: string
+          nullable: true
         routeDate:
           type: string
           format: date-time
@@ -2749,6 +2752,8 @@ components:
       type: object
       required: [routeDate]
       properties:
+        name:
+          type: string
         routeDate:
           type: string
           format: date-time

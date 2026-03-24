@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useListReviewRequests, useSendReviewRequest, useListCustomers } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
+import { PlanGate } from '@/components/plan-gate';
 import { Card, Button } from '@/components/ui';
 import { Star, Plus, Mail, MessageSquare, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +32,7 @@ export function ReviewsPage() {
 
   return (
     <AppLayout>
+      <PlanGate feature="review_requests">
       {showSend && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6">
@@ -139,6 +141,7 @@ export function ReviewsPage() {
           </div>
         </Card>
       )}
+      </PlanGate>
     </AppLayout>
   );
 }

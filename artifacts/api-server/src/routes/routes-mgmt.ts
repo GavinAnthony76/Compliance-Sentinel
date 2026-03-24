@@ -35,6 +35,7 @@ router.post("/", async (req: any, res) => {
   const { companyId, userId } = req.user;
   const [route] = await db.insert(routesTable).values({
     companyId,
+    name: req.body.name ?? null,
     routeDate: new Date(req.body.routeDate),
     assignedUserId: req.body.assignedUserId ?? null,
     status: req.body.status ?? "planned",

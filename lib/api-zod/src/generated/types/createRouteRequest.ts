@@ -7,6 +7,7 @@
  */
 
 export interface CreateRouteRequest {
+  name?: string;
   routeDate: Date;
   assignedUserId?: number;
   status?: string;

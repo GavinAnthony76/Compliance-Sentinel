@@ -6,6 +6,7 @@ import { companiesTable } from "./companies";
 export const routesTable = pgTable("routes", {
   id: serial("id").primaryKey(),
   companyId: integer("company_id").notNull().references(() => companiesTable.id, { onDelete: "cascade" }),
+  name: text("name"),
   routeDate: timestamp("route_date").notNull(),
   assignedUserId: integer("assigned_user_id"),
   status: text("status").default("planned"),

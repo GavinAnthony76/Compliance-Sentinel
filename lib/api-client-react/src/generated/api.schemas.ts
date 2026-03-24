@@ -533,6 +533,7 @@ export interface CreateEstimateRequest {
 export interface Route {
   id: number;
   companyId: number;
+  name?: string | null;
   routeDate: string;
   assignedUserId?: number | null;
   status?: string | null;
@@ -561,6 +562,7 @@ export interface RouteListResponse {
 }
 
 export interface CreateRouteRequest {
+  name?: string;
   routeDate: string;
   assignedUserId?: number;
   status?: string;

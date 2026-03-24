@@ -59,6 +59,7 @@ router.put("/:id", async (req: any, res) => {
   const [existing] = await db.select().from(recurringPlansTable).where(and(eq(recurringPlansTable.id, id), eq(recurringPlansTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
   const updates: any = { updatedAt: new Date() };
+  if (req.body.customerId !== undefined) updates.customerId = req.body.customerId;
   if (req.body.frequencyType) updates.frequencyType = req.body.frequencyType;
   if (req.body.isActive !== undefined) updates.isActive = req.body.isActive;
   if (req.body.price != null) updates.price = String(req.body.price);

@@ -37,7 +37,7 @@ export function RoutesPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createMut.mutateAsync({ data: { name: form.name, date: new Date(form.date).toISOString(), notes: form.notes || undefined } });
+      await createMut.mutateAsync({ data: { name: form.name || undefined, routeDate: new Date(form.date).toISOString(), notes: form.notes || undefined } });
       toast({ title: 'Route created' });
       qc.invalidateQueries({ queryKey: getListRoutesQueryKey() });
       setShowNew(false);
@@ -105,9 +105,9 @@ export function RoutesPage() {
               <div className="p-6">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h3 className="font-semibold">{route.name}</h3>
+                    <h3 className="font-semibold">{route.name || format(new Date(route.routeDate), 'EEE, MMM d, yyyy')}</h3>
                     <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-                      <Clock className="w-3.5 h-3.5" />{format(new Date(route.date), 'EEE, MMM d, yyyy')}
+                      <Clock className="w-3.5 h-3.5" />{format(new Date(route.routeDate), 'EEE, MMM d, yyyy')}
                     </p>
                   </div>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${route.status === 'completed' ? 'bg-green-100 text-green-700' : route.status === 'in_progress' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>

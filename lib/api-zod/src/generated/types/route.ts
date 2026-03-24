@@ -9,6 +9,7 @@
 export interface Route {
   id: number;
   companyId: number;
+  name?: string | null;
   routeDate: Date;
   assignedUserId?: number | null;
   status?: string | null;
