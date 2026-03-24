@@ -1,8 +1,24 @@
 import { Router } from "express";
+import { z } from "zod";
 import { db, customersTable, propertiesTable, appointmentsTable, invoicesTable } from "@workspace/db";
 import { eq, and, ilike, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+
+const customerBodySchema = z.object({
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  email: z.string().email().optional().nullable(),
+  phone: z.string().max(30).optional().nullable(),
+  addressLine1: z.string().max(255).optional().nullable(),
+  addressLine2: z.string().max(255).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  state: z.string().max(50).optional().nullable(),
+  zip: z.string().max(20).optional().nullable(),
+  notes: z.string().max(5000).optional().nullable(),
+  leadSource: z.string().max(100).optional().nullable(),
+  tags: z.array(z.string()).optional(),
+});
 
 const router = Router();
 router.use(requireAuth);
@@ -30,14 +46,16 @@ router.get("/", async (req: any, res) => {
 });
 
 router.post("/", async (req: any, res) => {
+  const parsed = customerBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  }
   const { companyId, userId } = req.user;
-
   const [customer] = await db.insert(customersTable).values({
     companyId,
-    ...req.body,
-    tags: req.body.tags ?? [],
+    ...parsed.data,
+    tags: parsed.data.tags ?? [],
   }).returning();
-
   await logActivity({ companyId, userId, action: "customer.created", entityType: "customer", entityId: customer.id });
   return res.status(201).json(customer);
 });
@@ -59,13 +77,15 @@ router.get("/:id", async (req: any, res) => {
 });
 
 router.put("/:id", async (req: any, res) => {
+  const parsed = customerBodySchema.partial().safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  }
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
-
   const [existing] = await db.select().from(customersTable).where(and(eq(customersTable.id, id), eq(customersTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
-
-  const [updated] = await db.update(customersTable).set({ ...req.body, updatedAt: new Date() }).where(and(eq(customersTable.id, id), eq(customersTable.companyId, companyId))).returning();
+  const [updated] = await db.update(customersTable).set({ ...parsed.data, updatedAt: new Date() }).where(and(eq(customersTable.id, id), eq(customersTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "customer.updated", entityType: "customer", entityId: id });
   return res.json(updated);
 });
