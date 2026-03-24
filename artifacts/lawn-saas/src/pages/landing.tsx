@@ -71,6 +71,47 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* Customer Logo Strip */}
+      <section className="py-14 bg-white relative z-20 border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <p className="text-center text-sm font-semibold text-muted-foreground uppercase tracking-widest mb-8">
+            Trusted by lawn care pros across the country
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4">
+            {[
+              { name: 'GreenScapes Pro', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+              { name: 'Precision Lawn', color: 'bg-sky-100 text-sky-700 border-sky-200' },
+              { name: 'EverGreen Solutions', color: 'bg-green-100 text-green-700 border-green-200' },
+              { name: 'TurfMaster Pro', color: 'bg-teal-100 text-teal-700 border-teal-200' },
+              { name: 'CutRight Services', color: 'bg-lime-100 text-lime-700 border-lime-200' },
+              { name: 'Elite Lawn Systems', color: 'bg-violet-100 text-violet-700 border-violet-200' },
+            ].map(({ name, color }) => (
+              <span key={name} className={`px-5 py-2.5 rounded-full border font-semibold text-sm tracking-tight ${color}`}>
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Bar */}
+      <section className="py-14 bg-gray-50 border-y border-gray-100 relative z-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row items-center justify-center divide-y md:divide-y-0 md:divide-x divide-gray-200">
+            {[
+              { value: '500+', label: 'Businesses' },
+              { value: '50,000', label: 'Jobs Scheduled' },
+              { value: '$8M+', label: 'Invoiced' },
+            ].map(({ value, label }) => (
+              <div key={label} className="flex flex-col items-center py-8 md:py-4 md:px-16 first:pt-0 last:pb-0 md:first:pt-4 md:last:pb-4 first:md:pl-0 last:md:pr-0 w-full md:w-auto">
+                <span className="text-5xl md:text-6xl font-display font-extrabold text-primary tracking-tight">{value}</span>
+                <span className="mt-2 text-sm font-semibold text-muted-foreground uppercase tracking-widest">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Features Section */}
       <section id="features" className="py-24 bg-white relative z-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -305,6 +346,29 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* Mid-Page CTA */}
+      <section className="py-24 bg-primary relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.08)_0%,_transparent_60%)]" />
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+          <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight mb-4">
+            See GreenSync in action
+          </h2>
+          <p className="text-lg text-white/80 mb-10 leading-relaxed">
+            Join hundreds of lawn care businesses already saving time and growing revenue.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link href="/register">
+              <Button size="lg" className="w-full sm:w-auto rounded-full text-lg px-8 h-14 bg-white text-primary hover:bg-white/90 font-bold">
+                Start Your Free Trial
+              </Button>
+            </Link>
+            <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-full text-lg px-8 h-14 border-white text-white hover:bg-white/10 bg-transparent font-bold">
+              Schedule a Demo
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
       <section id="pricing" className="py-24 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -435,12 +499,61 @@ export function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-foreground text-background py-12 text-center">
-        <div className="flex items-center justify-center gap-2 font-display font-bold text-2xl mb-6">
-          <Leaf className="w-6 h-6 fill-primary text-primary" />
-          GreenSync
+      <footer className="bg-foreground text-background pt-16 pb-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10 mb-12">
+            {/* Brand column */}
+            <div>
+              <div className="flex items-center gap-2 font-display font-bold text-xl mb-3">
+                <Leaf className="w-6 h-6 fill-primary text-primary" />
+                GreenSync
+              </div>
+              <p className="text-background/60 text-sm leading-relaxed">
+                The all-in-one platform built for lawn care professionals who want to grow smarter.
+              </p>
+            </div>
+
+            {/* Product column */}
+            <div>
+              <h4 className="font-semibold text-sm uppercase tracking-widest text-background/40 mb-4">Product</h4>
+              <ul className="space-y-2.5">
+                {['Features', 'Pricing', 'Testimonials', 'Security'].map((item) => (
+                  <li key={item}>
+                    <a href="#" className="text-background/70 hover:text-background text-sm transition-colors">{item}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Company column */}
+            <div>
+              <h4 className="font-semibold text-sm uppercase tracking-widest text-background/40 mb-4">Company</h4>
+              <ul className="space-y-2.5">
+                {['About', 'Blog', 'Careers', 'Contact'].map((item) => (
+                  <li key={item}>
+                    <a href="#" className="text-background/70 hover:text-background text-sm transition-colors">{item}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Legal column */}
+            <div>
+              <h4 className="font-semibold text-sm uppercase tracking-widest text-background/40 mb-4">Legal</h4>
+              <ul className="space-y-2.5">
+                {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item) => (
+                  <li key={item}>
+                    <a href="#" className="text-background/70 hover:text-background text-sm transition-colors">{item}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-background/10 pt-8 text-center">
+            <p className="text-background/40 text-sm">© 2025 GreenSync SaaS. All rights reserved.</p>
+          </div>
         </div>
-        <p className="text-background/60 text-sm">© 2025 GreenSync SaaS. All rights reserved.</p>
       </footer>
     </div>
   );
