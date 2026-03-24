@@ -245,7 +245,7 @@ export function DashboardPage() {
                   <div className="p-4 flex items-center justify-between hover:bg-accent/50 transition-colors cursor-pointer">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                        {customer.firstName[0]}{customer.lastName[0]}
+                        {customer.firstName?.[0] || customer.lastName?.[0] || '?'}
                       </div>
                       <div>
                         <h4 className="font-medium text-sm">{customer.firstName} {customer.lastName}</h4>

@@ -116,7 +116,7 @@ export function InvoicesPage() {
   const handleSendReminders = async () => {
     setSendingReminders(true);
     try {
-      const res = await fetch('/api/autopay/invoices/send-reminders', { method: 'POST' });
+      const res = await fetch('/api/autopay/invoices/send-reminders', { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } });
       const d = await res.json();
       if (!res.ok) throw new Error(d.message || 'Failed');
       toast({ title: `Reminders sent!`, description: `${d.remindersSent} of ${d.totalOverdue} overdue invoices notified.` });

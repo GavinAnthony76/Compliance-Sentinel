@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGetSettings, useUpdateSettings } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button, Input } from '@/components/ui';
@@ -31,37 +31,49 @@ export function SettingsPage() {
     logoUrl: '',
   });
 
-  if (!isLoading && company && businessForm.name === '') {
-    setBusinessForm({
-      name: company.name ?? '',
-      phone: company.phone ?? '',
-      email: company.email ?? '',
-      address: company.address ?? '',
-      city: company.city ?? '',
-      state: company.state ?? '',
-      zip: company.zip ?? '',
-      website: company.website ?? '',
-      timezone: company.timezone ?? 'America/New_York',
-    });
-    setBrandingForm({
-      primaryColor: company.primaryColor ?? '#22c55e',
-      reviewUrl: company.reviewUrl ?? '',
-      logoUrl: company.logoUrl ?? '',
-    });
-  }
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (company && !initialized.current) {
+      initialized.current = true;
+      setBusinessForm({
+        name: company.name ?? '',
+        phone: company.phone ?? '',
+        email: company.email ?? '',
+        address: company.address ?? '',
+        city: company.city ?? '',
+        state: company.state ?? '',
+        zip: company.zip ?? '',
+        website: company.website ?? '',
+        timezone: company.timezone ?? 'America/New_York',
+      });
+      setBrandingForm({
+        primaryColor: company.primaryColor ?? '#22c55e',
+        reviewUrl: company.reviewUrl ?? '',
+        logoUrl: company.logoUrl ?? '',
+      });
+    }
+  }, [company]);
 
   const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateMut.mutateAsync({ data: businessForm });
-    qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
-    toast({ title: 'Settings saved' });
+    try {
+      await updateMut.mutateAsync({ data: businessForm });
+      qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+      toast({ title: 'Settings saved' });
+    } catch {
+      toast({ title: 'Error saving settings', variant: 'destructive' });
+    }
   };
 
   const handleSaveBranding = async (e: React.FormEvent) => {
     e.preventDefault();
-    await updateMut.mutateAsync({ data: brandingForm });
-    qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
-    toast({ title: 'Branding saved' });
+    try {
+      await updateMut.mutateAsync({ data: brandingForm });
+      qc.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+      toast({ title: 'Branding saved' });
+    } catch {
+      toast({ title: 'Error saving branding', variant: 'destructive' });
+    }
   };
 
   return (
