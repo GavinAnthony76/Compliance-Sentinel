@@ -3,7 +3,7 @@ import { useListAutomations, useCreateAutomation, useUpdateAutomation, useDelete
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, Zap } from 'lucide-react';
+import { Plus, Zap, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListAutomationsQueryKey } from '@workspace/api-client-react';
@@ -104,6 +104,10 @@ export function AutomationsPage() {
     <AppLayout>
       <PlanGate feature="automations">
       {(creating || editing || template) && <AutomationModal automation={editing || template} onClose={() => { setEditing(null); setCreating(false); setTemplate(null); }} />}
+      <div className="flex items-center gap-3 mb-6 p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-sm">
+        <Info className="w-4 h-4 shrink-0 text-blue-500" />
+        <span>Automation rules fire and are logged when triggered, but email and SMS delivery runs in <strong>preview mode</strong> — messages are not delivered to real inboxes in this environment.</span>
+      </div>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold">Automations</h1>

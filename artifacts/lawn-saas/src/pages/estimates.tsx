@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useListCustomers } from '@workspace/api-client-react';
+import { useState, useEffect } from 'react';
+import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useListCustomers, useGetEstimate } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
@@ -17,39 +17,75 @@ const STATUS_COLORS: Record<string, string> = {
   expired: 'bg-gray-100 text-gray-500',
 };
 
-function EstimateModal({ onClose }: { onClose: () => void }) {
+function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: any }) {
+  const isEdit = !!estimate?.id;
   const [form, setForm] = useState({ customerId: '', subtotal: '', tax: '0', notes: '', validUntil: '', lineItems: [{ description: '', quantity: '1', unitPrice: '' }] });
+  const [initialized, setInitialized] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateEstimate();
+  const updateMut = useUpdateEstimate();
   const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
+  const { data: detail } = useGetEstimate(estimate?.id ?? 0, { query: { enabled: isEdit } } as any);
+
+  useEffect(() => {
+    if (isEdit && detail && !initialized) {
+      setForm({
+        customerId: String(detail.customerId),
+        subtotal: '',
+        tax: String(detail.tax ?? 0),
+        notes: (detail as any).notes ?? '',
+        validUntil: (detail as any).validUntil ? new Date((detail as any).validUntil).toISOString().slice(0, 10) : '',
+        lineItems: (detail as any).lineItems?.length > 0
+          ? (detail as any).lineItems.map((li: any) => ({ description: li.description, quantity: String(li.quantity), unitPrice: String(li.unitPrice) }))
+          : [{ description: '', quantity: '1', unitPrice: '' }],
+      });
+      setInitialized(true);
+    }
+  }, [detail, isEdit, initialized]);
 
   const total = form.lineItems.reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice || 0), 0) + Number(form.tax);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const lineItems = form.lineItems.filter(li => li.description && li.unitPrice).map(li => ({
+      description: li.description,
+      quantity: Number(li.quantity),
+      unitPrice: Number(li.unitPrice),
+      total: Number(li.quantity) * Number(li.unitPrice),
+    }));
     try {
-      await createMut.mutateAsync({
-        data: {
-          customerId: Number(form.customerId),
-          subtotal: total - Number(form.tax),
-          tax: Number(form.tax),
-          total,
-          notes: form.notes || undefined,
-          validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
-          lineItems: form.lineItems.filter(li => li.description && li.unitPrice).map(li => ({
-            description: li.description,
-            quantity: Number(li.quantity),
-            unitPrice: Number(li.unitPrice),
-            total: Number(li.quantity) * Number(li.unitPrice),
-          })),
-        },
-      });
-      toast({ title: 'Estimate created' });
+      if (isEdit) {
+        await updateMut.mutateAsync({
+          id: estimate.id,
+          data: {
+            subtotal: total - Number(form.tax),
+            tax: Number(form.tax),
+            total,
+            notes: form.notes || undefined,
+            validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
+            lineItems,
+          } as any,
+        });
+        toast({ title: 'Estimate updated' });
+      } else {
+        await createMut.mutateAsync({
+          data: {
+            customerId: Number(form.customerId),
+            subtotal: total - Number(form.tax),
+            tax: Number(form.tax),
+            total,
+            notes: form.notes || undefined,
+            validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
+            lineItems,
+          },
+        });
+        toast({ title: 'Estimate created' });
+      }
       qc.invalidateQueries({ queryKey: getListEstimatesQueryKey() });
       onClose();
     } catch {
-      toast({ title: 'Error creating estimate', variant: 'destructive' });
+      toast({ title: isEdit ? 'Error updating estimate' : 'Error creating estimate', variant: 'destructive' });
     }
   };
 
@@ -58,15 +94,17 @@ function EstimateModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-xl p-6 my-4">
-        <h2 className="text-xl font-bold mb-6">New Estimate</h2>
+        <h2 className="text-xl font-bold mb-6">{isEdit ? 'Edit Estimate' : 'New Estimate'}</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Customer *</label>
-            <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-              <option value="">Select customer...</option>
-              {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-            </select>
-          </div>
+          {!isEdit && (
+            <div>
+              <label className="text-sm font-medium">Customer *</label>
+              <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
+                <option value="">Select customer...</option>
+                {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium">Line Items</label>
@@ -102,7 +140,7 @@ function EstimateModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" className="flex-1" isLoading={createMut.isPending}>Create Estimate</Button>
+            <Button type="submit" className="flex-1" isLoading={createMut.isPending || updateMut.isPending}>{isEdit ? 'Save Changes' : 'Create Estimate'}</Button>
           </div>
         </form>
       </div>
@@ -113,6 +151,7 @@ function EstimateModal({ onClose }: { onClose: () => void }) {
 export function EstimatesPage() {
   const { data, isLoading } = useListEstimates({ page: 1, limit: 50 } as any);
   const [showNew, setShowNew] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
   const deleteMut = useDeleteEstimate();
@@ -138,6 +177,7 @@ export function EstimatesPage() {
     <AppLayout>
       <PlanGate feature="estimates">
       {showNew && <EstimateModal onClose={() => setShowNew(false)} />}
+      {editing && <EstimateModal estimate={editing} onClose={() => setEditing(null)} />}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold">Estimates</h1>
@@ -181,17 +221,20 @@ export function EstimatesPage() {
                       <td className="p-4 text-sm text-muted-foreground">{est.validUntil ? format(new Date(est.validUntil), 'MMM d, yyyy') : '—'}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-2 justify-end flex-wrap">
+                          {(est.status === 'draft' || est.status === 'sent') && (
+                            <Button size="sm" variant="outline" onClick={() => setEditing(est)}>Edit</Button>
+                          )}
                           {(est.status === 'draft' || est.status === 'sent') && !est.signedAt && (
                             <Button size="sm" variant="outline" onClick={() => handleSendForSignature(est.id)} isLoading={sendingSignId === est.id}>
-                              <PenLine className="w-3.5 h-3.5 mr-1" />Sign
+                              <PenLine className="w-3.5 h-3.5 mr-1" />Send for Signature
                             </Button>
                           )}
                           {est.status === 'draft' && (
                             <Button size="sm" variant="outline" onClick={async () => {
                               await updateMut.mutateAsync({ id: est.id, data: { status: 'sent' } });
                               qc.invalidateQueries({ queryKey: getListEstimatesQueryKey() });
-                              toast({ title: 'Estimate sent' });
-                            }}><Send className="w-3.5 h-3.5 mr-1" />Send</Button>
+                              toast({ title: 'Marked as sent' });
+                            }}><Send className="w-3.5 h-3.5 mr-1" />Mark as Sent</Button>
                           )}
                           <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={async () => {
                             if (!confirm('Delete estimate?')) return;

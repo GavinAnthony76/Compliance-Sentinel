@@ -218,6 +218,9 @@ export function ReportingPage() {
                       valueKey="jobCount"
                       formatVal={v => `${v} jobs`}
                     />
+                    {(data?.advanced?.serviceBreakdown?.length ?? 0) === 0 && (
+                      <p className="text-muted-foreground text-xs mt-2">No data yet — analytics will populate as you complete jobs and generate invoices.</p>
+                    )}
                     {(data?.advanced?.serviceBreakdown?.length ?? 0) > 0 && (
                       <div className="mt-4 pt-4 border-t border-border space-y-1">
                         {data.advanced.serviceBreakdown.map((r: any, i: number) => (
