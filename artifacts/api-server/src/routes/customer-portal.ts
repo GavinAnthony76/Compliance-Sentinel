@@ -8,7 +8,10 @@ import crypto from "crypto";
 
 const router = Router();
 
-const PORTAL_JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET || "greensync-dev-secret-change-in-production";
+const PORTAL_JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET;
+if (!PORTAL_JWT_SECRET) {
+  throw new Error("Missing required environment variable: SESSION_SECRET or JWT_SECRET");
+}
 const PORTAL_TOKEN_PREFIX = "portal:";
 
 interface PortalJWTPayload {

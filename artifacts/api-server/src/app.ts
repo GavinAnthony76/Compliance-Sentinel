@@ -1,5 +1,6 @@
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -27,6 +28,12 @@ function rateLimit(maxRequests: number, windowMs: number) {
 
 const app: Express = express();
 
+// Security headers
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: false,
+}));
+
 app.use(
   pinoHttp({
     logger,
@@ -47,10 +54,14 @@ app.use(
   }),
 );
 
-const allowedOrigin = process.env.FRONTEND_URL
-  || (process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.repl.co` : undefined);
+const allowedOrigins: (string | RegExp)[] = [];
+if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+if (process.env.REPL_SLUG) allowedOrigins.push(`https://${process.env.REPL_SLUG}.repl.co`);
+// Allow all *.replit.dev and *.riker.replit.dev origins for Replit workspace previews
+allowedOrigins.push(/https?:\/\/.*\.(replit\.dev|riker\.replit\.dev|repl\.co)(:\d+)?$/);
+
 app.use(cors({
-  origin: allowedOrigin || true,
+  origin: allowedOrigins.length > 1 ? allowedOrigins : true,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 }));
@@ -79,5 +90,13 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", router);
+
+// Global error handler — must have 4 parameters for Express to treat it as an error handler
+app.use((err: any, _req: Request, res: Response, _next: NextFunction): void => {
+  const status = err.status || err.statusCode || 500;
+  const message = status < 500 ? err.message : "Internal server error";
+  logger.error({ err }, "Unhandled error");
+  res.status(status).json({ error: "ServerError", message });
+});
 
 export default app;
