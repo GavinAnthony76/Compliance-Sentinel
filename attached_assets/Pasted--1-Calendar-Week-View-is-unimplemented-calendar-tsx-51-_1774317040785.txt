@@ -1,0 +1,60 @@
+
+  1. Calendar — Week View is unimplemented (calendar.tsx:51–56)
+  The Month/Week toggle renders and allows selection, but view state is never used to change the layout. Both modes render the identical month calendar.       
+
+  2. Routes — No way to manage stops (routes.tsx)
+  The server has a complete stops API (POST /:id/stops, DELETE /:routeId/stops/:stopId, POST /:routeId/stops/:stopId/on-my-way) but there is no frontend UI for
+   any of it. You can create a route, see its stop count (always 0 since stops can't be added), and delete it. The detail view, stop list, drag-to-reorder, and
+   "On My Way" per-stop notifications are all inaccessible.
+
+  3. Routes — "Optimize" button is a no-op stub (routes.tsx:129)
+  Clicking Optimize calls PUT /:id with { status: 'optimized' } — it just relabels the route. There is no routing algorithm, distance calculation, or
+  reordering logic behind it.
+
+  4. Routes — totalDistanceKm / estimatedDurationMin never appear (routes.tsx:119–120)
+  These metrics are rendered conditionally (route.totalDistanceKm && ...), but neither field exists in the DB schema or the API response. The stats row for    
+  distance and duration will always be empty.
+
+  5. Routes — No edit functionality (routes.tsx)
+  After creating a route, there is no way to edit its name, date, or notes. The PUT endpoint supports it, but there is no edit modal or inline edit in the UI. 
+
+  6. Settings — Save failures are silent (settings.tsx:53–65)
+  handleSaveBusiness and handleSaveBranding have no try/catch. If the API call throws, no error toast appears — the user gets no feedback that the save failed.
+
+  7. Calendar — Appointment clicks navigate to the full list (calendar.tsx:100)
+  Clicking any appointment on the calendar navigates to /appointments (the list page), not to the specific appointment. There is no way to open appointment    
+  details from the calendar.
+
+  ---
+  FUNCTIONAL GAPS — features exist but are incomplete
+
+  8. Estimates — No edit UI for existing estimates (estimates.tsx)
+  The estimate list has "Send" (changes status to sent), "Sign" (sends signature link), and "Delete" buttons. There is no "Edit" button — you cannot modify an 
+  estimate's line items, amounts, notes, or valid-until date after creation. The PUT /estimates/:id endpoint supports all of this.
+
+  9. Routes — Assigned User field has no UI (routes.tsx)
+  The routes.assignedUserId DB column exists and the PUT endpoint accepts it, but the create form and card view don't expose it. You can't assign a route to a 
+  staff member from the frontend.
+
+  10. Dashboard avatar — empty name renders "undefinedundefined" (dashboard.tsx:248)
+  {customer.firstName[0]}{customer.lastName[0]} — if firstName or lastName is an empty string, ''[0] is undefined in JS, producing "undefinedundefined" as the 
+  avatar initials. Any customer created with a blank name will display this.
+
+  11. Settings form — name-clear re-initialization edge case (settings.tsx:34–51)
+  The form initializes from API data when businessForm.name === ''. If a user intentionally saves an empty company name, the guard condition always passes and 
+  the form perpetually re-initializes from server data on every render — making the name field impossible to clear.
+
+  ---
+  COSMETIC / LOW SEVERITY
+
+  12. Automations — send_review_request and send_follow_up_email actions only log (lib/automations.ts)
+  The automation engine fires, but both action types print console.log rather than actually sending emails/SMS. This is expected for a stub implementation, but
+   the UI makes no indication that execution is simulated.
+
+  13. Reporting page — Pro section renders empty charts if company has no data
+  The BreakdownChart renders with an empty array gracefully (shows nothing), but there's no empty-state message explaining why the charts are blank for a new  
+  account.
+
+  14. Estimates — "Send" button (status→sent) vs "Sign" button coexist for draft status
+  A draft estimate shows both a "Send" button (changes status to sent with no email) and a "Sign" button (sends email+SMS + changes status to sent). Both do   
+  the same status transition but only one sends a notification. The distinction isn't obvious from the UI labels.
