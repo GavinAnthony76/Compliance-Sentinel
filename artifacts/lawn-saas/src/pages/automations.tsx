@@ -8,8 +8,22 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListAutomationsQueryKey } from '@workspace/api-client-react';
 
-const TRIGGERS = ['appointment_completed', 'invoice_overdue', 'appointment_upcoming_24h', 'customer_created', 'appointment_no_show'];
-const ACTIONS = ['send_review_request', 'send_sms_reminder', 'send_email_reminder', 'create_invoice', 'send_followup_email'];
+const TRIGGERS: { value: string; label: string }[] = [
+  { value: 'appointment_completed',   label: 'Appointment Completed' },
+  { value: 'invoice_sent',            label: 'Invoice Sent' },
+  { value: 'invoice_overdue',         label: 'Invoice Overdue' },
+  { value: 'appointment_upcoming_24h', label: 'Appointment in 24 Hours' },
+  { value: 'customer_created',        label: 'New Customer Added' },
+];
+
+const ACTIONS: { value: string; label: string }[] = [
+  { value: 'send_review_request', label: 'Send Review Request' },
+  { value: 'send_follow_up_email', label: 'Send Follow-Up Email' },
+  { value: 'create_invoice',       label: 'Auto-Create Invoice' },
+];
+
+const TRIGGER_LABEL: Record<string, string> = Object.fromEntries(TRIGGERS.map(t => [t.value, t.label]));
+const ACTION_LABEL: Record<string, string>  = Object.fromEntries(ACTIONS.map(a => [a.value, a.label]));
 
 function AutomationModal({ automation, onClose }: { automation?: any; onClose: () => void }) {
   const [form, setForm] = useState({ name: automation?.name ?? '', triggerType: automation?.triggerType ?? 'appointment_completed', actionType: automation?.actionType ?? 'send_review_request', isActive: automation?.isActive ?? true });
@@ -46,13 +60,13 @@ function AutomationModal({ automation, onClose }: { automation?: any; onClose: (
           <div>
             <label className="text-sm font-medium">Trigger</label>
             <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.triggerType} onChange={e => setForm(f => ({ ...f, triggerType: e.target.value }))}>
-              {TRIGGERS.map(t => <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}</option>)}
+              {TRIGGERS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div>
             <label className="text-sm font-medium">Action</label>
             <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.actionType} onChange={e => setForm(f => ({ ...f, actionType: e.target.value }))}>
-              {ACTIONS.map(a => <option key={a} value={a}>{a.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase())}</option>)}
+              {ACTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-3">
@@ -123,11 +137,11 @@ export function AutomationsPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 mb-4">
                   <span className="px-2 py-1 rounded-lg bg-accent text-xs font-medium">
-                    When: {aut.triggerType.replace(/_/g, ' ')}
+                    When: {TRIGGER_LABEL[aut.triggerType] ?? aut.triggerType.replace(/_/g, ' ')}
                   </span>
                   <span className="text-xs text-muted-foreground self-center">→</span>
                   <span className="px-2 py-1 rounded-lg bg-primary/10 text-primary text-xs font-medium">
-                    {aut.actionType.replace(/_/g, ' ')}
+                    {ACTION_LABEL[aut.actionType] ?? aut.actionType.replace(/_/g, ' ')}
                   </span>
                 </div>
                 <div className="flex gap-2">

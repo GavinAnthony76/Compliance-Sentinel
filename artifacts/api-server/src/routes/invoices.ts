@@ -3,6 +3,7 @@ import { db, invoicesTable, customersTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+import { fireAutomations } from "../lib/automations";
 
 const router = Router();
 router.use(requireAuth);
@@ -89,6 +90,10 @@ router.put("/:id", async (req: any, res) => {
 
   const [updated] = await db.update(invoicesTable).set(updates).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "invoice.updated", entityType: "invoice", entityId: id });
+  // Fire invoice_overdue automations when status transitions to overdue
+  if (updates.status === "overdue" && existing.status !== "overdue") {
+    fireAutomations(companyId, "invoice_overdue", { customerId: existing.customerId, userId, invoiceId: id });
+  }
   return res.json(fmt(updated));
 });
 
@@ -109,6 +114,8 @@ router.post("/:id/send", async (req: any, res) => {
   if (!existing) return res.status(404).json({ error: "NotFound" });
   const [updated] = await db.update(invoicesTable).set({ status: "sent", updatedAt: new Date() }).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "invoice.sent", entityType: "invoice", entityId: id });
+  // Fire invoice_sent automations (non-blocking)
+  fireAutomations(companyId, "invoice_sent", { customerId: existing.customerId, userId, invoiceId: id });
   return res.json(fmt(updated));
 });
 
