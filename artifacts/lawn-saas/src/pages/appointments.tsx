@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useListAppointments, useCreateAppointment, useUpdateAppointment, useDeleteAppointment, useCompleteAppointment, useListCustomers, useListServices } from '@workspace/api-client-react';
+import { useListAppointments, useCreateAppointment, useUpdateAppointment, useDeleteAppointment, useCompleteAppointment, useListCustomers, useListServices, useListTeam } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, Calendar, Filter, ChevronDown, Download } from 'lucide-react';
@@ -29,6 +29,7 @@ import { Link } from 'wouter';
 function EditAppointmentModal({ appointment, onClose }: { appointment: any; onClose: () => void }) {
   const [form, setForm] = useState({
     serviceId: appointment.serviceId?.toString() ?? '',
+    assignedUserId: appointment.assignedUserId?.toString() ?? '',
     scheduledStart: appointment.scheduledStart ? new Date(appointment.scheduledStart).toISOString().slice(0, 16) : '',
     scheduledEnd: appointment.scheduledEnd ? new Date(appointment.scheduledEnd).toISOString().slice(0, 16) : '',
     status: appointment.status ?? 'pending',
@@ -39,6 +40,7 @@ function EditAppointmentModal({ appointment, onClose }: { appointment: any; onCl
   const qc = useQueryClient();
   const updateMut = useUpdateAppointment();
   const { data: services } = useListServices();
+  const { data: team } = useListTeam();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,6 +49,7 @@ function EditAppointmentModal({ appointment, onClose }: { appointment: any; onCl
         id: appointment.id,
         data: {
           serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          assignedUserId: form.assignedUserId ? Number(form.assignedUserId) : undefined,
           scheduledStart: new Date(form.scheduledStart).toISOString(),
           scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
           status: form.status as any,
@@ -67,12 +70,21 @@ function EditAppointmentModal({ appointment, onClose }: { appointment: any; onCl
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
         <h2 className="text-xl font-bold mb-6">Edit Appointment</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Service</label>
-            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
-              <option value="">No service</option>
-              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Service</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+                <option value="">No service</option>
+                {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Assigned To</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.assignedUserId} onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {team?.members.filter(m => m.isActive).map(m => <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>)}
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -119,6 +131,7 @@ function NewAppointmentModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
     customerId: '',
     serviceId: '',
+    assignedUserId: '',
     scheduledStart: '',
     scheduledEnd: '',
     status: 'pending',
@@ -130,6 +143,7 @@ function NewAppointmentModal({ onClose }: { onClose: () => void }) {
   const createMut = useCreateAppointment();
   const { data: customers } = useListCustomers({ search: undefined, page: 1, limit: 100 });
   const { data: services } = useListServices();
+  const { data: team } = useListTeam();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +152,7 @@ function NewAppointmentModal({ onClose }: { onClose: () => void }) {
         data: {
           customerId: Number(form.customerId),
           serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          assignedUserId: form.assignedUserId ? Number(form.assignedUserId) : undefined,
           scheduledStart: new Date(form.scheduledStart).toISOString(),
           scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
           status: form.status as any,
@@ -165,12 +180,21 @@ function NewAppointmentModal({ onClose }: { onClose: () => void }) {
               {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
             </select>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Service</label>
-            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
-              <option value="">Select service...</option>
-              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Service</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+                <option value="">Select service...</option>
+                {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Assigned To</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.assignedUserId} onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {team?.members.filter(m => m.isActive).map(m => <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>)}
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -213,13 +237,19 @@ export function AppointmentsPage() {
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState('');
-  const { data, isLoading } = useListAppointments({ status: statusFilter || undefined, page: 1, limit: 50 } as any);
+  const { user } = useAuthState();
+  const plan = user?.company?.subscriptionPlan ?? 'starter';
+  const isStaff = user?.role === 'staff';
+  const { data, isLoading } = useListAppointments({
+    status: statusFilter || undefined,
+    page: 1,
+    limit: 50,
+    ...(isStaff && user?.id ? { assignedUserId: user.id } : {}),
+  } as any);
   const { toast } = useToast();
   const qc = useQueryClient();
   const deleteMut = useDeleteAppointment();
   const completeMut = useCompleteAppointment();
-  const { user } = useAuthState();
-  const plan = user?.company?.subscriptionPlan ?? 'starter';
 
   const statuses = ['', 'pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'];
 
@@ -271,6 +301,7 @@ export function AppointmentsPage() {
                   <tr className="border-b border-border bg-accent/30">
                     <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Customer</th>
                     <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Service</th>
+                    <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Assigned To</th>
                     <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Date & Time</th>
                     <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Status</th>
                     <th className="text-left p-4 text-sm font-semibold text-muted-foreground">Price</th>
@@ -284,6 +315,7 @@ export function AppointmentsPage() {
                         <div className="font-medium text-sm">{apt.customerName || 'Unknown'}</div>
                       </td>
                       <td className="p-4 text-sm text-muted-foreground">{apt.serviceName || '—'}</td>
+                      <td className="p-4 text-sm text-muted-foreground">{apt.assignedUserName || <span className="text-xs text-muted-foreground/60">Unassigned</span>}</td>
                       <td className="p-4 text-sm">{format(new Date(apt.scheduledStart), 'MMM d, yyyy h:mm a')}</td>
                       <td className="p-4"><AppointmentStatusBadge status={apt.status} /></td>
                       <td className="p-4 text-sm">{apt.price ? `$${Number(apt.price).toFixed(2)}` : '—'}</td>

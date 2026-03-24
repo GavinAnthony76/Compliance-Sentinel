@@ -5,7 +5,7 @@ import {
   useCreateProperty, useUpdateProperty, useDeleteProperty,
   useCreateAppointment, useUpdateAppointment, useCompleteAppointment, useDeleteAppointment,
   useCreateInvoice, useMarkInvoicePaid, useDeleteInvoice,
-  useListServices,
+  useListServices, useListTeam,
   getListCustomersQueryKey,
 } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
@@ -184,6 +184,7 @@ function EditAppointmentModal({ appointment, customerId, onClose }: { appointmen
   };
   const [form, setForm] = useState({
     serviceId: appointment.serviceId ? String(appointment.serviceId) : '',
+    assignedUserId: appointment.assignedUserId ? String(appointment.assignedUserId) : '',
     scheduledStart: appointment.scheduledStart ? toLocalDT(appointment.scheduledStart) : '',
     scheduledEnd: appointment.scheduledEnd ? toLocalDT(appointment.scheduledEnd) : '',
     status: appointment.status ?? 'pending',
@@ -194,6 +195,7 @@ function EditAppointmentModal({ appointment, customerId, onClose }: { appointmen
   const qc = useQueryClient();
   const updateMut = useUpdateAppointment();
   const { data: services } = useListServices();
+  const { data: team } = useListTeam();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -202,6 +204,7 @@ function EditAppointmentModal({ appointment, customerId, onClose }: { appointmen
         id: appointment.id,
         data: {
           serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          assignedUserId: form.assignedUserId ? Number(form.assignedUserId) : undefined,
           scheduledStart: new Date(form.scheduledStart).toISOString(),
           scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
           status: form.status as any,
@@ -222,12 +225,21 @@ function EditAppointmentModal({ appointment, customerId, onClose }: { appointmen
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
         <h2 className="text-xl font-bold mb-6">Edit Appointment</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Service</label>
-            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
-              <option value="">No service selected</option>
-              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Service</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+                <option value="">No service selected</option>
+                {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Assigned To</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.assignedUserId} onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {team?.members.filter(m => m.isActive).map(m => <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>)}
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -270,11 +282,12 @@ function EditAppointmentModal({ appointment, customerId, onClose }: { appointmen
 }
 
 function NewAppointmentModal({ customerId, onClose }: { customerId: number; onClose: () => void }) {
-  const [form, setForm] = useState({ serviceId: '', scheduledStart: '', scheduledEnd: '', status: 'pending', notes: '', price: '' });
+  const [form, setForm] = useState({ serviceId: '', assignedUserId: '', scheduledStart: '', scheduledEnd: '', status: 'pending', notes: '', price: '' });
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateAppointment();
   const { data: services } = useListServices();
+  const { data: team } = useListTeam();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,6 +296,7 @@ function NewAppointmentModal({ customerId, onClose }: { customerId: number; onCl
         data: {
           customerId,
           serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          assignedUserId: form.assignedUserId ? Number(form.assignedUserId) : undefined,
           scheduledStart: new Date(form.scheduledStart).toISOString(),
           scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
           status: form.status as any,
@@ -303,12 +317,21 @@ function NewAppointmentModal({ customerId, onClose }: { customerId: number; onCl
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
         <h2 className="text-xl font-bold mb-6">Schedule Appointment</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Service</label>
-            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
-              <option value="">No service selected</option>
-              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Service</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+                <option value="">No service selected</option>
+                {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Assigned To</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.assignedUserId} onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {team?.members.filter(m => m.isActive).map(m => <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>)}
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">

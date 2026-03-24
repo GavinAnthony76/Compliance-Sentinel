@@ -7,7 +7,8 @@ const router = Router();
 router.use(requireAuth);
 
 router.get("/", async (req: any, res) => {
-  const { companyId } = req.user;
+  const { companyId, userId, role } = req.user;
+  const isStaff = role === "staff";
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
@@ -28,6 +29,7 @@ router.get("/", async (req: any, res) => {
       eq(appointmentsTable.companyId, companyId),
       gte(appointmentsTable.scheduledStart, todayStart),
       lte(appointmentsTable.scheduledStart, todayEnd),
+      ...(isStaff ? [eq(appointmentsTable.assignedUserId, userId)] : []),
     )).orderBy(appointmentsTable.scheduledStart).limit(10),
 
     db.select().from(appointmentsTable).where(and(
@@ -35,6 +37,7 @@ router.get("/", async (req: any, res) => {
       gte(appointmentsTable.scheduledStart, todayEnd),
       lte(appointmentsTable.scheduledStart, nextWeek),
       ne(appointmentsTable.status, "cancelled"),
+      ...(isStaff ? [eq(appointmentsTable.assignedUserId, userId)] : []),
     )).orderBy(appointmentsTable.scheduledStart).limit(10),
 
     db.select().from(customersTable).where(eq(customersTable.companyId, companyId)).orderBy(desc(customersTable.createdAt)).limit(5),

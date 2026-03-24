@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useGetDashboard, useCreateAppointment, useListCustomers, useListServices, getListAppointmentsQueryKey } from '@workspace/api-client-react';
+import { useGetDashboard, useCreateAppointment, useListCustomers, useListServices, useListTeam, getListAppointmentsQueryKey } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button, Input } from '@/components/ui';
 import { formatCurrency, formatTime } from '@/lib/utils';
@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 function NewJobModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
-    customerId: '', serviceId: '', scheduledStart: '', scheduledEnd: '',
+    customerId: '', serviceId: '', assignedUserId: '', scheduledStart: '', scheduledEnd: '',
     status: 'pending', notes: '', price: '',
   });
   const { toast } = useToast();
@@ -19,6 +19,7 @@ function NewJobModal({ onClose }: { onClose: () => void }) {
   const createMut = useCreateAppointment();
   const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
   const { data: services } = useListServices();
+  const { data: team } = useListTeam();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +28,7 @@ function NewJobModal({ onClose }: { onClose: () => void }) {
         data: {
           customerId: Number(form.customerId),
           serviceId: form.serviceId ? Number(form.serviceId) : undefined,
+          assignedUserId: form.assignedUserId ? Number(form.assignedUserId) : undefined,
           scheduledStart: new Date(form.scheduledStart).toISOString(),
           scheduledEnd: form.scheduledEnd ? new Date(form.scheduledEnd).toISOString() : undefined,
           status: form.status as any,
@@ -55,12 +57,21 @@ function NewJobModal({ onClose }: { onClose: () => void }) {
               {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
             </select>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Service</label>
-            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
-              <option value="">No service</option>
-              {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Service</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}>
+                <option value="">No service</option>
+                {services?.services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Assigned To</label>
+              <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.assignedUserId} onChange={e => setForm(f => ({ ...f, assignedUserId: e.target.value }))}>
+                <option value="">Unassigned</option>
+                {team?.members.filter(m => m.isActive).map(m => <option key={m.id} value={m.id}>{m.firstName} {m.lastName}</option>)}
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
