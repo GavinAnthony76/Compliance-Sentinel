@@ -1,5 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthState, TOKEN_KEY, ADMIN_TOKEN_KEY } from "@/hooks/use-auth-state";
@@ -79,13 +79,39 @@ window.fetch = async (...args) => {
   return originalFetch(resource, config);
 };
 
+// Global 401 handler: clear the matching token so useAuthState
+// picks it up and ProtectedRoute redirects to the login page.
+// queryClient is referenced lazily (closure) — it is defined by the time
+// any onError fires.
+const queryCache = new QueryCache({
+  onError: (error: any) => {
+    if (error?.status === 401) {
+      const url: string = error?.url ?? '';
+      if (url.includes('/api/admin')) {
+        localStorage.removeItem(ADMIN_TOKEN_KEY);
+        // Reset the auth/me query so useAdminGetMe re-fires → clears React state
+        queryClient.resetQueries({ queryKey: ['/api/admin/auth/me'] });
+      } else if (url.includes('/api/')) {
+        localStorage.removeItem(TOKEN_KEY);
+        // Reset the auth/me query so useGetMe re-fires → clears React state
+        queryClient.resetQueries({ queryKey: ['/api/auth/me'] });
+      }
+    }
+  },
+});
+
 const queryClient = new QueryClient({
+  queryCache,
   defaultOptions: {
     queries: {
-      retry: 1,
+      // Never retry auth/permission errors — they will not succeed on retry.
+      retry: (failureCount, error: any) => {
+        if (error?.status === 401 || error?.status === 403) return false;
+        return failureCount < 1;
+      },
       refetchOnWindowFocus: false,
-    }
-  }
+    },
+  },
 });
 
 function ProtectedRoute({ component: Component, adminOnly = false }: { component: any, adminOnly?: boolean }) {
