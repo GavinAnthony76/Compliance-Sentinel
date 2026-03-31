@@ -192,6 +192,21 @@ router.get("/auth/me", requirePortalAuth, async (req: any, res) => {
   });
 });
 
+// GET /portal/services — list company's active services for booking
+router.get("/services", requirePortalAuth, async (req: any, res) => {
+  const { companyId } = req.portal;
+  const services = await db.select().from(servicesTable)
+    .where(and(eq(servicesTable.companyId, companyId), eq(servicesTable.isActive, true)));
+  return res.json(services.map(s => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    basePrice: s.basePrice ? Number(s.basePrice) : null,
+    durationMinutes: s.durationMinutes,
+    category: s.category,
+  })));
+});
+
 // GET /portal/appointments
 router.get("/appointments", requirePortalAuth, async (req: any, res) => {
   const { customerId, companyId } = req.portal;
@@ -209,6 +224,67 @@ router.get("/appointments", requirePortalAuth, async (req: any, res) => {
     price: a.price ? Number(a.price) : null,
     serviceName: a.serviceId ? serviceMap[a.serviceId] ?? null : null,
   })));
+});
+
+// POST /portal/appointments — book a new appointment request
+router.post("/appointments", requirePortalAuth, async (req: any, res) => {
+  const { customerId, companyId } = req.portal;
+  const parsed = z.object({
+    serviceId: z.number().int().positive(),
+    scheduledStart: z.string().min(1),
+    notes: z.string().optional(),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const { serviceId, scheduledStart, notes } = parsed.data;
+
+  // Verify the service belongs to the company
+  const [service] = await db.select().from(servicesTable)
+    .where(and(eq(servicesTable.id, serviceId), eq(servicesTable.companyId, companyId), eq(servicesTable.isActive, true)))
+    .limit(1);
+  if (!service) return res.status(404).json({ error: "NotFound", message: "Service not found" });
+
+  const scheduledDate = new Date(scheduledStart);
+  if (isNaN(scheduledDate.getTime())) return res.status(400).json({ error: "ValidationError", message: "Invalid date" });
+
+  const [appointment] = await db.insert(appointmentsTable).values({
+    companyId,
+    customerId,
+    serviceId,
+    status: "pending",
+    scheduledStart: scheduledDate,
+    notes: notes || null,
+    price: service.basePrice ?? null,
+  }).returning();
+
+  return res.status(201).json({
+    ...appointment,
+    price: appointment.price ? Number(appointment.price) : null,
+    serviceName: service.name,
+  });
+});
+
+// POST /portal/appointments/:id/cancel — cancel a pending or confirmed appointment
+router.post("/appointments/:id/cancel", requirePortalAuth, async (req: any, res) => {
+  const { customerId, companyId } = req.portal;
+  const id = Number(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "ValidationError", message: "Invalid appointment ID" });
+
+  const [appointment] = await db.select().from(appointmentsTable)
+    .where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.customerId, customerId), eq(appointmentsTable.companyId, companyId)))
+    .limit(1);
+
+  if (!appointment) return res.status(404).json({ error: "NotFound", message: "Appointment not found" });
+  if (!["pending", "confirmed"].includes(appointment.status)) {
+    return res.status(400).json({ error: "CannotCancel", message: `Cannot cancel an appointment with status: ${appointment.status}` });
+  }
+
+  const [updated] = await db.update(appointmentsTable)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(eq(appointmentsTable.id, id))
+    .returning();
+
+  return res.json({ ...updated, price: updated.price ? Number(updated.price) : null });
 });
 
 // GET /portal/invoices

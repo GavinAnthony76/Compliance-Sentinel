@@ -3,7 +3,7 @@ import { useParams, Link, useLocation } from 'wouter';
 import { usePortalAuth } from '@/hooks/use-portal-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Calendar, CreditCard, FileText, LogOut, Leaf, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Calendar, CreditCard, FileText, LogOut, Leaf, Clock, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 import { useSearch } from 'wouter';
 
 function StatusBadge({ status }: { status: string }) {
@@ -106,42 +106,55 @@ export function PortalDashboardPage() {
         )}
 
         {/* Quick links */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Link href={`/portal/${slug}/appointments?book=1`}>
+            <Card className="hover:shadow-md transition-shadow cursor-pointer border-primary/30 bg-primary/5">
+              <CardContent className="pt-5 pb-4 flex flex-col items-center gap-2 text-center">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Plus className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Book</p>
+                  <p className="text-xs text-muted-foreground">New appointment</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
           <Link href={`/portal/${slug}/appointments`}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-border/50">
-              <CardContent className="pt-6 pb-5 flex items-center gap-4">
+              <CardContent className="pt-5 pb-4 flex flex-col items-center gap-2 text-center">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="font-semibold">Appointments</p>
-                  <p className="text-sm text-muted-foreground">View your schedule</p>
+                  <p className="font-semibold text-sm">Appointments</p>
+                  <p className="text-xs text-muted-foreground">View schedule</p>
                 </div>
               </CardContent>
             </Card>
           </Link>
           <Link href={`/portal/${slug}/invoices`}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-border/50">
-              <CardContent className="pt-6 pb-5 flex items-center gap-4">
+              <CardContent className="pt-5 pb-4 flex flex-col items-center gap-2 text-center">
                 <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
                   <CreditCard className="w-5 h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="font-semibold">Invoices</p>
-                  <p className="text-sm text-muted-foreground">Pay & view history</p>
+                  <p className="font-semibold text-sm">Invoices</p>
+                  <p className="text-xs text-muted-foreground">Pay & history</p>
                 </div>
               </CardContent>
             </Card>
           </Link>
           <Link href={`/portal/${slug}/estimates`}>
             <Card className="hover:shadow-md transition-shadow cursor-pointer border-border/50">
-              <CardContent className="pt-6 pb-5 flex items-center gap-4">
+              <CardContent className="pt-5 pb-4 flex flex-col items-center gap-2 text-center">
                 <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center">
                   <FileText className="w-5 h-5 text-violet-600" />
                 </div>
                 <div>
-                  <p className="font-semibold">Estimates</p>
-                  <p className="text-sm text-muted-foreground">Review & sign</p>
+                  <p className="font-semibold text-sm">Estimates</p>
+                  <p className="text-xs text-muted-foreground">Review & sign</p>
                 </div>
               </CardContent>
             </Card>
