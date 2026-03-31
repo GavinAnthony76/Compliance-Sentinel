@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui';
 import { Leaf, CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield, Calendar, Navigation, FileText, Contact, ClipboardList, Zap, Clock, Fuel, Bell, Eye, PenLine, BadgeCheck, RefreshCw, Mail, Repeat, MessageSquare, ChevronRight } from 'lucide-react';
@@ -265,6 +265,8 @@ const TAB_DATA = [
 export function LandingPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [animating, setAnimating] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   function switchTab(index: number) {
     if (index === activeTab) return;
@@ -279,6 +281,33 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
+      {/* Demo Video Modal */}
+      {showDemo && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={() => { setShowDemo(false); videoRef.current?.pause(); }}
+        >
+          <div
+            className="relative w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="absolute top-3 right-3 z-10 bg-black/50 hover:bg-black/80 text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors"
+              onClick={() => { setShowDemo(false); videoRef.current?.pause(); }}
+            >
+              ✕
+            </button>
+            <video
+              ref={videoRef}
+              src={`${import.meta.env.BASE_URL}greensyncad1.mp4`}
+              className="w-full"
+              controls
+              autoPlay
+              loop={false}
+            />
+          </div>
+        </div>
+      )}
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 glass-panel border-b-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -326,7 +355,7 @@ export function LandingPage() {
                 Start Your 14-Day Free Trial
               </Button>
             </Link>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-full text-lg px-8 h-14 bg-white">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-full text-lg px-8 h-14 bg-white" onClick={() => setShowDemo(true)}>
               View Demo
             </Button>
           </div>

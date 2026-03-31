@@ -79,7 +79,10 @@ export function AdminLoginPage() {
                 Sign In to Admin Panel
               </Button>
             </form>
-            <div className="mt-6 text-center text-xs text-slate-500">
+            <div className="mt-4 text-center text-xs text-slate-500">
+              <Link href="/admin/forgot-password" className="hover:text-slate-300 transition-colors">Forgot password?</Link>
+            </div>
+            <div className="mt-3 text-center text-xs text-slate-500">
               <Link href="/login" className="hover:text-slate-300 transition-colors">← Back to company login</Link>
             </div>
           </CardContent>

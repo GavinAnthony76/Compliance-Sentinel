@@ -10,6 +10,8 @@ export const platformAdminsTable = pgTable("platform_admins", {
   lastName: text("last_name").notNull(),
   role: text("role").notNull().default("admin"),
   isActive: boolean("is_active").notNull().default(true),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetExpiresAt: timestamp("password_reset_expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

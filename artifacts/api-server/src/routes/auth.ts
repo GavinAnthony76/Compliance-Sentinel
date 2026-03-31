@@ -3,7 +3,9 @@ import { db, usersTable, companiesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signUserToken, hashPassword, verifyPassword, requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+import { sendEmail } from "../lib/notifications";
 import { z } from "zod";
+import crypto from "crypto";
 
 const router = Router();
 
@@ -194,6 +196,47 @@ router.get("/me", requireAuth, async (req: any, res) => {
       createdAt: company.createdAt,
     } : null,
   });
+});
+
+router.post("/forgot-password", async (req, res) => {
+  const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email)).limit(1);
+
+  // Always return success to avoid email enumeration
+  if (user && user.isActive) {
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await db.update(usersTable).set({ passwordResetToken: token, passwordResetExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
+
+    const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+    const resetUrl = `${baseUrl}/reset-password?token=${token}`;
+    await sendEmail({
+      to: user.email,
+      subject: "Reset your GreenSync password",
+      body: `Hi ${user.firstName},\n\nClick the link below to reset your password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
+    });
+  }
+
+  return res.json({ success: true, message: "If that email is registered, a reset link has been sent." });
+});
+
+router.post("/reset-password", async (req, res) => {
+  const parsed = z.object({ token: z.string().min(1), password: z.string().min(8) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const { token, password } = parsed.data;
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.passwordResetToken, token)).limit(1);
+  if (!user) return res.status(400).json({ error: "InvalidToken", message: "Invalid or expired reset link" });
+  if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
+    return res.status(400).json({ error: "ExpiredToken", message: "This reset link has expired. Please request a new one." });
+  }
+
+  const passwordHash = await hashPassword(password);
+  await db.update(usersTable).set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
+
+  return res.json({ success: true, message: "Password updated successfully." });
 });
 
 export default router;

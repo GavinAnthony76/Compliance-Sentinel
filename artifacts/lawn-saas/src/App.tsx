@@ -10,6 +10,11 @@ import { LandingPage } from "@/pages/landing";
 import { LoginPage } from "@/pages/login";
 import { RegisterPage } from "@/pages/register";
 import { AdminLoginPage } from "@/pages/admin-login";
+import { ForgotPasswordPage } from "@/pages/forgot-password";
+import { ResetPasswordPage } from "@/pages/reset-password";
+import { AdminForgotPasswordPage } from "@/pages/admin-forgot-password";
+import { AdminResetPasswordPage } from "@/pages/admin-reset-password";
+import { PortalForgotPasswordPage } from "@/pages/portal-forgot-password";
 import { PublicBookingPage } from "@/pages/public-booking";
 import { PortalLoginPage } from "@/pages/portal-login";
 import { PortalSetPasswordPage } from "@/pages/portal-set-password";
@@ -112,10 +117,15 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/admin/login" component={AdminLoginPage} />
+      <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/reset-password" component={ResetPasswordPage} />
+      <Route path="/admin/forgot-password" component={AdminForgotPasswordPage} />
+      <Route path="/admin/reset-password" component={AdminResetPasswordPage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
 
       {/* Customer portal routes */}
       <Route path="/portal/set-password" component={PortalSetPasswordPage} />
+      <Route path="/portal/:slug/forgot-password" component={PortalForgotPasswordPage} />
       <Route path="/portal/:slug/login" component={PortalLoginPage} />
       <Route path="/portal/:slug/invoices" component={PortalInvoicesPage} />
       <Route path="/portal/:slug/appointments" component={PortalAppointmentsPage} />

@@ -151,6 +151,35 @@ router.post("/auth/set-password", async (req, res) => {
   });
 });
 
+// POST /portal/auth/forgot-password
+router.post("/auth/forgot-password", async (req, res) => {
+  const parsed = z.object({ email: z.string().email(), companySlug: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const { email, companySlug } = parsed.data;
+  const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
+  if (!company) return res.json({ success: true }); // silent — avoid slug enumeration
+
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.email, email))).limit(1);
+
+  if (customer && customer.portalPasswordHash) {
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await db.update(customersTable).set({ portalInviteToken: resetToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+
+    const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+    const resetUrl = `${baseUrl}/portal/set-password?token=${resetToken}&slug=${companySlug}`;
+    const { sendEmail } = await import("../lib/notifications");
+    await sendEmail({
+      to: customer.email!,
+      subject: `Reset your ${company.name} portal password`,
+      body: `Hi ${customer.firstName},\n\nClick the link below to reset your portal password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
+    });
+  }
+
+  return res.json({ success: true, message: "If that email has a portal account, a reset link has been sent." });
+});
+
 // GET /portal/auth/me
 router.get("/auth/me", requirePortalAuth, async (req: any, res) => {
   const { customerId, companyId } = req.portal;

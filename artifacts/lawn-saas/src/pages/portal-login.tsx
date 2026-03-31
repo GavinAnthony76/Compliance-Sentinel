@@ -76,7 +76,10 @@ export function PortalLoginPage() {
                 Sign In
               </Button>
             </form>
-            <div className="mt-6 text-center text-xs text-muted-foreground">
+            <div className="mt-4 text-center text-sm">
+              <Link href={`/portal/${slug}/forgot-password`} className="text-primary text-xs font-medium hover:underline">Forgot password?</Link>
+            </div>
+            <div className="mt-3 text-center text-xs text-muted-foreground">
               Access provided by your service provider. <Link href="/" className="text-primary hover:underline">GreenSync</Link>
             </div>
           </CardContent>

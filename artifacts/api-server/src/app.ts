@@ -9,7 +9,8 @@ import { logger } from "./lib/logger";
 const _rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 function rateLimit(maxRequests: number, windowMs: number) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const key = `${req.ip}:${req.path}`;
+    // Use originalUrl so the key is stable regardless of where middleware is mounted
+    const key = `${req.ip}:${req.originalUrl.split("?")[0]}`;
     const now = Date.now();
     const entry = _rateLimitStore.get(key);
     if (!entry || now > entry.resetAt) {
@@ -66,9 +67,14 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 }));
 
-// Rate limiting: stricter on auth and export endpoints
-app.use("/api/auth", rateLimit(20, 60_000));
-app.use("/api/admin/auth", rateLimit(10, 60_000));
+// Rate limiting: only on mutation auth endpoints, not /me (which is called on every page load)
+app.use("/api/auth/login", rateLimit(20, 60_000));
+app.use("/api/auth/register", rateLimit(10, 60_000));
+app.use("/api/auth/forgot-password", rateLimit(10, 60_000));
+app.use("/api/auth/reset-password", rateLimit(10, 60_000));
+app.use("/api/admin/auth/login", rateLimit(10, 60_000));
+app.use("/api/admin/auth/forgot-password", rateLimit(10, 60_000));
+app.use("/api/admin/auth/reset-password", rateLimit(10, 60_000));
 app.use("/api/export", rateLimit(30, 60_000));
 
 // Raw body capture for Stripe webhooks (must be before express.json())
