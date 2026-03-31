@@ -2,17 +2,28 @@ import { useState, useEffect, useRef } from 'react';
 import { useGetSettings, useUpdateSettings } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button, Input } from '@/components/ui';
-import { Settings, Globe, Palette } from 'lucide-react';
+import { Settings, Globe, Palette, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetSettingsQueryKey } from '@workspace/api-client-react';
+
+const PAYMENT_METHODS = [
+  { value: 'cash',          label: 'Cash' },
+  { value: 'check',         label: 'Check' },
+  { value: 'zelle',         label: 'Zelle' },
+  { value: 'venmo',         label: 'Venmo' },
+  { value: 'cashapp',       label: 'Cash App' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'card',          label: 'Card (Online)' },
+  { value: 'other',         label: 'Other' },
+];
 
 export function SettingsPage() {
   const { data: company, isLoading } = useGetSettings();
   const { toast } = useToast();
   const qc = useQueryClient();
   const updateMut = useUpdateSettings();
-  const [tab, setTab] = useState<'business' | 'branding'>('business');
+  const [tab, setTab] = useState<'business' | 'branding' | 'payments'>('business');
 
   const [businessForm, setBusinessForm] = useState({
     name: '',
@@ -30,6 +41,15 @@ export function SettingsPage() {
     reviewUrl: '',
     logoUrl: '',
   });
+  const [paymentForm, setPaymentForm] = useState({
+    acceptedPaymentMethods: ['cash', 'check'] as string[],
+    paymentInstructions: '',
+    zelleInfo: '',
+    venmoHandle: '',
+    cashAppTag: '',
+    checkPayableTo: '',
+  });
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   const initialized = useRef(false);
   useEffect(() => {
@@ -54,6 +74,27 @@ export function SettingsPage() {
     }
   }, [company]);
 
+  // Load payment config separately
+  useEffect(() => {
+    if (tab !== 'payments') return;
+    const token = localStorage.getItem('greensync_token');
+    fetch('/api/settings/payment-config', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d && !d.error) {
+          setPaymentForm({
+            acceptedPaymentMethods: d.acceptedPaymentMethods ?? ['cash', 'check'],
+            paymentInstructions: d.paymentInstructions ?? '',
+            zelleInfo: d.zelleInfo ?? '',
+            venmoHandle: d.venmoHandle ?? '',
+            cashAppTag: d.cashAppTag ?? '',
+            checkPayableTo: d.checkPayableTo ?? '',
+          });
+        }
+      })
+      .catch(() => {});
+  }, [tab]);
+
   const handleSaveBusiness = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -76,6 +117,34 @@ export function SettingsPage() {
     }
   };
 
+  const handleSavePayments = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPaymentLoading(true);
+    try {
+      const token = localStorage.getItem('greensync_token');
+      const res = await fetch('/api/settings/payment-config', {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(paymentForm),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      toast({ title: 'Payment settings saved' });
+    } catch {
+      toast({ title: 'Error saving payment settings', variant: 'destructive' });
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
+  const toggleMethod = (method: string) => {
+    setPaymentForm(f => ({
+      ...f,
+      acceptedPaymentMethods: f.acceptedPaymentMethods.includes(method)
+        ? f.acceptedPaymentMethods.filter(m => m !== method)
+        : [...f.acceptedPaymentMethods, method],
+    }));
+  };
+
   return (
     <AppLayout>
       <div className="mb-8">
@@ -83,8 +152,12 @@ export function SettingsPage() {
         <p className="text-muted-foreground mt-1">Manage your business profile and preferences</p>
       </div>
 
-      <div className="flex gap-2 mb-6">
-        {([['business', 'Business Info', Settings], ['branding', 'Branding', Palette]] as const).map(([id, label, Icon]) => (
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {([
+          ['business', 'Business Info', Settings],
+          ['branding', 'Branding', Palette],
+          ['payments', 'Payments', CreditCard],
+        ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as any)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === id ? 'bg-primary text-primary-foreground shadow-md' : 'bg-card border border-border hover:border-primary/50 text-muted-foreground'}`}>
             <Icon className="w-4 h-4" />{label}
@@ -149,7 +222,7 @@ export function SettingsPage() {
             </form>
           </CardContent>
         </Card>
-      ) : (
+      ) : tab === 'branding' ? (
         <Card className="border-border/50">
           <CardContent className="p-6">
             <form onSubmit={handleSaveBranding} className="space-y-5 max-w-2xl">
@@ -171,6 +244,61 @@ export function SettingsPage() {
                 <p className="text-xs text-muted-foreground">Where customers are directed for reviews (Google, Yelp, etc.)</p>
               </div>
               <Button type="submit" isLoading={updateMut.isPending}>Save Branding</Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-border/50">
+          <CardContent className="p-6">
+            <form onSubmit={handleSavePayments} className="space-y-6 max-w-2xl">
+              <div>
+                <label className="text-sm font-semibold block mb-3">Accepted Payment Methods</label>
+                <p className="text-xs text-muted-foreground mb-3">Choose which payment options your customers can use. These are displayed on their invoices and in the customer portal.</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {PAYMENT_METHODS.map(m => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => toggleMethod(m.value)}
+                      className={`px-3 py-2 rounded-xl border text-sm font-medium transition-all text-left ${paymentForm.acceptedPaymentMethods.includes(m.value) ? 'bg-primary text-primary-foreground border-primary shadow-md' : 'border-border hover:border-primary/50 text-muted-foreground bg-card'}`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Payment Instructions</label>
+                <textarea
+                  className="w-full px-3 py-2 rounded-xl border border-input bg-background text-sm min-h-[80px] resize-none"
+                  value={paymentForm.paymentInstructions}
+                  onChange={e => setPaymentForm(f => ({ ...f, paymentInstructions: e.target.value }))}
+                  placeholder="e.g. Please pay within 14 days of service. Cash or check preferred."
+                />
+                <p className="text-xs text-muted-foreground">Shown at the top of each invoice and on the customer portal payment page.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className={`space-y-1 transition-opacity ${paymentForm.acceptedPaymentMethods.includes('zelle') ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                  <label className="text-sm font-medium">Zelle — Phone / Email</label>
+                  <Input value={paymentForm.zelleInfo} onChange={e => setPaymentForm(f => ({ ...f, zelleInfo: e.target.value }))} placeholder="(555) 000-0000 or zelle@email.com" disabled={!paymentForm.acceptedPaymentMethods.includes('zelle')} />
+                </div>
+                <div className={`space-y-1 transition-opacity ${paymentForm.acceptedPaymentMethods.includes('venmo') ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                  <label className="text-sm font-medium">Venmo Handle</label>
+                  <Input value={paymentForm.venmoHandle} onChange={e => setPaymentForm(f => ({ ...f, venmoHandle: e.target.value }))} placeholder="@YourBusiness" disabled={!paymentForm.acceptedPaymentMethods.includes('venmo')} />
+                </div>
+                <div className={`space-y-1 transition-opacity ${paymentForm.acceptedPaymentMethods.includes('cashapp') ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                  <label className="text-sm font-medium">Cash App $Cashtag</label>
+                  <Input value={paymentForm.cashAppTag} onChange={e => setPaymentForm(f => ({ ...f, cashAppTag: e.target.value }))} placeholder="$YourCashtag" disabled={!paymentForm.acceptedPaymentMethods.includes('cashapp')} />
+                </div>
+                <div className={`space-y-1 transition-opacity ${paymentForm.acceptedPaymentMethods.includes('check') ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                  <label className="text-sm font-medium">Check Payable To</label>
+                  <Input value={paymentForm.checkPayableTo} onChange={e => setPaymentForm(f => ({ ...f, checkPayableTo: e.target.value }))} placeholder="Greenscapes LLC" disabled={!paymentForm.acceptedPaymentMethods.includes('check')} />
+                </div>
+              </div>
+
+              <Button type="submit" isLoading={paymentLoading}>Save Payment Settings</Button>
             </form>
           </CardContent>
         </Card>

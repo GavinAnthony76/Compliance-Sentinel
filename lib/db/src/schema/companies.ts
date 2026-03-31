@@ -26,6 +26,13 @@ export const companiesTable = pgTable("companies", {
   reviewUrl: text("review_url"),
   internalNotes: text("internal_notes"),
   isActive: boolean("is_active").notNull().default(true),
+  // Payment acceptance configuration
+  acceptedPaymentMethods: text("accepted_payment_methods"),
+  paymentInstructions: text("payment_instructions"),
+  zelleInfo: text("zelle_info"),
+  venmoHandle: text("venmo_handle"),
+  cashAppTag: text("cash_app_tag"),
+  checkPayableTo: text("check_payable_to"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

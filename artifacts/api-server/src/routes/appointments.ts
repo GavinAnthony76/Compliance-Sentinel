@@ -178,6 +178,7 @@ router.put("/:id", async (req: any, res) => {
       userId,
       appointmentId: updated.id,
       appointmentPrice: updated.price ? Number(updated.price) : null,
+      appointmentServiceId: updated.serviceId,
     });
   }
   return res.json(fmtAppt(updated));
@@ -211,6 +212,7 @@ router.post("/:id/complete", async (req: any, res) => {
     userId,
     appointmentId: id,
     appointmentPrice: existing.price ? Number(existing.price) : null,
+    appointmentServiceId: existing.serviceId,
   });
 
   return res.json(fmtAppt(updated));

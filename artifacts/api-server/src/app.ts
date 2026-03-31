@@ -4,6 +4,7 @@ import helmet from "helmet";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { startAutomationScheduler } from "./lib/automations";
 
 // Simple in-memory rate limiter
 const _rateLimitStore = new Map<string, { count: number; resetAt: number }>();
@@ -104,5 +105,8 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction): void => {
   logger.error({ err }, "Unhandled error");
   res.status(status).json({ error: "ServerError", message });
 });
+
+// Start background automation scheduler (24h appointment reminders)
+startAutomationScheduler();
 
 export default app;

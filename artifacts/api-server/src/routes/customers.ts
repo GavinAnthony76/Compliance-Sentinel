@@ -4,6 +4,7 @@ import { db, customersTable, propertiesTable, appointmentsTable, invoicesTable, 
 import { eq, and, ilike, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+import { fireAutomations } from "../lib/automations";
 import crypto from "crypto";
 
 const customerBodySchema = z.object({
@@ -58,6 +59,9 @@ router.post("/", async (req: any, res) => {
     tags: parsed.data.tags ?? [],
   }).returning();
   await logActivity({ companyId, userId, action: "customer.created", entityType: "customer", entityId: customer.id });
+
+  // Fire customer_created automations (non-blocking)
+  fireAutomations(companyId, "customer_created", { customerId: customer.id, userId });
 
   // Auto-send portal invite via SMS when customer has a phone number
   let portalUrl: string | undefined;

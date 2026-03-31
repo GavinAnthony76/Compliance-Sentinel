@@ -1,6 +1,6 @@
-import { db, automationRulesTable, reviewRequestsTable, invoicesTable, customersTable, companiesTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
-import { sendReviewRequestNotification, sendEmail } from "./notifications";
+import { db, automationRulesTable, reviewRequestsTable, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable, appointmentsTable, servicesTable } from "@workspace/db";
+import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { sendReviewRequestNotification, sendEmail, sendSMS } from "./notifications";
 import { logActivity } from "./activity";
 
 export interface AutomationContext {
@@ -9,6 +9,7 @@ export interface AutomationContext {
   appointmentId?: number;
   invoiceId?: number;
   appointmentPrice?: number | null;
+  appointmentServiceId?: number | null;
 }
 
 /**
@@ -63,7 +64,7 @@ async function executeAction(
   reviewUrl: string,
   ctx: AutomationContext,
 ): Promise<void> {
-  const { customerId, userId, appointmentId, appointmentPrice } = ctx;
+  const { customerId, userId, appointmentId, appointmentPrice, appointmentServiceId } = ctx;
 
   switch (rule.actionType) {
     case "send_review_request": {
@@ -129,20 +130,79 @@ async function executeAction(
       break;
     }
 
+    case "send_sms_reminder": {
+      const [customer] = await db
+        .select()
+        .from(customersTable)
+        .where(eq(customersTable.id, customerId))
+        .limit(1);
+      if (!customer?.phone) return;
+
+      let message = `Hi ${customer.firstName}, this is a reminder from ${companyName}.`;
+      if (appointmentId) {
+        const [appt] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, appointmentId)).limit(1);
+        if (appt) {
+          const dateStr = new Date(appt.scheduledStart).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+          const timeStr = new Date(appt.scheduledStart).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+          message = `Hi ${customer.firstName}, reminder: your appointment with ${companyName} is on ${dateStr} at ${timeStr}. Reply STOP to opt out.`;
+        }
+      }
+
+      await sendSMS({ to: customer.phone, body: message });
+
+      await logActivity({
+        companyId,
+        userId,
+        action: "automation.sms_reminder_sent",
+        entityType: "automation",
+        entityId: rule.id,
+        metadata: { ruleId: rule.id, triggerType: rule.triggerType, customerId },
+      });
+      break;
+    }
+
     case "create_invoice": {
       if (!appointmentId) return;
+
+      // Check for duplicate: skip if invoice already exists for this appointment
+      const [existingInv] = await db.select({ id: invoicesTable.id }).from(invoicesTable)
+        .where(and(eq(invoicesTable.appointmentId, appointmentId), eq(invoicesTable.companyId, companyId)))
+        .limit(1);
+      if (existingInv) return;
+
+      // Fetch service for line item details
+      let serviceName = "Service Rendered";
+      let price = appointmentPrice ?? 0;
+      if (appointmentServiceId) {
+        const [svc] = await db.select().from(servicesTable).where(eq(servicesTable.id, appointmentServiceId)).limit(1);
+        if (svc) {
+          serviceName = svc.name;
+          if (!appointmentPrice && svc.basePrice) price = Number(svc.basePrice);
+        }
+      } else if (!appointmentServiceId) {
+        // Try to get service from the appointment record
+        const [appt] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, appointmentId)).limit(1);
+        if (appt?.serviceId) {
+          const [svc] = await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1);
+          if (svc) {
+            serviceName = svc.name;
+            if (!appointmentPrice && svc.basePrice) price = Number(svc.basePrice);
+          }
+        }
+      }
+
       const [countResult] = await db
         .select({ count: sql<number>`count(*)` })
         .from(invoicesTable)
         .where(eq(invoicesTable.companyId, companyId));
       const invoiceNum = `INV-${String(Number(countResult.count) + 1).padStart(4, "0")}`;
-      const price = appointmentPrice ?? 0;
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 14);
 
-      await db.insert(invoicesTable).values({
+      const [newInv] = await db.insert(invoicesTable).values({
         companyId,
         customerId,
+        appointmentId,
         invoiceNumber: invoiceNum,
         subtotal: String(price),
         tax: "0",
@@ -150,6 +210,16 @@ async function executeAction(
         status: "sent",
         dueDate,
         notes: `Auto-generated for appointment #${appointmentId}`,
+      }).returning();
+
+      // Insert line item with service name
+      await db.insert(invoiceLineItemsTable).values({
+        invoiceId: newInv.id,
+        description: serviceName,
+        quantity: "1",
+        unitPrice: String(price),
+        lineTotal: String(price),
+        sortOrder: 0,
       });
 
       await logActivity({
@@ -158,7 +228,7 @@ async function executeAction(
         action: "automation.invoice_created",
         entityType: "automation",
         entityId: rule.id,
-        metadata: { ruleId: rule.id, triggerType: rule.triggerType, appointmentId },
+        metadata: { ruleId: rule.id, triggerType: rule.triggerType, appointmentId, invoiceId: newInv.id },
       });
       break;
     }
@@ -167,4 +237,64 @@ async function executeAction(
       // Unknown action type — skip silently
       break;
   }
+}
+
+/**
+ * Background scheduler: runs every 5 minutes, checks for appointments
+ * scheduled 24–25 hours from now and fires appointment_upcoming_24h automations.
+ */
+export function startAutomationScheduler(): void {
+  const INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+  async function checkUpcomingAppointments() {
+    try {
+      const now = new Date();
+      const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const in25h = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+
+      // Find appointments in the 24–25h window that haven't had a reminder sent
+      const upcoming = await db.select().from(appointmentsTable)
+        .where(
+          and(
+            eq(appointmentsTable.reminderSent, false),
+            gte(appointmentsTable.scheduledStart, in24h),
+            lte(appointmentsTable.scheduledStart, in25h),
+          )
+        );
+
+      for (const appt of upcoming) {
+        try {
+          // Check if company has any active appointment_upcoming_24h automation rules
+          const rules = await db.select().from(automationRulesTable)
+            .where(and(
+              eq(automationRulesTable.companyId, appt.companyId),
+              eq(automationRulesTable.triggerType, "appointment_upcoming_24h"),
+              eq(automationRulesTable.isActive, true),
+            ));
+
+          if (rules.length > 0) {
+            await fireAutomations(appt.companyId, "appointment_upcoming_24h", {
+              customerId: appt.customerId,
+              appointmentId: appt.id,
+              appointmentPrice: appt.price ? Number(appt.price) : null,
+              appointmentServiceId: appt.serviceId,
+            });
+          }
+
+          // Mark reminder sent regardless (avoid spam even if no rule)
+          await db.update(appointmentsTable)
+            .set({ reminderSent: true, updatedAt: new Date() })
+            .where(eq(appointmentsTable.id, appt.id));
+        } catch {
+          // Non-fatal per appointment
+        }
+      }
+    } catch {
+      // Non-fatal scheduler errors
+    }
+  }
+
+  // Run immediately on startup, then every 5 minutes
+  checkUpcomingAppointments();
+  setInterval(checkUpcomingAppointments, INTERVAL_MS);
 }

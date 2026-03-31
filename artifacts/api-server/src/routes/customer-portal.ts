@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, customersTable, invoicesTable, appointmentsTable, estimatesTable, companiesTable, servicesTable } from "@workspace/db";
+import { db, customersTable, invoicesTable, invoiceLineItemsTable, appointmentsTable, estimatesTable, companiesTable, servicesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { hashPassword, verifyPassword } from "../lib/auth";
@@ -301,6 +301,46 @@ router.get("/invoices", requirePortalAuth, async (req: any, res) => {
     .where(and(eq(invoicesTable.customerId, customerId), eq(invoicesTable.companyId, companyId)))
     .orderBy(desc(invoicesTable.createdAt));
   return res.json(invoices.map(i => ({ ...i, subtotal: Number(i.subtotal), tax: Number(i.tax), total: Number(i.total) })));
+});
+
+// GET /portal/invoices/:id — full detail with line items and company payment config
+router.get("/invoices/:id", requirePortalAuth, async (req: any, res) => {
+  const { customerId, companyId } = req.portal;
+  const id = Number(req.params.id);
+  const [invoice] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.customerId, customerId), eq(invoicesTable.companyId, companyId)))
+    .limit(1);
+  if (!invoice) return res.status(404).json({ error: "NotFound" });
+
+  const [lineItems, company] = await Promise.all([
+    db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder),
+    db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1).then(r => r[0]),
+  ]);
+
+  const paymentConfig = {
+    acceptedPaymentMethods: company?.acceptedPaymentMethods ? JSON.parse(company.acceptedPaymentMethods) : ["cash", "check"],
+    paymentInstructions: company?.paymentInstructions ?? "",
+    zelleInfo: company?.zelleInfo ?? "",
+    venmoHandle: company?.venmoHandle ?? "",
+    cashAppTag: company?.cashAppTag ?? "",
+    checkPayableTo: company?.checkPayableTo ?? "",
+  };
+
+  return res.json({
+    ...invoice,
+    subtotal: Number(invoice.subtotal),
+    tax: Number(invoice.tax),
+    total: Number(invoice.total),
+    lineItems: lineItems.map(li => ({
+      ...li,
+      quantity: Number(li.quantity),
+      unitPrice: Number(li.unitPrice),
+      lineTotal: Number(li.lineTotal),
+    })),
+    paymentConfig,
+    companyName: company?.name ?? "",
+    companyPlan: company?.subscriptionPlan ?? "starter",
+  });
 });
 
 // GET /portal/estimates

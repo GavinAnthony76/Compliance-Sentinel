@@ -16,6 +16,8 @@ export const invoicesTable = pgTable("invoices", {
   status: text("status").notNull().default("draft"),
   dueDate: timestamp("due_date"),
   paidAt: timestamp("paid_at"),
+  paymentMethod: text("payment_method"),
+  paymentMethodNote: text("payment_method_note"),
   notes: text("notes"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   lastReminderSentAt: timestamp("last_reminder_sent_at"),
@@ -24,11 +26,27 @@ export const invoicesTable = pgTable("invoices", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const invoiceLineItemsTable = pgTable("invoice_line_items", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").notNull().references(() => invoicesTable.id, { onDelete: "cascade" }),
+  description: text("description").notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 2 }).notNull().default("1"),
+  unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull().default("0"),
+  lineTotal: numeric("line_total", { precision: 10, scale: 2 }).notNull().default("0"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
+export const insertInvoiceLineItemSchema = createInsertSchema(invoiceLineItemsTable).omit({
+  id: true,
+});
+
 export type Invoice = typeof invoicesTable.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type InvoiceLineItem = typeof invoiceLineItemsTable.$inferSelect;
+export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
