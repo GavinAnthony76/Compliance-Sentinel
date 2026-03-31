@@ -1,18 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLogin } from '@workspace/api-client-react';
-import { useAuthState } from '@/hooks/use-auth-state';
+import { useAuthState, TOKEN_KEY } from '@/hooks/use-auth-state';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Mail, Lock, Leaf } from 'lucide-react';
-import { Link } from 'wouter';
+import { Mail, Lock, Leaf, RotateCcw } from 'lucide-react';
+import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { login } = useAuthState();
+  const { login, isAuthenticated, isLoading } = useAuthState();
   const { toast } = useToast();
-  
   const loginMutation = useLogin();
+  const [, setLocation] = useLocation();
+
+  // If already authenticated, go straight to the dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      setLocation('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +34,11 @@ export function LoginPage() {
         variant: "destructive" 
       });
     }
+  };
+
+  const clearSession = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    window.location.reload();
   };
 
   return (
@@ -57,6 +69,7 @@ export function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="username"
                 />
               </div>
               <div className="space-y-1">
@@ -71,6 +84,7 @@ export function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                 />
               </div>
               <Button type="submit" className="w-full h-12 text-lg" isLoading={loginMutation.isPending}>
@@ -83,6 +97,16 @@ export function LoginPage() {
             </div>
             <div className="mt-4 text-center text-xs text-muted-foreground/60">
               <Link href="/admin/login" className="hover:underline">Admin Login</Link>
+            </div>
+            <div className="mt-4 border-t border-border/40 pt-4 text-center">
+              <button
+                type="button"
+                onClick={clearSession}
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Clear session data
+              </button>
             </div>
           </CardContent>
         </Card>

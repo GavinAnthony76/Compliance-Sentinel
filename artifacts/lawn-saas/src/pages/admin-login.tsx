@@ -1,17 +1,25 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAdminLogin } from '@workspace/api-client-react';
-import { useAuthState } from '@/hooks/use-auth-state';
+import { useAuthState, ADMIN_TOKEN_KEY } from '@/hooks/use-auth-state';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Mail, Lock, ShieldCheck } from 'lucide-react';
-import { Link } from 'wouter';
+import { Mail, Lock, ShieldCheck, RotateCcw } from 'lucide-react';
+import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
 export function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { adminLogin } = useAuthState();
+  const { adminLogin, isAdminAuthenticated, isLoading } = useAuthState();
   const { toast } = useToast();
   const loginMutation = useAdminLogin();
+  const [, setLocation] = useLocation();
+
+  // If already authenticated, go straight to the dashboard
+  useEffect(() => {
+    if (!isLoading && isAdminAuthenticated) {
+      setLocation('/admin/dashboard');
+    }
+  }, [isAdminAuthenticated, isLoading, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,8 +28,13 @@ export function AdminLoginPage() {
       adminLogin(res.token);
       toast({ title: 'Welcome, Admin!' });
     } catch {
-      toast({ title: 'Login failed', description: 'Invalid credentials', variant: 'destructive' });
+      toast({ title: 'Login failed', description: 'Invalid credentials. Please check your email and password.', variant: 'destructive' });
     }
+  };
+
+  const clearSession = () => {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
+    window.location.reload();
   };
 
   return (
@@ -58,6 +71,7 @@ export function AdminLoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  autoComplete="username"
                   className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                 />
               </div>
@@ -70,6 +84,7 @@ export function AdminLoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  autoComplete="current-password"
                   className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                 />
               </div>
@@ -82,6 +97,16 @@ export function AdminLoginPage() {
             </div>
             <div className="mt-3 text-center text-xs text-slate-500">
               <Link href="/login" className="hover:text-slate-300 transition-colors">← Back to company login</Link>
+            </div>
+            <div className="mt-4 border-t border-slate-800 pt-4 text-center">
+              <button
+                type="button"
+                onClick={clearSession}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-600 hover:text-slate-400 transition-colors"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Clear session data
+              </button>
             </div>
           </CardContent>
         </Card>
