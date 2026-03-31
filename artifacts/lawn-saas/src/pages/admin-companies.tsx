@@ -2,12 +2,17 @@ import { useState } from 'react';
 import { useAdminListCompanies, useAdminGetCompany, useAdminSuspendCompany, useAdminActivateCompany, useAdminUpdateCompanyPlan } from '@workspace/api-client-react';
 import { AdminLayout } from './admin-dashboard';
 import { Button, Input } from '@/components/ui';
-import { Search, Building2, ChevronRight, Plus, X } from 'lucide-react';
+import { Search, Building2, ChevronRight, Plus, X, Pencil, UserX, UserCheck, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAdminListCompaniesQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useParams, useLocation } from 'wouter';
+
+function adminFetch(path: string, opts: RequestInit = {}) {
+  const token = localStorage.getItem('greensync_admin_token');
+  return fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(opts.headers ?? {}) } });
+}
 
 function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { toast } = useToast();
@@ -21,16 +26,8 @@ function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCre
     e.preventDefault();
     setIsLoading(true);
     try {
-      const token = localStorage.getItem('greensync_admin_token');
-      const res = await fetch('/api/admin/companies', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.message || 'Failed to create company');
-      }
+      const res = await adminFetch('/api/admin/companies', { method: 'POST', body: JSON.stringify(form) });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to create company'); }
       toast({ title: 'Company created successfully' });
       onCreated();
       onClose();
@@ -44,14 +41,7 @@ function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCre
   const field = (key: keyof typeof form, label: string, opts?: { type?: string; required?: boolean; placeholder?: string }) => (
     <div>
       <label className="text-xs font-medium text-slate-400">{label}{opts?.required !== false ? ' *' : ''}</label>
-      <input
-        type={opts?.type ?? 'text'}
-        className="w-full mt-1 h-10 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary"
-        placeholder={opts?.placeholder ?? label}
-        value={form[key]}
-        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-        required={opts?.required !== false}
-      />
+      <input type={opts?.type ?? 'text'} className="w-full mt-1 h-10 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary" placeholder={opts?.placeholder ?? label} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} required={opts?.required !== false} />
     </div>
   );
 
@@ -81,7 +71,6 @@ function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCre
             {field('city', 'City', { required: false })}
             {field('state', 'State', { required: false })}
           </div>
-
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider pt-2">Owner Account</p>
           <div className="grid grid-cols-2 gap-3">
             {field('ownerFirstName', 'First Name')}
@@ -89,11 +78,75 @@ function CreateCompanyModal({ onClose, onCreated }: { onClose: () => void; onCre
           </div>
           {field('ownerEmail', 'Owner Email', { type: 'email' })}
           {field('ownerPassword', 'Password', { type: 'password', placeholder: 'Min 8 characters' })}
-
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 h-10 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-medium transition-colors">Cancel</button>
             <button type="submit" disabled={isLoading} className="flex-1 h-10 rounded-xl bg-primary text-white text-sm font-medium transition-colors hover:bg-primary/90 disabled:opacity-60">
               {isLoading ? 'Creating...' : 'Create Company'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function EditCompanyModal({ company, onClose, onSaved }: { company: any; onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [form, setForm] = useState({
+    name: company.name ?? '',
+    email: company.email ?? '',
+    phone: company.phone ?? '',
+    city: company.city ?? '',
+    state: company.state ?? '',
+    address: company.address ?? '',
+    zip: company.zip ?? '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const res = await adminFetch(`/api/admin/companies/${company.id}`, { method: 'PUT', body: JSON.stringify(form) });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update company'); }
+      toast({ title: 'Company updated' });
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const field = (key: keyof typeof form, label: string, opts?: { type?: string }) => (
+    <div>
+      <label className="text-xs font-medium text-slate-400">{label}</label>
+      <input type={opts?.type ?? 'text'} className="w-full mt-1 h-10 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-primary" value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 rounded-2xl w-full max-w-lg border border-slate-700 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+          <h2 className="text-lg font-bold text-white">Edit Company</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {field('name', 'Company Name')}
+          {field('email', 'Email', { type: 'email' })}
+          {field('phone', 'Phone')}
+          {field('address', 'Address')}
+          <div className="grid grid-cols-3 gap-3">
+            {field('city', 'City')}
+            {field('state', 'State')}
+            {field('zip', 'ZIP')}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 h-10 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-medium transition-colors">Cancel</button>
+            <button type="submit" disabled={isLoading} className="flex-1 h-10 rounded-xl bg-primary text-white text-sm font-medium transition-colors hover:bg-primary/90 disabled:opacity-60">
+              {isLoading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
@@ -137,9 +190,8 @@ export function AdminCompaniesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input className="w-full h-11 pl-10 pr-4 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:border-primary" placeholder="Search companies..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        {['', 'starter', 'growth', 'pro'].map(p => (
-          <button key={p} onClick={() => setPlanFilter(p)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${planFilter === p ? 'bg-primary text-white' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-white'}`}>
+        {(['', 'starter', 'growth', 'pro'] as const).map(p => (
+          <button key={p} onClick={() => setPlanFilter(p)} className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${planFilter === p ? 'bg-primary text-white' : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-white'}`}>
             {p ? p.charAt(0).toUpperCase() + p.slice(1) : 'All'}
           </button>
         ))}
@@ -198,13 +250,51 @@ export function AdminCompaniesPage() {
 
 export function AdminCompanyDetailPage() {
   const params = useParams<{ id: string }>();
-  const { data, isLoading } = useAdminGetCompany(Number(params.id));
+  const { data, isLoading, refetch } = useAdminGetCompany(Number(params.id));
   const { toast } = useToast();
   const qc = useQueryClient();
   const suspendMut = useAdminSuspendCompany();
   const activateMut = useAdminActivateCompany();
   const planMut = useAdminUpdateCompanyPlan();
   const [, setLocation] = useLocation();
+  const [showEdit, setShowEdit] = useState(false);
+  const [togglingUser, setTogglingUser] = useState<number | null>(null);
+  const [deletingUser, setDeletingUser] = useState<number | null>(null);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: [`/api/admin/companies/${params.id}`] });
+    refetch();
+  };
+
+  const handleToggleUser = async (userId: number) => {
+    setTogglingUser(userId);
+    try {
+      const res = await adminFetch(`/api/admin/companies/${params.id}/users/${userId}/toggle`, { method: 'PUT' });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to toggle user'); }
+      const result = await res.json();
+      toast({ title: result.isActive ? 'User activated' : 'User deactivated' });
+      invalidate();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setTogglingUser(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId: number, userName: string) => {
+    if (!confirm(`Delete user "${userName}"? This cannot be undone.`)) return;
+    setDeletingUser(userId);
+    try {
+      const res = await adminFetch(`/api/admin/companies/${params.id}/users/${userId}`, { method: 'DELETE' });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to delete user'); }
+      toast({ title: 'User deleted' });
+      invalidate();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeletingUser(null);
+    }
+  };
 
   if (isLoading) return <AdminLayout><div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div></AdminLayout>;
   if (!data?.company) return <AdminLayout><div className="text-slate-400 py-20 text-center">Company not found</div></AdminLayout>;
@@ -213,12 +303,16 @@ export function AdminCompanyDetailPage() {
 
   return (
     <AdminLayout>
+      {showEdit && <EditCompanyModal company={company} onClose={() => setShowEdit(false)} onSaved={invalidate} />}
       <div className="flex items-center gap-4 mb-6">
         <button onClick={() => setLocation('/admin/companies')} className="text-slate-400 hover:text-white text-sm">← Back</button>
         <h1 className="text-2xl font-bold text-white">{company.name}</h1>
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${company.isActive ? 'bg-green-400/10 text-green-400' : 'bg-red-400/10 text-red-400'}`}>
           {company.isActive ? 'Active' : 'Suspended'}
         </span>
+        <button onClick={() => setShowEdit(true)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors">
+          <Pencil className="w-3.5 h-3.5" />Edit Info
+        </button>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -226,8 +320,8 @@ export function AdminCompanyDetailPage() {
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
             <h2 className="font-bold text-white mb-4">Company Info</h2>
             <div className="grid grid-cols-2 gap-4 text-sm">
-              {[['Email', company.email], ['Phone', company.phone], ['Plan', company.subscriptionPlan], ['Status', company.subscriptionStatus], ['Customers', company.customersCount], ['Appointments', company.appointmentsCount]].map(([k, v]) => (
-                <div key={k as string}>
+              {([['Email', company.email], ['Phone', company.phone], ['Address', company.address], ['City / State', [company.city, company.state].filter(Boolean).join(', ')], ['Plan', company.subscriptionPlan], ['Status', company.subscriptionStatus], ['Customers', company.customersCount], ['Appointments', company.appointmentsCount]] as [string, any][]).map(([k, v]) => (
+                <div key={k}>
                   <span className="text-slate-400">{k}: </span>
                   <span className="text-white capitalize">{v ?? '—'}</span>
                 </div>
@@ -237,14 +331,37 @@ export function AdminCompanyDetailPage() {
 
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
             <h2 className="font-bold text-white mb-4">Users ({users?.length ?? 0})</h2>
-            <div className="space-y-3">
+            <div className="space-y-1">
               {users?.map((u: any) => (
-                <div key={u.id} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0">
+                <div key={u.id} className="flex items-center justify-between py-2.5 px-2 rounded-lg hover:bg-slate-800/60 transition-colors">
                   <div>
-                    <span className="text-white text-sm">{u.firstName} {u.lastName}</span>
+                    <span className="text-white text-sm font-medium">{u.firstName} {u.lastName}</span>
                     <span className="text-slate-400 text-xs ml-2">{u.email}</span>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-xs capitalize ${u.role === 'owner' ? 'bg-purple-400/10 text-purple-400' : 'bg-slate-700 text-slate-400'}`}>{u.role}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-xs capitalize ${u.role === 'owner' ? 'bg-purple-400/10 text-purple-400' : 'bg-slate-700 text-slate-400'}`}>{u.role}</span>
+                    {!u.isActive && <span className="px-2 py-0.5 rounded-full text-xs bg-red-400/10 text-red-400">Inactive</span>}
+                    {u.role !== 'owner' && (
+                      <>
+                        <button
+                          onClick={() => handleToggleUser(u.id)}
+                          disabled={togglingUser === u.id}
+                          title={u.isActive ? 'Deactivate user' : 'Activate user'}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-yellow-400 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                        >
+                          {u.isActive ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(u.id, `${u.firstName} ${u.lastName}`)}
+                          disabled={deletingUser === u.id}
+                          title="Delete user"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -260,7 +377,7 @@ export function AdminCompanyDetailPage() {
                 <select className="w-full h-9 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm" value={company.subscriptionPlan || ''} onChange={async (e) => {
                   if (!e.target.value) return;
                   await planMut.mutateAsync({ id: company.id, data: { plan: e.target.value as any } });
-                  await qc.invalidateQueries({ queryKey: [`/api/admin/companies/${company.id}`] });
+                  invalidate();
                   toast({ title: 'Plan updated' });
                 }}>
                   <option value="">Select plan...</option>
@@ -272,13 +389,13 @@ export function AdminCompanyDetailPage() {
               {company.isActive ? (
                 <Button size="sm" variant="destructive" className="w-full" onClick={async () => {
                   await suspendMut.mutateAsync({ id: company.id });
-                  await qc.invalidateQueries({ queryKey: [`/api/admin/companies/${company.id}`] });
+                  invalidate();
                   toast({ title: 'Company suspended' });
                 }}>Suspend Company</Button>
               ) : (
                 <Button size="sm" className="w-full" onClick={async () => {
                   await activateMut.mutateAsync({ id: company.id });
-                  await qc.invalidateQueries({ queryKey: [`/api/admin/companies/${company.id}`] });
+                  invalidate();
                   toast({ title: 'Company activated' });
                 }}>Activate Company</Button>
               )}

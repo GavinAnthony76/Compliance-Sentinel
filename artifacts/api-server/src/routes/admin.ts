@@ -122,6 +122,27 @@ router.get("/companies/:id", async (req, res) => {
   });
 });
 
+const updateCompanySchema = z.object({
+  name: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+});
+
+router.put("/companies/:id", async (req: any, res) => {
+  const id = Number(req.params.id);
+  const parsed = updateCompanySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  const fields = parsed.data;
+  if (Object.keys(fields).length === 0) return res.status(400).json({ error: "NoFields", message: "No fields to update" });
+  await db.update(companiesTable).set({ ...fields, updatedAt: new Date() }).where(eq(companiesTable.id, id));
+  await logActivity({ adminId: req.admin.adminId, action: "admin.company_updated", entityType: "company", entityId: id, metadata: fields });
+  return res.json({ success: true });
+});
+
 router.post("/companies/:id/suspend", async (req: any, res) => {
   const id = Number(req.params.id);
   await db.update(companiesTable).set({ isActive: false, updatedAt: new Date() }).where(eq(companiesTable.id, id));
@@ -279,6 +300,27 @@ router.post("/admins", async (req: any, res) => {
 
   await logActivity({ adminId: req.admin.adminId, action: "admin.admin_created", entityType: "admin", entityId: admin.id });
   return res.status(201).json({ id: admin.id, email: admin.email, firstName: admin.firstName, lastName: admin.lastName, role: admin.role, isActive: admin.isActive, createdAt: admin.createdAt });
+});
+
+const updateAdminSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  password: z.string().min(8).optional(),
+  role: z.enum(["admin", "superadmin"]).optional(),
+});
+
+router.put("/admins/:id", async (req: any, res) => {
+  const id = Number(req.params.id);
+  const parsed = updateAdminSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  const { password, ...rest } = parsed.data;
+  const fields: Record<string, any> = { ...rest, updatedAt: new Date() };
+  if (password) fields.passwordHash = await hashPassword(password);
+  if (Object.keys(fields).length === 1) return res.status(400).json({ error: "NoFields", message: "No fields to update" });
+  const [updated] = await db.update(platformAdminsTable).set(fields).where(eq(platformAdminsTable.id, id)).returning();
+  await logActivity({ adminId: req.admin.adminId, action: "admin.admin_updated", entityType: "admin", entityId: id });
+  return res.json({ id: updated.id, email: updated.email, firstName: updated.firstName, lastName: updated.lastName, role: updated.role });
 });
 
 router.delete("/admins/:id", async (req: any, res) => {
