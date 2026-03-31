@@ -23,11 +23,12 @@ function BookAppointmentModal({
 }: {
   portalFetch: (path: string, opts?: RequestInit) => Promise<Response>;
   onClose: () => void;
-  onBooked: (apt: any) => void;
+  onBooked: () => void;
 }) {
   const { toast } = useToast();
   const [services, setServices] = useState<any[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+  const [servicesError, setServicesError] = useState(false);
   const [selectedService, setSelectedService] = useState<number | null>(null);
   const [preferredDate, setPreferredDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -35,8 +36,12 @@ function BookAppointmentModal({
 
   useEffect(() => {
     portalFetch('/api/portal/services')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('Failed to load services');
+        return r.json();
+      })
       .then(data => setServices(Array.isArray(data) ? data : []))
+      .catch(() => setServicesError(true))
       .finally(() => setLoadingServices(false));
   }, []);
 
@@ -60,7 +65,7 @@ function BookAppointmentModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to book appointment');
       toast({ title: 'Appointment requested!', description: "We'll confirm your appointment shortly." });
-      onBooked(data);
+      onBooked();
       onClose();
     } catch (err: any) {
       toast({ title: 'Booking failed', description: err.message, variant: 'destructive' });
@@ -85,8 +90,12 @@ function BookAppointmentModal({
             <label className="block text-sm font-semibold mb-3">Select a Service *</label>
             {loadingServices ? (
               <div className="flex justify-center py-6"><div className="animate-spin w-6 h-6 border-4 border-primary border-t-transparent rounded-full" /></div>
+            ) : servicesError ? (
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-center">
+                Could not load services. Please close and try again.
+              </div>
             ) : services.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No services available.</p>
+              <p className="text-sm text-muted-foreground text-center py-4">No services available yet.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {services.map(svc => (
@@ -182,8 +191,14 @@ export function PortalAppointmentsPage() {
     }).finally(() => setDataLoading(false));
   }, [isAuthenticated]);
 
-  const handleBooked = (apt: any) => {
-    setAppointments(prev => [apt, ...prev]);
+  const reloadAppointments = () => {
+    portalFetch('/api/portal/appointments').then(r => r.json()).then(data => {
+      setAppointments(Array.isArray(data) ? data : []);
+    });
+  };
+
+  const handleBooked = () => {
+    reloadAppointments();
   };
 
   const handleCancel = async (id: number) => {

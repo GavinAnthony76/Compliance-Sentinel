@@ -246,6 +246,7 @@ router.post("/appointments", requirePortalAuth, async (req: any, res) => {
 
   const scheduledDate = new Date(scheduledStart);
   if (isNaN(scheduledDate.getTime())) return res.status(400).json({ error: "ValidationError", message: "Invalid date" });
+  if (scheduledDate <= new Date()) return res.status(400).json({ error: "ValidationError", message: "Preferred date must be in the future" });
 
   const [appointment] = await db.insert(appointmentsTable).values({
     companyId,
