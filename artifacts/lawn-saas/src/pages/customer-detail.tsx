@@ -16,7 +16,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   ArrowLeft, User, MapPin, Phone, Mail, Globe, Edit2, Trash2,
-  Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap, Pencil,
+  Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap, Pencil, Copy,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
@@ -454,12 +454,13 @@ export function CustomerDetailPage() {
   const markPaidMut = useMarkInvoicePaid();
   const deleteInvoiceMut = useDeleteInvoice();
   const [sendingInvite, setSendingInvite] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [togglingAutopay, setTogglingAutopay] = useState(false);
   const [removingCard, setRemovingCard] = useState(false);
 
   const handleSendPortalInvite = async () => {
-    if (!customer.email) {
-      toast({ title: 'Customer has no email', description: 'Add an email address first', variant: 'destructive' });
+    if (!customer.phone) {
+      toast({ title: 'Customer has no phone number', description: 'Add a phone number first to send a portal invite', variant: 'destructive' });
       return;
     }
     setSendingInvite(true);
@@ -471,7 +472,8 @@ export function CustomerDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to send invite');
-      toast({ title: 'Portal invite sent!', description: `Invite link sent to ${customer.email}` });
+      setInviteUrl(data.portalUrl);
+      toast({ title: 'Portal invite sent!', description: `Invite link sent via SMS to ${customer.phone}` });
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -497,8 +499,8 @@ export function CustomerDetailPage() {
   );
 
   const { customer, properties, recentAppointments, recentInvoices } = data;
-  const fullName = `${customer.firstName} ${customer.lastName}`;
-  const initials = `${customer.firstName[0] ?? ''}${customer.lastName[0] ?? ''}`.toUpperCase();
+  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.phone || 'Customer';
+  const initials = customer.firstName?.[0] || customer.phone?.[0] || 'C';
   const totalRevenue = recentInvoices.filter(i => i.status === 'paid').reduce((s, i) => s + Number(i.total), 0);
   const outstandingBalance = recentInvoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((s, i) => s + Number(i.total), 0);
 
@@ -524,6 +526,29 @@ export function CustomerDetailPage() {
       {showNewAppt && <NewAppointmentModal customerId={id} onClose={() => setShowNewAppt(false)} />}
       {editingAppt && <EditAppointmentModal appointment={editingAppt} customerId={id} onClose={() => setEditingAppt(null)} />}
       {showNewInvoice && <NewInvoiceModal customerId={id} onClose={() => setShowNewInvoice(false)} />}
+      {inviteUrl && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                <ExternalLink className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Invite Sent!</h3>
+                <p className="text-sm text-muted-foreground">Sent via SMS to {customer.phone}</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">You can also share this link directly with your customer:</p>
+            <div className="flex gap-2">
+              <input readOnly value={inviteUrl} className="flex-1 text-xs border border-border rounded-lg px-3 py-2 bg-muted/50 font-mono truncate" />
+              <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(inviteUrl); toast({ title: 'Link copied!' }); }} className="shrink-0">
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+            <Button className="w-full mt-4" onClick={() => setInviteUrl(null)}>Done</Button>
+          </div>
+        </div>
+      )}
 
       {/* Back link */}
       <Link href="/customers" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">

@@ -47,21 +47,28 @@ function requirePortalAuth(req: any, res: any, next: any): void {
 
 // POST /portal/auth/login
 router.post("/auth/login", async (req, res) => {
-  const parsed = z.object({ email: z.string().email(), password: z.string().min(1), companySlug: z.string().min(1) }).safeParse(req.body);
+  const parsed = z.object({ identifier: z.string().min(1), password: z.string().min(1), companySlug: z.string().min(1) }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
-  const { email, password, companySlug } = parsed.data;
+  const { identifier, password, companySlug } = parsed.data;
 
   const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound", message: "Company not found" });
 
-  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.email, email))).limit(1);
+  // Support login by phone number (primary) or email (fallback)
+  const isEmail = identifier.includes("@");
+  const [customer] = await db.select().from(customersTable).where(
+    and(
+      eq(customersTable.companyId, company.id),
+      isEmail ? eq(customersTable.email, identifier) : eq(customersTable.phone, identifier)
+    )
+  ).limit(1);
   if (!customer || !customer.portalPasswordHash) {
-    return res.status(401).json({ error: "AuthError", message: "Invalid email or password" });
+    return res.status(401).json({ error: "AuthError", message: "Invalid phone number or password" });
   }
 
   const valid = await verifyPassword(password, customer.portalPasswordHash);
-  if (!valid) return res.status(401).json({ error: "AuthError", message: "Invalid email or password" });
+  if (!valid) return res.status(401).json({ error: "AuthError", message: "Invalid phone number or password" });
 
   const token = signPortalToken({ customerId: customer.id, companyId: company.id });
   return res.json({
@@ -93,7 +100,7 @@ router.post("/auth/send-invite", async (req: any, res) => {
 
   const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, parsed.data.customerId), eq(customersTable.companyId, businessCompanyId))).limit(1);
   if (!customer) return res.status(404).json({ error: "NotFound" });
-  if (!customer.email) return res.status(400).json({ error: "NoEmail", message: "Customer has no email address" });
+  if (!customer.phone) return res.status(400).json({ error: "NoPhone", message: "Customer has no phone number. Add a phone number first." });
 
   const inviteToken = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -108,15 +115,14 @@ router.post("/auth/send-invite", async (req: any, res) => {
   const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
   const portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
 
-  // Send email notification (mock or real)
-  const { sendEmail } = await import("../lib/notifications");
-  await sendEmail({
-    to: customer.email,
-    subject: `Access your ${company.name} customer portal`,
-    body: `Hi ${customer.firstName},\n\n${company.name} has invited you to access your customer portal where you can view your appointments, invoices, and service history.\n\nSet up your account: ${portalUrl}\n\nThis link expires in 7 days.\n\nThank you!`,
+  // Send SMS invite (mock or real via Twilio)
+  const { sendSMS } = await import("../lib/notifications");
+  await sendSMS({
+    to: customer.phone,
+    body: `${company.name} has invited you to your customer portal. Set up your account here: ${portalUrl} (link expires in 7 days)`,
   });
 
-  return res.json({ success: true, portalUrl });
+  return res.json({ success: true, portalUrl, sentTo: customer.phone });
 });
 
 // POST /portal/auth/set-password — customer sets password via invite token

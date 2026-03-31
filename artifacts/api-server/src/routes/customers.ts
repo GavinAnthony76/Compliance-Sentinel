@@ -1,15 +1,16 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db, customersTable, propertiesTable, appointmentsTable, invoicesTable } from "@workspace/db";
+import { db, customersTable, propertiesTable, appointmentsTable, invoicesTable, companiesTable } from "@workspace/db";
 import { eq, and, ilike, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+import crypto from "crypto";
 
 const customerBodySchema = z.object({
-  firstName: z.string().min(1).max(100),
-  lastName: z.string().min(1).max(100),
+  firstName: z.string().max(100).optional().default(""),
+  lastName: z.string().max(100).optional().default(""),
   email: z.string().email().optional().nullable(),
-  phone: z.string().max(30).optional().nullable(),
+  phone: z.string().min(7).max(30),
   addressLine1: z.string().max(255).optional().nullable(),
   addressLine2: z.string().max(255).optional().nullable(),
   city: z.string().max(100).optional().nullable(),
@@ -57,7 +58,21 @@ router.post("/", async (req: any, res) => {
     tags: parsed.data.tags ?? [],
   }).returning();
   await logActivity({ companyId, userId, action: "customer.created", entityType: "customer", entityId: customer.id });
-  return res.status(201).json(customer);
+
+  // Auto-send portal invite via SMS when customer has a phone number
+  let portalUrl: string | undefined;
+  try {
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    const inviteToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+    const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+    portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
+    const { sendSMS } = await import("../lib/notifications");
+    await sendSMS({ to: customer.phone!, body: `${company.name} has invited you to your customer portal. Set up your account here: ${portalUrl}` });
+  } catch { /* non-fatal — invite can be re-sent from customer detail */ }
+
+  return res.status(201).json({ ...customer, portalUrl });
 });
 
 router.get("/:id", async (req: any, res) => {

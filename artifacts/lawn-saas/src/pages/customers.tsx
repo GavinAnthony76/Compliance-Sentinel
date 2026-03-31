@@ -30,11 +30,44 @@ function downloadExport(path: string, filename: string, onError: (msg: string) =
     .catch(err => onError(err.message || 'Export failed'));
 }
 
+function InviteLinkDialog({ portalUrl, phone, onClose }: { portalUrl: string; phone: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const handleCopy = () => {
+    navigator.clipboard.writeText(portalUrl).then(() => toast({ title: 'Link copied!' }));
+  };
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+            <UserPlus className="w-5 h-5 text-green-600" />
+          </div>
+          <div>
+            <h3 className="font-bold text-lg">Customer Added!</h3>
+            <p className="text-sm text-muted-foreground">Portal invite sent via SMS to {phone}</p>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground mb-3">You can also share this link directly with your customer:</p>
+        <div className="flex gap-2">
+          <input
+            readOnly
+            value={portalUrl}
+            className="flex-1 text-xs border border-border rounded-lg px-3 py-2 bg-muted/50 font-mono truncate"
+          />
+          <Button variant="outline" size="sm" onClick={handleCopy} className="shrink-0">Copy</Button>
+        </div>
+        <Button className="w-full mt-4" onClick={onClose}>Done</Button>
+      </div>
+    </div>
+  );
+}
+
 function AddCustomerModal({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', phone: '',
     addressLine1: '', city: '', state: '', zip: '', notes: '',
   });
+  const [inviteInfo, setInviteInfo] = useState<{ portalUrl: string; phone: string } | null>(null);
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateCustomer();
@@ -42,39 +75,57 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createMut.mutateAsync({ data: { ...form, tags: [] } });
+      const sanitized = {
+        ...form,
+        email: form.email || undefined,
+        addressLine1: form.addressLine1 || undefined,
+        city: form.city || undefined,
+        state: form.state || undefined,
+        zip: form.zip || undefined,
+        notes: form.notes || undefined,
+        tags: [] as string[],
+      };
+      const result: any = await createMut.mutateAsync({ data: sanitized });
       qc.invalidateQueries({ queryKey: getListCustomersQueryKey() });
-      toast({ title: 'Customer added' });
-      onClose();
+      if (result?.portalUrl) {
+        setInviteInfo({ portalUrl: result.portalUrl, phone: form.phone });
+      } else {
+        toast({ title: 'Customer added' });
+        onClose();
+      }
     } catch {
       toast({ title: 'Error adding customer', variant: 'destructive' });
     }
   };
 
+  if (inviteInfo) {
+    return <InviteLinkDialog portalUrl={inviteInfo.portalUrl} phone={inviteInfo.phone} onClose={onClose} />;
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6">
-        <h2 className="text-xl font-bold mb-6">Add Customer</h2>
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-1">Add Customer</h2>
+        <p className="text-sm text-muted-foreground mb-5">A portal invite will be sent via SMS. The customer can fill in the rest of their info.</p>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">First Name *</label>
-              <Input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} placeholder="Jane" required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Last Name *</label>
-              <Input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Smith" required />
-            </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Phone Number *</label>
+            <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="(555) 000-0000" icon={<Phone className="w-4 h-4" />} required minLength={7} />
+            <p className="text-xs text-muted-foreground">Required — the portal invite link will be sent here</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-sm font-medium">Email</label>
-              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" icon={<Mail className="w-4 h-4" />} />
+              <label className="text-sm font-medium">First Name</label>
+              <Input value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} placeholder="Jane" />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium">Phone</label>
-              <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="(555) 000-0000" icon={<Phone className="w-4 h-4" />} />
+              <label className="text-sm font-medium">Last Name</label>
+              <Input value={form.lastName} onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} placeholder="Smith" />
             </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Email</label>
+            <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" icon={<Mail className="w-4 h-4" />} />
           </div>
           <div className="space-y-1">
             <label className="text-sm font-medium">Street Address</label>
@@ -100,7 +151,7 @@ function AddCustomerModal({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-            <Button type="submit" className="flex-1" isLoading={createMut.isPending}>Add Customer</Button>
+            <Button type="submit" className="flex-1" isLoading={createMut.isPending}>Add &amp; Send Invite</Button>
           </div>
         </form>
       </div>
@@ -185,10 +236,12 @@ export function CustomersPage() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">
-                          {customer.firstName[0]}{customer.lastName[0]}
+                          {customer.firstName?.[0] || customer.phone?.[0] || '?'}
                         </div>
                         <div>
-                          <div className="font-semibold text-foreground">{customer.firstName} {customer.lastName}</div>
+                          <div className="font-semibold text-foreground">
+                            {[customer.firstName, customer.lastName].filter(Boolean).join(' ') || customer.phone || 'Customer'}
+                          </div>
                           <div className="flex gap-1 mt-0.5">
                             {customer.tags?.slice(0, 2).map(tag => (
                               <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">{tag}</Badge>

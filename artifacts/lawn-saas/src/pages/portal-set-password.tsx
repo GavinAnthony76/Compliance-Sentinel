@@ -70,7 +70,7 @@ export function PortalSetPasswordPage() {
         <Card className="border-border/50 shadow-2xl shadow-black/5 bg-white/80 backdrop-blur-xl">
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-2xl">Create your portal password</CardTitle>
-            <p className="text-muted-foreground text-sm mt-2">Set a password to access your customer portal</p>
+            <p className="text-muted-foreground text-sm mt-2">Set a password to access your customer portal. You'll sign in with your phone number.</p>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-5">

@@ -3,11 +3,11 @@ import { useParams, Link } from 'wouter';
 import { usePortalAuth } from '@/hooks/use-portal-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Mail, Lock, Leaf } from 'lucide-react';
+import { Phone, Lock, Leaf } from 'lucide-react';
 
 export function PortalLoginPage() {
   const { slug } = useParams<{ slug: string }>();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = usePortalAuth();
@@ -20,12 +20,12 @@ export function PortalLoginPage() {
       const res = await fetch('/api/portal/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, companySlug: slug }),
+        body: JSON.stringify({ identifier, password, companySlug: slug }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Login failed');
       login(data.token, { customer: data.customer, company: data.company });
-      toast({ title: `Welcome back, ${data.customer.firstName}!` });
+      toast({ title: `Welcome${data.customer.firstName ? `, ${data.customer.firstName}` : ''}!` });
     } catch (err: any) {
       toast({ title: 'Login failed', description: err.message, variant: 'destructive' });
     } finally {
@@ -51,15 +51,16 @@ export function PortalLoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-1">
-                <label className="text-sm font-medium pl-1">Email</label>
+                <label className="text-sm font-medium pl-1">Phone Number</label>
                 <Input
-                  type="email"
-                  placeholder="you@email.com"
-                  icon={<Mail className="w-5 h-5" />}
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  type="tel"
+                  placeholder="(555) 000-0000"
+                  icon={<Phone className="w-5 h-5" />}
+                  value={identifier}
+                  onChange={e => setIdentifier(e.target.value)}
                   required
                 />
+                <p className="text-xs text-muted-foreground pl-1">Use the phone number on file with your service provider</p>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium pl-1">Password</label>
@@ -76,9 +77,6 @@ export function PortalLoginPage() {
                 Sign In
               </Button>
             </form>
-            <div className="mt-4 text-center text-sm">
-              <Link href={`/portal/${slug}/forgot-password`} className="text-primary text-xs font-medium hover:underline">Forgot password?</Link>
-            </div>
             <div className="mt-3 text-center text-xs text-muted-foreground">
               Access provided by your service provider. <Link href="/" className="text-primary hover:underline">GreenSync</Link>
             </div>
