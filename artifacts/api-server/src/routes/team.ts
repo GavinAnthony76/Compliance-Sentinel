@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, companiesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, requireRole, hashPassword } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
+import { sendTeamInviteEmail, resolveBaseUrl } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
@@ -33,7 +34,8 @@ router.post("/", requireRole("owner", "admin"), requireFeature("multi_staff"), a
     return res.status(409).json({ error: "ConflictError", message: "Email already in use" });
   }
 
-  const passwordHash = await hashPassword(req.body.password);
+  const temporaryPassword = req.body.password;
+  const passwordHash = await hashPassword(temporaryPassword);
   const [member] = await db.insert(usersTable).values({
     companyId,
     firstName: req.body.firstName,
@@ -46,6 +48,20 @@ router.post("/", requireRole("owner", "admin"), requireFeature("multi_staff"), a
   }).returning();
 
   await logActivity({ companyId, userId, action: "team.member_invited", entityType: "user", entityId: member.id });
+
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  sendTeamInviteEmail({
+    to: member.email,
+    firstName: member.firstName,
+    lastName: member.lastName,
+    companyName: company?.name ?? "your company",
+    temporaryPassword,
+    loginUrl: resolveBaseUrl(),
+  }).catch((err) => {
+    import("../lib/logger").then(({ logger }) => {
+      logger.error({ err, to: member.email }, "Failed to send team invite email");
+    });
+  });
 
   return res.status(201).json({
     id: member.id,
