@@ -1,31 +1,39 @@
 import { Router } from "express";
 import { db, companiesTable, usersTable, customersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable } from "@workspace/db";
-import { eq, sql, desc, ilike, and, inArray } from "drizzle-orm";
+import { eq, sql, desc, ilike, and, inArray, or } from "drizzle-orm";
 import { requireAdminAuth, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 import { z } from "zod";
 
 const PLAN_MRR: Record<string, number> = { starter: 4900, growth: 9900, pro: 19900 };
+const PLAN_LABEL: Record<string, string> = { starter: "Starter ($49)", growth: "Growth ($99)", pro: "Pro ($199)" };
 
 const router = Router();
 router.use(requireAdminAuth);
 
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 router.get("/dashboard", async (_req, res) => {
   const [
     totalCompanies,
     activeSubscriptions,
     trialingAccounts,
+    pastDueAccounts,
     canceledAccounts,
     totalAppointments,
     totalInvoices,
     recentSignups,
     planBreakdown,
     totalUsers,
+    totalCustomers,
+    recentActivity,
+    monthlySignups,
+    paidRevenue,
   ] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(companiesTable),
     db.select({ count: sql<number>`count(*)` }).from(companiesTable).where(eq(companiesTable.subscriptionStatus, "active")),
     db.select({ count: sql<number>`count(*)` }).from(companiesTable).where(eq(companiesTable.subscriptionStatus, "trialing")),
+    db.select({ count: sql<number>`count(*)` }).from(companiesTable).where(eq(companiesTable.subscriptionStatus, "past_due")),
     db.select({ count: sql<number>`count(*)` }).from(companiesTable).where(eq(companiesTable.subscriptionStatus, "canceled")),
     db.select({ count: sql<number>`count(*)` }).from(appointmentsTable),
     db.select({ count: sql<number>`count(*)` }).from(invoicesTable),
@@ -35,26 +43,100 @@ router.get("/dashboard", async (_req, res) => {
       .where(eq(companiesTable.subscriptionStatus, "active"))
       .groupBy(companiesTable.subscriptionPlan),
     db.select({ count: sql<number>`count(*)` }).from(usersTable),
+    db.select({ count: sql<number>`count(*)` }).from(customersTable),
+    db.select().from(activityLogsTable).orderBy(desc(activityLogsTable.createdAt)).limit(8),
+    db.select({
+      month: sql<string>`to_char(created_at, 'YYYY-MM')`,
+      count: sql<number>`count(*)`,
+    }).from(companiesTable).where(sql`created_at >= now() - interval '6 months'`)
+      .groupBy(sql`to_char(created_at, 'YYYY-MM')`)
+      .orderBy(sql`to_char(created_at, 'YYYY-MM')`),
+    db.select({ total: sql<number>`coalesce(sum(total::numeric), 0)` }).from(invoicesTable).where(eq(invoicesTable.status, "paid")),
   ]);
 
-  const mrr = planBreakdown.reduce((sum, row) => {
-    return sum + (PLAN_MRR[row.plan ?? ""] ?? 0) * Number(row.count);
-  }, 0);
+  const mrr = planBreakdown.reduce((sum, row) => sum + (PLAN_MRR[row.plan ?? ""] ?? 0) * Number(row.count), 0);
+
+  // Enrich activity with company names
+  const companyIds = [...new Set(recentActivity.map(l => l.companyId).filter(Boolean))] as number[];
+  const companies = companyIds.length > 0
+    ? await db.select({ id: companiesTable.id, name: companiesTable.name }).from(companiesTable).where(inArray(companiesTable.id, companyIds))
+    : [];
+  const companyMap = Object.fromEntries(companies.map(c => [c.id, c.name]));
 
   return res.json({
     totalCompanies: Number(totalCompanies[0].count),
     activeSubscriptions: Number(activeSubscriptions[0].count),
     trialingAccounts: Number(trialingAccounts[0].count),
+    pastDueAccounts: Number(pastDueAccounts[0].count),
     canceledAccounts: Number(canceledAccounts[0].count),
     totalAppointments: Number(totalAppointments[0].count),
     totalInvoices: Number(totalInvoices[0].count),
     totalUsers: Number(totalUsers[0].count),
-    recentSignups,
+    totalCustomers: Number(totalCustomers[0].count),
+    totalRevenue: Number(paidRevenue[0]?.total ?? 0),
     mrr,
+    recentSignups,
+    recentActivity: recentActivity.map(l => ({ ...l, companyName: l.companyId ? companyMap[l.companyId] ?? null : null })),
+    monthlySignups: monthlySignups.map(m => ({ month: m.month, count: Number(m.count) })),
     planBreakdown: Object.fromEntries(planBreakdown.map(p => [p.plan, Number(p.count)])),
   });
 });
 
+// ─── Revenue ──────────────────────────────────────────────────────────────────
+router.get("/revenue", async (_req, res) => {
+  const [
+    planBreakdown,
+    statusBreakdown,
+    paidInvoices,
+    totalCustomers,
+    monthlySignups,
+    pastDueCompanies,
+  ] = await Promise.all([
+    db.select({ plan: companiesTable.subscriptionPlan, count: sql<number>`count(*)` })
+      .from(companiesTable)
+      .where(eq(companiesTable.subscriptionStatus, "active"))
+      .groupBy(companiesTable.subscriptionPlan),
+    db.select({ status: companiesTable.subscriptionStatus, count: sql<number>`count(*)` })
+      .from(companiesTable)
+      .groupBy(companiesTable.subscriptionStatus),
+    db.select({
+      count: sql<number>`count(*)`,
+      total: sql<number>`coalesce(sum(total::numeric), 0)`,
+    }).from(invoicesTable).where(eq(invoicesTable.status, "paid")),
+    db.select({ count: sql<number>`count(*)` }).from(customersTable),
+    db.select({
+      month: sql<string>`to_char(created_at, 'YYYY-MM')`,
+      count: sql<number>`count(*)`,
+    }).from(companiesTable).where(sql`created_at >= now() - interval '6 months'`)
+      .groupBy(sql`to_char(created_at, 'YYYY-MM')`)
+      .orderBy(sql`to_char(created_at, 'YYYY-MM')`),
+    db.select().from(companiesTable).where(eq(companiesTable.subscriptionStatus, "past_due")).limit(20),
+  ]);
+
+  const mrr = planBreakdown.reduce((sum, row) => sum + (PLAN_MRR[row.plan ?? ""] ?? 0) * Number(row.count), 0);
+  const statusMap = Object.fromEntries(statusBreakdown.map(s => [s.status, Number(s.count)]));
+
+  const planData = Object.fromEntries(
+    planBreakdown.map(p => [p.plan, {
+      count: Number(p.count),
+      mrr: (PLAN_MRR[p.plan ?? ""] ?? 0) * Number(p.count),
+      label: PLAN_LABEL[p.plan ?? ""] ?? p.plan,
+    }])
+  );
+
+  return res.json({
+    mrr,
+    planBreakdown: planData,
+    statusBreakdown: statusMap,
+    totalCustomers: Number(totalCustomers[0]?.count ?? 0),
+    paidInvoicesCount: Number(paidInvoices[0]?.count ?? 0),
+    totalRevenue: Number(paidInvoices[0]?.total ?? 0),
+    monthlySignups: monthlySignups.map(m => ({ month: m.month, count: Number(m.count) })),
+    pastDueCompanies,
+  });
+});
+
+// ─── Companies ────────────────────────────────────────────────────────────────
 router.get("/companies", async (req, res) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 20;
@@ -103,10 +185,15 @@ router.get("/companies/:id", async (req, res) => {
     db.select().from(activityLogsTable).where(eq(activityLogsTable.companyId, id)).orderBy(desc(activityLogsTable.createdAt)).limit(10),
   ]);
 
-  const [custCount, apptCount, owner] = await Promise.all([
+  const [custCount, apptCount, owner, invoiceSummary] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(customersTable).where(eq(customersTable.companyId, id)),
     db.select({ count: sql<number>`count(*)` }).from(appointmentsTable).where(eq(appointmentsTable.companyId, id)),
     db.select().from(usersTable).where(and(eq(usersTable.companyId, id), eq(usersTable.role, "owner"))).limit(1),
+    db.select({
+      total: sql<number>`count(*)`,
+      paid: sql<number>`sum(case when status='paid' then 1 else 0 end)`,
+      revenue: sql<number>`coalesce(sum(case when status='paid' then total::numeric else 0 end), 0)`,
+    }).from(invoicesTable).where(eq(invoicesTable.companyId, id)),
   ]);
 
   return res.json({
@@ -116,6 +203,9 @@ router.get("/companies/:id", async (req, res) => {
       ownerEmail: owner[0]?.email ?? null,
       customersCount: Number(custCount[0].count),
       appointmentsCount: Number(apptCount[0].count),
+      invoicesTotal: Number(invoiceSummary[0]?.total ?? 0),
+      invoicesPaid: Number(invoiceSummary[0]?.paid ?? 0),
+      revenue: Number(invoiceSummary[0]?.revenue ?? 0),
     },
     users,
     recentActivity,
@@ -130,6 +220,7 @@ const updateCompanySchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   zip: z.string().optional(),
+  subscriptionStatus: z.enum(["active", "trialing", "past_due", "canceled"]).optional(),
 });
 
 router.put("/companies/:id", async (req: any, res) => {
@@ -170,6 +261,7 @@ router.put("/companies/:id/notes", async (req: any, res) => {
   const id = Number(req.params.id);
   const notes = req.body?.notes ?? null;
   await db.update(companiesTable).set({ internalNotes: notes, updatedAt: new Date() }).where(eq(companiesTable.id, id));
+  await logActivity({ adminId: req.admin.adminId, action: "admin.company_notes_updated", entityType: "company", entityId: id });
   return res.json({ success: true });
 });
 
@@ -200,35 +292,51 @@ router.post("/companies", async (req: any, res) => {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + "-" + Date.now().toString(36);
 
   const [company] = await db.insert(companiesTable).values({
-    name,
-    slug,
-    email,
-    phone: phone ?? null,
-    address: address ?? null,
-    city: city ?? null,
-    state: state ?? null,
-    zip: zip ?? null,
-    subscriptionPlan: plan,
-    subscriptionStatus: "active",
-    isActive: true,
+    name, slug, email, phone: phone ?? null, address: address ?? null, city: city ?? null, state: state ?? null, zip: zip ?? null,
+    subscriptionPlan: plan, subscriptionStatus: "active", isActive: true,
   }).returning();
 
   const passwordHash = await hashPassword(ownerPassword);
   const [owner] = await db.insert(usersTable).values({
-    companyId: company.id,
-    firstName: ownerFirstName,
-    lastName: ownerLastName,
-    email: ownerEmail,
-    passwordHash,
-    role: "owner",
-    isActive: true,
+    companyId: company.id, firstName: ownerFirstName, lastName: ownerLastName, email: ownerEmail,
+    passwordHash, role: "owner", isActive: true,
   }).returning();
 
   await logActivity({ adminId: req.admin.adminId, action: "admin.company_created", entityType: "company", entityId: company.id });
-
   return res.status(201).json({ company, owner: { id: owner.id, email: owner.email, firstName: owner.firstName, lastName: owner.lastName } });
 });
 
+// Add user to company
+const addCompanyUserSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(8),
+  role: z.enum(["admin", "staff"]).default("staff"),
+});
+
+router.post("/companies/:id/users", async (req: any, res) => {
+  const companyId = Number(req.params.id);
+  const parsed = addCompanyUserSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  if (!company) return res.status(404).json({ error: "NotFound" });
+
+  const existing = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email)).limit(1);
+  if (existing.length > 0) return res.status(409).json({ error: "ConflictError", message: "Email already in use" });
+
+  const passwordHash = await hashPassword(parsed.data.password);
+  const [user] = await db.insert(usersTable).values({
+    companyId, firstName: parsed.data.firstName, lastName: parsed.data.lastName, email: parsed.data.email,
+    passwordHash, role: parsed.data.role, isActive: true,
+  }).returning();
+
+  await logActivity({ adminId: req.admin.adminId, action: "admin.user_created", entityType: "user", entityId: user.id, metadata: { companyId } });
+  return res.status(201).json({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, isActive: user.isActive, createdAt: user.createdAt });
+});
+
+// Toggle user active status
 router.put("/companies/:id/users/:userId/toggle", async (req: any, res) => {
   const companyId = Number(req.params.id);
   const userId = Number(req.params.userId);
@@ -240,6 +348,7 @@ router.put("/companies/:id/users/:userId/toggle", async (req: any, res) => {
   return res.json({ success: true, isActive: updated.isActive });
 });
 
+// Delete user from company
 router.delete("/companies/:id/users/:userId", async (req: any, res) => {
   const companyId = Number(req.params.id);
   const userId = Number(req.params.userId);
@@ -251,25 +360,70 @@ router.delete("/companies/:id/users/:userId", async (req: any, res) => {
   return res.json({ success: true });
 });
 
+// Reset owner password
+router.post("/companies/:id/owner/reset-password", async (req: any, res) => {
+  const companyId = Number(req.params.id);
+  const password = req.body?.password;
+  if (!password || password.length < 8) return res.status(400).json({ error: "PasswordTooShort", message: "Password must be at least 8 characters" });
+  const [owner] = await db.select().from(usersTable).where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "owner"))).limit(1);
+  if (!owner) return res.status(404).json({ error: "NotFound", message: "Owner not found" });
+  const passwordHash = await hashPassword(password);
+  await db.update(usersTable).set({ passwordHash, updatedAt: new Date() }).where(eq(usersTable.id, owner.id));
+  await logActivity({ adminId: req.admin.adminId, action: "admin.owner_password_reset", entityType: "user", entityId: owner.id, metadata: { companyId } });
+  return res.json({ success: true });
+});
+
+// ─── Activity Logs ────────────────────────────────────────────────────────────
 router.get("/activity", async (req, res) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 50;
   const offset = (page - 1) * limit;
+  const search = req.query.search as string;
+  const entityType = req.query.entityType as string;
+  const companyId = req.query.companyId ? Number(req.query.companyId) : undefined;
+
+  const conditions: any[] = [];
+  if (search) conditions.push(ilike(activityLogsTable.action, `%${search}%`));
+  if (entityType) conditions.push(eq(activityLogsTable.entityType, entityType));
+  if (companyId) conditions.push(eq(activityLogsTable.companyId, companyId));
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [logs, total] = await Promise.all([
-    db.select().from(activityLogsTable).orderBy(desc(activityLogsTable.createdAt)).limit(limit).offset(offset),
-    db.select({ count: sql<number>`count(*)` }).from(activityLogsTable),
+    db.select().from(activityLogsTable).where(whereClause).orderBy(desc(activityLogsTable.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(activityLogsTable).where(whereClause),
   ]);
 
   const userIds = [...new Set(logs.map(l => l.userId).filter(Boolean))] as number[];
-  const users = userIds.length > 0 ? await db.select().from(usersTable).where(inArray(usersTable.id, userIds)) : [];
-  const userMap = Object.fromEntries(users.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
+  const companyIds = [...new Set(logs.map(l => l.companyId).filter(Boolean))] as number[];
 
-  return res.json({ logs: logs.map(l => ({ ...l, userName: l.userId ? userMap[l.userId] ?? null : null })), total: Number(total[0].count), page, limit });
+  const [users, companies] = await Promise.all([
+    userIds.length > 0 ? db.select().from(usersTable).where(inArray(usersTable.id, userIds)) : Promise.resolve([]),
+    companyIds.length > 0 ? db.select({ id: companiesTable.id, name: companiesTable.name }).from(companiesTable).where(inArray(companiesTable.id, companyIds)) : Promise.resolve([]),
+  ]);
+
+  const userMap = Object.fromEntries(users.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
+  const companyMap = Object.fromEntries(companies.map(c => [c.id, c.name]));
+
+  return res.json({
+    logs: logs.map(l => ({
+      ...l,
+      userName: l.userId ? userMap[l.userId] ?? null : null,
+      companyName: l.companyId ? companyMap[l.companyId] ?? null : null,
+    })),
+    total: Number(total[0].count),
+    page,
+    limit,
+  });
 });
 
+// ─── Admin Users ──────────────────────────────────────────────────────────────
 router.get("/admins", async (_req, res) => {
-  const admins = await db.select({ id: platformAdminsTable.id, email: platformAdminsTable.email, firstName: platformAdminsTable.firstName, lastName: platformAdminsTable.lastName, role: platformAdminsTable.role, isActive: platformAdminsTable.isActive, createdAt: platformAdminsTable.createdAt }).from(platformAdminsTable).orderBy(desc(platformAdminsTable.createdAt));
+  const admins = await db.select({
+    id: platformAdminsTable.id, email: platformAdminsTable.email, firstName: platformAdminsTable.firstName,
+    lastName: platformAdminsTable.lastName, role: platformAdminsTable.role, isActive: platformAdminsTable.isActive,
+    lastLoginAt: platformAdminsTable.lastLoginAt, createdAt: platformAdminsTable.createdAt,
+  }).from(platformAdminsTable).orderBy(desc(platformAdminsTable.createdAt));
   return res.json({ admins });
 });
 
@@ -290,12 +444,8 @@ router.post("/admins", async (req: any, res) => {
 
   const passwordHash = await hashPassword(parsed.data.password);
   const [admin] = await db.insert(platformAdminsTable).values({
-    firstName: parsed.data.firstName,
-    lastName: parsed.data.lastName,
-    email: parsed.data.email,
-    passwordHash,
-    role: parsed.data.role ?? "admin",
-    isActive: true,
+    firstName: parsed.data.firstName, lastName: parsed.data.lastName, email: parsed.data.email,
+    passwordHash, role: parsed.data.role ?? "admin", isActive: true,
   }).returning();
 
   await logActivity({ adminId: req.admin.adminId, action: "admin.admin_created", entityType: "admin", entityId: admin.id });
@@ -331,36 +481,22 @@ router.delete("/admins/:id", async (req: any, res) => {
   return res.json({ success: true });
 });
 
+// ─── Seed ─────────────────────────────────────────────────────────────────────
 router.post("/seed", async (req: any, res) => {
   try {
     const existingDemo = await db.select().from(companiesTable).where(eq(companiesTable.slug, "greenscapes-demo")).limit(1);
-    if (existingDemo.length > 0) {
-      return res.json({ success: true, message: "Demo data already seeded" });
-    }
+    if (existingDemo.length > 0) return res.json({ success: true, message: "Demo data already seeded" });
 
     const [company] = await db.insert(companiesTable).values({
-      name: "GreenScapes Pro",
-      slug: "greenscapes-demo",
-      phone: "555-123-4567",
-      email: "demo@greenscapes.com",
-      address: "123 Lawn Lane",
-      city: "Austin",
-      state: "TX",
-      zip: "78701",
-      subscriptionPlan: "growth",
-      subscriptionStatus: "active",
-      isActive: true,
+      name: "GreenScapes Pro", slug: "greenscapes-demo", phone: "555-123-4567", email: "demo@greenscapes.com",
+      address: "123 Lawn Lane", city: "Austin", state: "TX", zip: "78701",
+      subscriptionPlan: "growth", subscriptionStatus: "active", isActive: true,
     }).returning();
 
     const passwordHash = await hashPassword("Demo1234!");
     const [owner] = await db.insert(usersTable).values({
-      companyId: company.id,
-      firstName: "Alex",
-      lastName: "Green",
-      email: "alex@greenscapes.com",
-      passwordHash,
-      role: "owner",
-      isActive: true,
+      companyId: company.id, firstName: "Alex", lastName: "Green", email: "alex@greenscapes.com",
+      passwordHash, role: "owner", isActive: true,
     }).returning();
 
     logger.info({ companyId: company.id, userId: owner.id }, "Demo data seeded");

@@ -117,11 +117,13 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `/billing` — Subscription management (Stripe)
 
 ### Admin Panel (admin auth required)
-- `/admin/dashboard` — Platform metrics
-- `/admin/companies` — All companies
-- `/admin/companies/:id` — Company detail + actions
-- `/admin/activity` — Platform activity logs
-- `/admin/admins` — Admin user management
+- `/admin/dashboard` — Enhanced platform metrics: MRR, active subs, customers, appointments, plan distribution, recent signups, recent activity feed
+- `/admin/billing` — Revenue & billing: MRR by plan with bars, subscription status distribution, monthly signup chart, past-due company management
+- `/admin/companies` — All companies with plan + status filters; click to detail
+- `/admin/companies/:id` — Company detail: stats row, edit info modal, internal notes, add staff user, reset owner password, toggle/delete users, change plan/status, recent activity
+- `/admin/activity` — Platform activity logs with action search + entity type filter (company/user/customer/etc), company names enriched
+- `/admin/admins` — Admin user management (create, edit, delete)
+- `/admin/settings` — Admin profile settings (name, email, password)
 
 ## Plans & Pricing
 - **Starter**: $49/mo — solo operators, basic features

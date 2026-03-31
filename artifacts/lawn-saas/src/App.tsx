@@ -49,6 +49,8 @@ import { AdminDashboardPage } from "@/pages/admin-dashboard";
 import { AdminCompaniesPage, AdminCompanyDetailPage } from "@/pages/admin-companies";
 import { AdminActivityPage } from "@/pages/admin-activity";
 import { AdminAdminsPage } from "@/pages/admin-admins";
+import { AdminBillingPage } from "@/pages/admin-billing";
+import { AdminSettingsPage } from "@/pages/admin-settings";
 
 // Monkey-patch fetch to automatically add Authorization headers
 const originalFetch = window.fetch;
@@ -184,8 +186,10 @@ function Router() {
       <Route path="/admin/dashboard"><ProtectedRoute component={AdminDashboardPage} adminOnly /></Route>
       <Route path="/admin/companies/:id"><ProtectedRoute component={AdminCompanyDetailPage} adminOnly /></Route>
       <Route path="/admin/companies"><ProtectedRoute component={AdminCompaniesPage} adminOnly /></Route>
+      <Route path="/admin/billing"><ProtectedRoute component={AdminBillingPage} adminOnly /></Route>
       <Route path="/admin/activity"><ProtectedRoute component={AdminActivityPage} adminOnly /></Route>
       <Route path="/admin/admins"><ProtectedRoute component={AdminAdminsPage} adminOnly /></Route>
+      <Route path="/admin/settings"><ProtectedRoute component={AdminSettingsPage} adminOnly /></Route>
 
       <Route component={NotFound} />
     </Switch>
