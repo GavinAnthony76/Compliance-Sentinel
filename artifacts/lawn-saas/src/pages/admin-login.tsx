@@ -5,7 +5,6 @@ import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/compo
 import { Mail, Lock, ShieldCheck } from 'lucide-react';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
-import { ADMIN_TOKEN_KEY } from '@/hooks/use-auth-state';
 
 export function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -18,7 +17,6 @@ export function AdminLoginPage() {
     e.preventDefault();
     try {
       const res = await loginMutation.mutateAsync({ data: { email, password } });
-      localStorage.setItem(ADMIN_TOKEN_KEY, res.token);
       adminLogin(res.token);
       toast({ title: 'Welcome, Admin!' });
     } catch {

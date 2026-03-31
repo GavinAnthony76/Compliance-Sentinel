@@ -10,35 +10,64 @@ export function useAuthState() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
   const [adminToken, setAdminToken] = useState<string | null>(() => localStorage.getItem(ADMIN_TOKEN_KEY));
 
-  // Regular user auth
-  const { data: user, isLoading: isLoadingUser, refetch: refetchUser } = useGetMe({
+  const {
+    data: user,
+    isLoading: isLoadingUser,
+    error: userError,
+    refetch: refetchUser,
+  } = useGetMe({
     query: {
       enabled: !!token,
       retry: false,
-    }
+    },
   });
 
-  // Admin auth
-  const { data: adminUser, isLoading: isLoadingAdmin, refetch: refetchAdmin } = useAdminGetMe({
+  const {
+    data: adminUser,
+    isLoading: isLoadingAdmin,
+    error: adminError,
+    refetch: refetchAdmin,
+  } = useAdminGetMe({
     query: {
       enabled: !!adminToken,
       retry: false,
-    }
+    },
   });
 
-  const login = useCallback((newToken: string) => {
-    localStorage.setItem(TOKEN_KEY, newToken);
-    setToken(newToken);
-    refetchUser();
-    setLocation('/dashboard');
-  }, [setLocation, refetchUser]);
+  // Auto-clear stale / invalid tokens on 401 so the spinner never gets stuck
+  useEffect(() => {
+    if (userError && (userError as any)?.status === 401) {
+      localStorage.removeItem(TOKEN_KEY);
+      setToken(null);
+    }
+  }, [userError]);
 
-  const adminLogin = useCallback((newToken: string) => {
-    localStorage.setItem(ADMIN_TOKEN_KEY, newToken);
-    setAdminToken(newToken);
-    refetchAdmin();
-    setLocation('/admin/dashboard');
-  }, [setLocation, refetchAdmin]);
+  useEffect(() => {
+    if (adminError && (adminError as any)?.status === 401) {
+      localStorage.removeItem(ADMIN_TOKEN_KEY);
+      setAdminToken(null);
+    }
+  }, [adminError]);
+
+  const login = useCallback(
+    (newToken: string) => {
+      localStorage.setItem(TOKEN_KEY, newToken);
+      setToken(newToken);
+      refetchUser();
+      setLocation('/dashboard');
+    },
+    [setLocation, refetchUser],
+  );
+
+  const adminLogin = useCallback(
+    (newToken: string) => {
+      localStorage.setItem(ADMIN_TOKEN_KEY, newToken);
+      setAdminToken(newToken);
+      refetchAdmin();
+      setLocation('/admin/dashboard');
+    },
+    [setLocation, refetchAdmin],
+  );
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
@@ -55,7 +84,10 @@ export function useAuthState() {
   return {
     user,
     adminUser,
-    isLoading: isLoadingUser || isLoadingAdmin,
+    // Only show "loading" when there is actually a token being validated.
+    // Without this guard, a stale admin token on a user-only route (or vice
+    // versa) would keep isLoading true and spin the ProtectedRoute forever.
+    isLoading: (!!token && isLoadingUser) || (!!adminToken && isLoadingAdmin),
     isAuthenticated: !!user,
     isAdminAuthenticated: !!adminUser,
     login,
