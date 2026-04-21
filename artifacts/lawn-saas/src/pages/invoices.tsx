@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { useListInvoices, useCreateInvoice, useMarkInvoicePaid, useSendInvoice, useDeleteInvoice, useListCustomers } from '@workspace/api-client-react';
+import { useState, useEffect } from 'react';
+import { useListInvoices, useCreateInvoice, useMarkInvoicePaid, useSendInvoice, useDeleteInvoice, useListCustomers, useListAppointments, useUpdateInvoice } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, FileText, DollarSign, Download, Bell, Trash2, CreditCard, Banknote } from 'lucide-react';
+import { Plus, FileText, Download, Bell, Trash2, Banknote, Pencil } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -76,17 +76,11 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateInvoice();
-  const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
-  const { user } = useAuthState();
+  const { data: customers } = useListCustomers({ page: 1, limit: 200 } as any);
+  const { data: apptData } = useListAppointments({ limit: 100, status: 'scheduled' } as any);
   const token = localStorage.getItem('greensync_token');
 
-  const [form, setForm] = useState({
-    customerId: '',
-    appointmentId: '',
-    tax: '0',
-    notes: '',
-    dueDate: '',
-  });
+  const [form, setForm] = useState({ customerId: '', appointmentId: '', tax: '0', notes: '', dueDate: '' });
   const [lineItems, setLineItems] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const [loadingAppt, setLoadingAppt] = useState(false);
 
@@ -105,12 +99,17 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
       if (!res.ok) throw new Error('Could not load appointment');
       const data = await res.json();
       if (data.existingInvoiceId) {
-        toast({ title: 'Invoice already exists', description: `Invoice already created for this appointment (ID: ${data.existingInvoiceId})`, variant: 'destructive' });
+        toast({ title: 'Invoice already exists', description: `Invoice #${data.existingInvoiceId} already created for this appointment.`, variant: 'destructive' });
         setForm(f => ({ ...f, appointmentId: '' }));
         return;
       }
       setForm(f => ({ ...f, customerId: String(data.customerId), notes: data.notes || '' }));
-      setLineItems(data.lineItems.map((li: any) => ({ ...li, lineTotal: Number((li.quantity * li.unitPrice).toFixed(2)) })));
+      setLineItems(data.lineItems.map((li: any) => ({
+        description: li.description,
+        quantity: Number(li.quantity),
+        unitPrice: Number(li.unitPrice),
+        lineTotal: Number((li.quantity * li.unitPrice).toFixed(2)),
+      })));
     } catch {
       toast({ title: 'Could not load appointment data', variant: 'destructive' });
     } finally {
@@ -130,9 +129,7 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
           customerId: Number(form.customerId),
           appointmentId: form.appointmentId ? Number(form.appointmentId) : undefined,
           lineItems: lineItems as any,
-          subtotal,
-          tax,
-          total,
+          subtotal, tax, total,
           notes: form.notes || undefined,
           dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
         } as any,
@@ -152,12 +149,7 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="text-sm font-medium">Customer *</label>
-            <select
-              className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm"
-              value={form.customerId}
-              onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))}
-              required
-            >
+            <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
               <option value="">Select customer...</option>
               {customers?.customers.map(c => {
                 const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c as any).phone || 'Customer';
@@ -175,19 +167,14 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
               disabled={loadingAppt}
             >
               <option value="">None — enter line items manually</option>
-              <option value="__load__" disabled>— or type an appointment ID below —</option>
+              {apptData?.appointments?.map((a: any) => {
+                const dateStr = new Date(a.scheduledStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const custName = a.customerName || `Customer #${a.customerId}`;
+                const svcName = a.serviceName ? ` — ${a.serviceName}` : '';
+                return <option key={a.id} value={a.id}>{dateStr} · {custName}{svcName}</option>;
+              })}
             </select>
-            <div className="mt-1 flex gap-2">
-              <Input
-                type="number"
-                placeholder="Appointment ID..."
-                value={form.appointmentId}
-                onChange={e => setForm(f => ({ ...f, appointmentId: e.target.value }))}
-                onBlur={e => { if (e.target.value) handleAppointmentChange(e.target.value); }}
-                className="h-9 text-sm"
-              />
-              {loadingAppt && <span className="text-xs text-muted-foreground self-center">Loading...</span>}
-            </div>
+            {loadingAppt && <p className="text-xs text-muted-foreground mt-1">Loading appointment data...</p>}
           </div>
 
           <div>
@@ -228,14 +215,8 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: 'Cash',
-  check: 'Check',
-  zelle: 'Zelle',
-  venmo: 'Venmo',
-  cashapp: 'Cash App',
-  bank_transfer: 'Bank Transfer',
-  card: 'Card (Online)',
-  other: 'Other',
+  cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo',
+  cashapp: 'Cash App', bank_transfer: 'Bank Transfer', card: 'Card (Online)', other: 'Other',
 };
 
 function MarkPaidDialog({ invoice, onClose, onPaid }: { invoice: any; onClose: () => void; onPaid: () => void }) {
@@ -265,23 +246,13 @@ function MarkPaidDialog({ invoice, onClose, onPaid }: { invoice: any; onClose: (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium">Payment Method *</label>
-            <select
-              className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm"
-              value={paymentMethod}
-              onChange={e => setPaymentMethod(e.target.value)}
-              required
-            >
+            <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} required>
               {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
           </div>
           <div>
             <label className="text-sm font-medium">Note (optional)</label>
-            <Input
-              className="mt-1"
-              value={paymentNote}
-              onChange={e => setPaymentNote(e.target.value)}
-              placeholder="e.g. Check #1234, Zelle ref, etc."
-            />
+            <Input className="mt-1" value={paymentNote} onChange={e => setPaymentNote(e.target.value)} placeholder="e.g. Check #1234, Zelle ref..." />
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
@@ -293,9 +264,111 @@ function MarkPaidDialog({ invoice, onClose, onPaid }: { invoice: any; onClose: (
   );
 }
 
+function EditInvoiceModal({ invoice, onClose }: { invoice: any; onClose: () => void }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const updateMut = useUpdateInvoice();
+  const token = localStorage.getItem('greensync_token');
+
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [tax, setTax] = useState('0');
+  const [notes, setNotes] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/invoices/${invoice.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        setLineItems(d.lineItems?.map((li: any) => ({
+          description: li.description,
+          quantity: Number(li.quantity),
+          unitPrice: Number(li.unitPrice),
+          lineTotal: Number(li.lineTotal),
+        })) ?? [{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
+        setTax(String(d.tax ?? 0));
+        setNotes(d.notes ?? '');
+        setDueDate(d.dueDate ? d.dueDate.split('T')[0] : '');
+      })
+      .catch(() => toast({ title: 'Could not load invoice', variant: 'destructive' }))
+      .finally(() => setLoading(false));
+  }, [invoice.id]);
+
+  const subtotal = lineItems.reduce((s, li) => s + li.lineTotal, 0);
+  const taxNum = Number(tax) || 0;
+  const total = subtotal + taxNum;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (lineItems.every(li => !li.description)) {
+      toast({ title: 'Add at least one line item', variant: 'destructive' }); return;
+    }
+    try {
+      await updateMut.mutateAsync({
+        id: invoice.id,
+        data: {
+          lineItems: lineItems as any,
+          subtotal, tax: taxNum, total,
+          notes: notes || undefined,
+          dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+        } as any,
+      });
+      toast({ title: 'Invoice updated' });
+      qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+      onClose();
+    } catch {
+      toast({ title: 'Error updating invoice', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+        <h2 className="text-xl font-bold mb-1">Edit Invoice</h2>
+        <p className="text-sm text-muted-foreground mb-6">{invoice.invoiceNumber} · Draft</p>
+        {loading ? (
+          <div className="flex justify-center py-12"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Line Items</label>
+              <div className="border border-border rounded-xl p-3">
+                <LineItemsEditor items={lineItems} onChange={setLineItems} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-6 text-sm">
+              <div className="text-muted-foreground">Subtotal: <span className="font-semibold text-foreground">${subtotal.toFixed(2)}</span></div>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Tax ($):</span>
+                <Input type="number" step="0.01" min="0" value={tax} onChange={e => setTax(e.target.value)} className="w-20 h-8 text-sm text-right" />
+              </div>
+              <div className="font-bold text-base">Total: ${total.toFixed(2)}</div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Due Date</label>
+                <Input type="date" className="mt-1" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Notes</label>
+                <Input className="mt-1" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes..." />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+              <Button type="submit" className="flex-1" isLoading={updateMut.isPending}>Save Changes</Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function InvoicesPage() {
   const [showNew, setShowNew] = useState(false);
   const [markingPaid, setMarkingPaid] = useState<any>(null);
+  const [editingDraft, setEditingDraft] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const { data, isLoading } = useListInvoices({ status: statusFilter || undefined, page: 1, limit: 50 } as any);
   const { toast } = useToast();
@@ -326,13 +399,8 @@ export function InvoicesPage() {
   return (
     <AppLayout>
       {showNew && <NewInvoiceModal onClose={() => setShowNew(false)} />}
-      {markingPaid && (
-        <MarkPaidDialog
-          invoice={markingPaid}
-          onClose={() => setMarkingPaid(null)}
-          onPaid={() => setMarkingPaid(null)}
-        />
-      )}
+      {markingPaid && <MarkPaidDialog invoice={markingPaid} onClose={() => setMarkingPaid(null)} onPaid={() => setMarkingPaid(null)} />}
+      {editingDraft && <EditInvoiceModal invoice={editingDraft} onClose={() => setEditingDraft(null)} />}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -417,11 +485,16 @@ export function InvoicesPage() {
                       <td className="p-4">
                         <div className="flex items-center gap-2 justify-end">
                           {inv.status === 'draft' && (
-                            <Button size="sm" variant="outline" onClick={async () => {
-                              await sendMut.mutateAsync({ id: inv.id });
-                              qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
-                              toast({ title: 'Invoice sent' });
-                            }}>Send</Button>
+                            <>
+                              <Button size="sm" variant="outline" onClick={() => setEditingDraft(inv)}>
+                                <Pencil className="w-3.5 h-3.5 mr-1" />Edit
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={async () => {
+                                await sendMut.mutateAsync({ id: inv.id });
+                                qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+                                toast({ title: 'Invoice sent' });
+                              }}>Send</Button>
+                            </>
                           )}
                           {['sent', 'overdue'].includes(inv.status) && (
                             <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setMarkingPaid(inv)}>

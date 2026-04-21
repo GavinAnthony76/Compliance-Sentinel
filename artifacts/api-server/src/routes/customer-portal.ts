@@ -364,6 +364,20 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
 
+  // --- PLAN ENFORCEMENT: only Growth/Pro companies can accept online card payments ---
+  const plan = company?.subscriptionPlan ?? "starter";
+  if (!["growth", "pro"].includes(plan)) {
+    return res.status(403).json({ error: "PlanRequired", message: "Online card payments require a Growth or Pro plan." });
+  }
+
+  // --- PAYMENT METHOD ENFORCEMENT: company must have 'card' in accepted methods ---
+  const acceptedMethods: string[] = company?.acceptedPaymentMethods
+    ? JSON.parse(company.acceptedPaymentMethods)
+    : ["cash", "check"];
+  if (!acceptedMethods.includes("card")) {
+    return res.status(403).json({ error: "PaymentMethodNotEnabled", message: "Online card payments are not enabled for this company." });
+  }
+
   let stripe: any;
   try {
     const { getUncachableStripeClient } = await import("../lib/stripe");

@@ -169,7 +169,7 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
                   )}
                 </div>
 
-                {(methods.includes('card') || detail?.companyPlan !== 'starter') && (
+                {(methods.includes('card') && detail?.companyPlan !== 'starter') && (
                   <Button className="w-full" onClick={handlePay} isLoading={paying}>
                     <CreditCard className="w-4 h-4 mr-2" />Pay Online Now
                   </Button>
