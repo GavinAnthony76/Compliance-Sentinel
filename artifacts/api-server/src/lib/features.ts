@@ -58,6 +58,7 @@ const PLAN_FEATURES: Record<Plan, Set<string>> = {
     "reporting",
     "branded_booking",
     "automations",
+    "autopay",
     "advanced_analytics",
     "csv_export",
     "lead_pipeline",

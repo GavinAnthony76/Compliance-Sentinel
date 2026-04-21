@@ -76,7 +76,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: '/reviews',      icon: Star,             label: 'Reviews',         requiredPlan: 'growth' },
     { href: '/team',         icon: Users2,           label: 'Team',            requiredPlan: 'growth' },
     { href: '/reporting',    icon: BarChart3,        label: 'Reporting',       requiredPlan: 'growth' },
-    { href: '/automations',  icon: Zap,              label: 'Automations',     requiredPlan: 'pro' },
+    { href: '/automations',  icon: Zap,              label: 'Automations',     requiredPlan: 'growth' },
     { href: '/settings',     icon: Settings,         label: 'Settings' },
   ];
 

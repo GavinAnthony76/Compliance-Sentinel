@@ -22,15 +22,15 @@ const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   multi_staff: 'growth',
   review_requests: 'growth',
   reporting: 'growth',
-  automations: 'pro',
+  automations: 'growth',
   advanced_analytics: 'pro',
   csv_export: 'pro',
 };
 
 const PLAN_FEATURES: Record<string, Set<string>> = {
   starter: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders']),
-  growth: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking']),
-  pro: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','advanced_analytics','csv_export','lead_pipeline','ai_hooks','custom_intake_fields','customer_portal']),
+  growth: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal']),
+  pro: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal','advanced_analytics','csv_export','lead_pipeline','ai_hooks','custom_intake_fields']),
 };
 
 const PLAN_LABELS: Record<string, string> = {

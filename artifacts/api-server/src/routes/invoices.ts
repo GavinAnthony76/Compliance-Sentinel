@@ -81,8 +81,9 @@ router.get("/", async (req: any, res) => {
   return res.json({ invoices: invoices.map(i => fmt(i, customerMap[i.customerId])), total: Number(total[0].count), page, limit });
 });
 
-// GET /invoices/from-appointment/:appointmentId — returns pre-filled invoice data (not saved)
-router.get("/from-appointment/:appointmentId", async (req: any, res) => {
+// Shared handler for GET and POST /invoices/from-appointment/:appointmentId
+// Returns pre-filled invoice data for an appointment (not saved). POST alias added per spec.
+async function handleFromAppointment(req: any, res: any) {
   const { companyId } = req.user;
   const appointmentId = Number(req.params.appointmentId);
 
@@ -106,7 +107,6 @@ router.get("/from-appointment/:appointmentId", async (req: any, res) => {
   }];
   const { subtotal, tax, total } = calcTotalsFromLineItems(lineItems);
 
-  // Check if an invoice already exists for this appointment
   const [existingInv] = await db.select({ id: invoicesTable.id }).from(invoicesTable)
     .where(and(eq(invoicesTable.appointmentId, appointmentId), eq(invoicesTable.companyId, companyId)))
     .limit(1);
@@ -122,7 +122,10 @@ router.get("/from-appointment/:appointmentId", async (req: any, res) => {
     total,
     notes: `Services rendered on ${new Date(appt.scheduledStart).toLocaleDateString()}`,
   });
-});
+}
+
+router.get("/from-appointment/:appointmentId", handleFromAppointment);
+router.post("/from-appointment/:appointmentId", handleFromAppointment);
 
 router.post("/", async (req: any, res) => {
   const { companyId, userId } = req.user;
