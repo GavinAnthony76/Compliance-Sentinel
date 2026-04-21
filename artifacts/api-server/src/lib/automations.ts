@@ -253,7 +253,7 @@ export async function executeActionDryRun(
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   const companyName = company?.name ?? "Your Company";
-  const reviewUrl = (company as any)?.reviewUrl ?? "https://g.page/review";
+  const reviewUrl = company?.reviewUrl ?? "https://g.page/review";
 
   switch (rule.actionType) {
     case "send_review_request": {

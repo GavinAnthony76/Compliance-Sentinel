@@ -101,7 +101,7 @@ router.post("/:id/test", async (req: any, res) => {
           customerId: appt.customerId,
           appointmentId: appt.id,
           appointmentPrice: appt.price ? Number(appt.price) : undefined,
-          appointmentServiceId: (appt as any).serviceId ?? undefined,
+          appointmentServiceId: appt.serviceId ?? undefined,
         };
         entityLabel = `appointment #${appt.id}`;
       }

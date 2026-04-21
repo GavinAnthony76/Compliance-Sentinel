@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useListInvoices, useCreateInvoice, useMarkInvoicePaid, useSendInvoice, useDeleteInvoice, useListCustomers, useListAppointments, useUpdateInvoice } from '@workspace/api-client-react';
+import type { CreateInvoiceRequest, UpdateInvoiceRequest } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, FileText, Download, Bell, Trash2, Banknote, Pencil } from 'lucide-react';
+import { Plus, FileText, Download, Bell, Trash2, Banknote, Pencil, Eye } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListInvoicesQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
+
+// Extended payload types that include lineItems beyond the generated schema
+type InvoiceLineItemInput = { description: string; quantity: number; unitPrice: number; lineTotal: number };
+type CreateInvoicePayload = CreateInvoiceRequest & { lineItems?: InvoiceLineItemInput[]; appointmentId?: number };
+type UpdateInvoicePayload = UpdateInvoiceRequest & { lineItems?: InvoiceLineItemInput[] };
 
 function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
@@ -32,12 +38,15 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-500',
 };
 
-type LineItem = { description: string; quantity: number; unitPrice: number; lineTotal: number };
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo',
+  cashapp: 'Cash App', bank_transfer: 'Bank Transfer', card: 'Card (Online)', other: 'Other',
+};
 
-function LineItemsEditor({ items, onChange }: { items: LineItem[]; onChange: (items: LineItem[]) => void }) {
+function LineItemsEditor({ items, onChange }: { items: InvoiceLineItemInput[]; onChange: (items: InvoiceLineItemInput[]) => void }) {
   const addRow = () => onChange([...items, { description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const removeRow = (i: number) => onChange(items.filter((_, idx) => idx !== i));
-  const update = (i: number, field: keyof LineItem, val: string) => {
+  const update = (i: number, field: keyof InvoiceLineItemInput, val: string) => {
     const updated = items.map((li, idx) => {
       if (idx !== i) return li;
       const next = { ...li, [field]: field === 'description' ? val : Number(val) };
@@ -76,12 +85,12 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateInvoice();
-  const { data: customers } = useListCustomers({ page: 1, limit: 200 } as any);
-  const { data: apptData } = useListAppointments({ limit: 100, status: 'scheduled' } as any);
+  const { data: customers } = useListCustomers({ page: 1, limit: 200 } as Parameters<typeof useListCustomers>[0]);
+  const { data: apptData } = useListAppointments({ limit: 100, status: 'scheduled' } as Parameters<typeof useListAppointments>[0]);
   const token = localStorage.getItem('greensync_token');
 
   const [form, setForm] = useState({ customerId: '', appointmentId: '', tax: '0', notes: '', dueDate: '' });
-  const [lineItems, setLineItems] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
+  const [lineItems, setLineItems] = useState<InvoiceLineItemInput[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const [loadingAppt, setLoadingAppt] = useState(false);
 
   const subtotal = lineItems.reduce((s, li) => s + li.lineTotal, 0);
@@ -104,7 +113,7 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
         return;
       }
       setForm(f => ({ ...f, customerId: String(data.customerId), notes: data.notes || '' }));
-      setLineItems(data.lineItems.map((li: any) => ({
+      setLineItems(data.lineItems.map((li: InvoiceLineItemInput) => ({
         description: li.description,
         quantity: Number(li.quantity),
         unitPrice: Number(li.unitPrice),
@@ -123,17 +132,18 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
     if (lineItems.length === 0 || lineItems.every(li => !li.description)) {
       toast({ title: 'Add at least one line item', variant: 'destructive' }); return;
     }
+    const payload: CreateInvoicePayload = {
+      customerId: Number(form.customerId),
+      appointmentId: form.appointmentId ? Number(form.appointmentId) : undefined,
+      lineItems,
+      subtotal,
+      tax,
+      total,
+      notes: form.notes || undefined,
+      dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
+    };
     try {
-      await createMut.mutateAsync({
-        data: {
-          customerId: Number(form.customerId),
-          appointmentId: form.appointmentId ? Number(form.appointmentId) : undefined,
-          lineItems: lineItems as any,
-          subtotal, tax, total,
-          notes: form.notes || undefined,
-          dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
-        } as any,
-      });
+      await createMut.mutateAsync({ data: payload as CreateInvoiceRequest });
       toast({ title: 'Invoice created' });
       qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
       onClose();
@@ -152,7 +162,7 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
             <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
               <option value="">Select customer...</option>
               {customers?.customers.map(c => {
-                const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c as any).phone || 'Customer';
+                const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c as { phone?: string }).phone || 'Customer';
                 return <option key={c.id} value={c.id}>{name}</option>;
               })}
             </select>
@@ -167,7 +177,7 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
               disabled={loadingAppt}
             >
               <option value="">None — enter line items manually</option>
-              {apptData?.appointments?.map((a: any) => {
+              {(apptData as { appointments?: Array<{ id: number; scheduledStart: string; customerName?: string; customerId: number; serviceName?: string }> })?.appointments?.map(a => {
                 const dateStr = new Date(a.scheduledStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 const custName = a.customerName || `Customer #${a.customerId}`;
                 const svcName = a.serviceName ? ` — ${a.serviceName}` : '';
@@ -214,12 +224,7 @@ function NewInvoiceModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo',
-  cashapp: 'Cash App', bank_transfer: 'Bank Transfer', card: 'Card (Online)', other: 'Other',
-};
-
-function MarkPaidDialog({ invoice, onClose, onPaid }: { invoice: any; onClose: () => void; onPaid: () => void }) {
+function MarkPaidDialog({ invoice, onClose, onPaid }: { invoice: { id: number; invoiceNumber: string; total: string | number }; onClose: () => void; onPaid: () => void }) {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [paymentNote, setPaymentNote] = useState('');
   const { toast } = useToast();
@@ -229,7 +234,7 @@ function MarkPaidDialog({ invoice, onClose, onPaid }: { invoice: any; onClose: (
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await markPaidMut.mutateAsync({ id: invoice.id, data: { paymentMethod, paymentMethodNote: paymentNote || undefined } as any });
+      await markPaidMut.mutateAsync({ id: invoice.id, data: { paymentMethod, paymentMethodNote: paymentNote || undefined } as Parameters<typeof markPaidMut.mutateAsync>[0]['data'] });
       qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
       toast({ title: `Invoice ${invoice.invoiceNumber} marked as paid` });
       onPaid();
@@ -264,13 +269,127 @@ function MarkPaidDialog({ invoice, onClose, onPaid }: { invoice: any; onClose: (
   );
 }
 
-function EditInvoiceModal({ invoice, onClose }: { invoice: any; onClose: () => void }) {
+type InvoiceDetail = {
+  id: number;
+  invoiceNumber: string;
+  customerName?: string;
+  status: string;
+  subtotal: string | number;
+  tax: string | number;
+  total: string | number;
+  dueDate?: string;
+  notes?: string;
+  paymentMethod?: string;
+  paymentMethodNote?: string;
+  lineItems: InvoiceLineItemInput[];
+};
+
+function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoiceNumber: string; status: string }; onClose: () => void }) {
+  const [detail, setDetail] = useState<InvoiceDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem('greensync_token');
+
+  useEffect(() => {
+    fetch(`/api/invoices/${invoice.id}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setDetail(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [invoice.id]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold">{invoice.invoiceNumber}</h2>
+            {detail?.customerName && <p className="text-sm text-muted-foreground mt-0.5">{detail.customerName}</p>}
+          </div>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[invoice.status] || 'bg-gray-100 text-gray-600'}`}>
+            {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+          </span>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
+        ) : detail ? (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Line Items</h3>
+              <div className="border border-border rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-accent/50">
+                      <th className="text-left p-3 font-medium text-muted-foreground">Description</th>
+                      <th className="text-center p-3 font-medium text-muted-foreground">Qty</th>
+                      <th className="text-right p-3 font-medium text-muted-foreground">Unit</th>
+                      <th className="text-right p-3 font-medium text-muted-foreground">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {detail.lineItems.map((li, i) => (
+                      <tr key={i}>
+                        <td className="p-3">{li.description}</td>
+                        <td className="p-3 text-center">{li.quantity}</td>
+                        <td className="p-3 text-right">${Number(li.unitPrice).toFixed(2)}</td>
+                        <td className="p-3 text-right font-medium">${Number(li.lineTotal).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="bg-accent/30 rounded-xl p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>${Number(detail.subtotal).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Tax</span>
+                <span>${Number(detail.tax).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-base border-t border-border pt-2 mt-1">
+                <span>Total</span>
+                <span>${Number(detail.total).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {detail.dueDate && (
+                <div><span className="text-muted-foreground">Due Date: </span>{format(new Date(detail.dueDate), 'MMM d, yyyy')}</div>
+              )}
+              {detail.paymentMethod && (
+                <div><span className="text-muted-foreground">Payment: </span>{PAYMENT_METHOD_LABELS[detail.paymentMethod] ?? detail.paymentMethod}</div>
+              )}
+            </div>
+
+            {detail.notes && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Notes</p>
+                <p className="text-sm">{detail.notes}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-8">Could not load invoice details.</p>
+        )}
+
+        <div className="pt-6">
+          <Button variant="outline" onClick={onClose} className="w-full">Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditInvoiceModal({ invoice, onClose }: { invoice: { id: number; invoiceNumber: string }; onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const updateMut = useUpdateInvoice();
   const token = localStorage.getItem('greensync_token');
 
-  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [lineItems, setLineItems] = useState<InvoiceLineItemInput[]>([]);
   const [tax, setTax] = useState('0');
   const [notes, setNotes] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -279,8 +398,8 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: any; onClose: () => v
   useEffect(() => {
     fetch(`/api/invoices/${invoice.id}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(d => {
-        setLineItems(d.lineItems?.map((li: any) => ({
+      .then((d: InvoiceDetail) => {
+        setLineItems(d.lineItems?.map(li => ({
           description: li.description,
           quantity: Number(li.quantity),
           unitPrice: Number(li.unitPrice),
@@ -303,16 +422,16 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: any; onClose: () => v
     if (lineItems.every(li => !li.description)) {
       toast({ title: 'Add at least one line item', variant: 'destructive' }); return;
     }
+    const payload: UpdateInvoicePayload = {
+      lineItems,
+      subtotal,
+      tax: taxNum,
+      total,
+      notes: notes || undefined,
+      dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+    };
     try {
-      await updateMut.mutateAsync({
-        id: invoice.id,
-        data: {
-          lineItems: lineItems as any,
-          subtotal, tax: taxNum, total,
-          notes: notes || undefined,
-          dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
-        } as any,
-      });
+      await updateMut.mutateAsync({ id: invoice.id, data: payload as UpdateInvoiceRequest });
       toast({ title: 'Invoice updated' });
       qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
       onClose();
@@ -367,10 +486,11 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: any; onClose: () => v
 
 export function InvoicesPage() {
   const [showNew, setShowNew] = useState(false);
-  const [markingPaid, setMarkingPaid] = useState<any>(null);
-  const [editingDraft, setEditingDraft] = useState<any>(null);
+  const [markingPaid, setMarkingPaid] = useState<{ id: number; invoiceNumber: string; total: string | number } | null>(null);
+  const [editingDraft, setEditingDraft] = useState<{ id: number; invoiceNumber: string } | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<{ id: number; invoiceNumber: string; status: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
-  const { data, isLoading } = useListInvoices({ status: statusFilter || undefined, page: 1, limit: 50 } as any);
+  const { data, isLoading } = useListInvoices({ status: statusFilter || undefined, page: 1, limit: 50 } as Parameters<typeof useListInvoices>[0]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const sendMut = useSendInvoice();
@@ -386,8 +506,9 @@ export function InvoicesPage() {
       const d = await res.json();
       if (!res.ok) throw new Error(d.message || 'Failed');
       toast({ title: `Reminders sent!`, description: `${d.remindersSent} of ${d.totalOverdue} overdue invoices notified.` });
-    } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
     } finally {
       setSendingReminders(false);
     }
@@ -401,6 +522,7 @@ export function InvoicesPage() {
       {showNew && <NewInvoiceModal onClose={() => setShowNew(false)} />}
       {markingPaid && <MarkPaidDialog invoice={markingPaid} onClose={() => setMarkingPaid(null)} onPaid={() => setMarkingPaid(null)} />}
       {editingDraft && <EditInvoiceModal invoice={editingDraft} onClose={() => setEditingDraft(null)} />}
+      {viewingInvoice && <InvoiceDetailModal invoice={viewingInvoice} onClose={() => setViewingInvoice(null)} />}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -466,51 +588,64 @@ export function InvoicesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {data?.invoices.map(inv => (
-                    <tr key={inv.id} className="hover:bg-accent/30 transition-colors">
-                      <td className="p-4 font-mono text-sm font-medium">{inv.invoiceNumber}</td>
-                      <td className="p-4 text-sm">{inv.customerName || '—'}</td>
-                      <td className="p-4 text-sm font-semibold">${Number(inv.total).toFixed(2)}</td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] || 'bg-gray-100 text-gray-600'}`}>
-                            {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
-                          </span>
-                          {inv.status === 'paid' && (inv as any).paymentMethod && (
-                            <span className="text-xs text-muted-foreground">· {PAYMENT_METHOD_LABELS[(inv as any).paymentMethod] ?? (inv as any).paymentMethod}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 text-sm text-muted-foreground">{inv.dueDate ? format(new Date(inv.dueDate), 'MMM d, yyyy') : '—'}</td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2 justify-end">
-                          {inv.status === 'draft' && (
-                            <>
-                              <Button size="sm" variant="outline" onClick={() => setEditingDraft(inv)}>
-                                <Pencil className="w-3.5 h-3.5 mr-1" />Edit
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={async () => {
-                                await sendMut.mutateAsync({ id: inv.id });
-                                qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
-                                toast({ title: 'Invoice sent' });
-                              }}>Send</Button>
-                            </>
-                          )}
-                          {['sent', 'overdue'].includes(inv.status) && (
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setMarkingPaid(inv)}>
-                              <Banknote className="w-3.5 h-3.5 mr-1" />Mark Paid
+                  {data?.invoices.map(inv => {
+                    const invExt = inv as typeof inv & { paymentMethod?: string };
+                    return (
+                      <tr key={inv.id} className="hover:bg-accent/30 transition-colors">
+                        <td className="p-4 font-mono text-sm font-medium">
+                          <button
+                            onClick={() => setViewingInvoice({ id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status })}
+                            className="text-primary underline underline-offset-2 hover:opacity-80"
+                          >
+                            {inv.invoiceNumber}
+                          </button>
+                        </td>
+                        <td className="p-4 text-sm">{inv.customerName || '—'}</td>
+                        <td className="p-4 text-sm font-semibold">${Number(inv.total).toFixed(2)}</td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] || 'bg-gray-100 text-gray-600'}`}>
+                              {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                            </span>
+                            {inv.status === 'paid' && invExt.paymentMethod && (
+                              <span className="text-xs text-muted-foreground">· {PAYMENT_METHOD_LABELS[invExt.paymentMethod] ?? invExt.paymentMethod}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4 text-sm text-muted-foreground">{inv.dueDate ? format(new Date(inv.dueDate), 'MMM d, yyyy') : '—'}</td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2 justify-end">
+                            <Button size="sm" variant="ghost" onClick={() => setViewingInvoice({ id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status })}>
+                              <Eye className="w-3.5 h-3.5" />
                             </Button>
-                          )}
-                          <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={async () => {
-                            if (!confirm('Delete invoice?')) return;
-                            await deleteMut.mutateAsync({ id: inv.id });
-                            qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
-                            toast({ title: 'Invoice deleted' });
-                          }}>Delete</Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {inv.status === 'draft' && (
+                              <>
+                                <Button size="sm" variant="outline" onClick={() => setEditingDraft({ id: inv.id, invoiceNumber: inv.invoiceNumber })}>
+                                  <Pencil className="w-3.5 h-3.5 mr-1" />Edit
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={async () => {
+                                  await sendMut.mutateAsync({ id: inv.id });
+                                  qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+                                  toast({ title: 'Invoice sent' });
+                                }}>Send</Button>
+                              </>
+                            )}
+                            {['sent', 'overdue'].includes(inv.status) && (
+                              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setMarkingPaid({ id: inv.id, invoiceNumber: inv.invoiceNumber, total: inv.total })}>
+                                <Banknote className="w-3.5 h-3.5 mr-1" />Mark Paid
+                              </Button>
+                            )}
+                            <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={async () => {
+                              if (!confirm('Delete invoice?')) return;
+                              await deleteMut.mutateAsync({ id: inv.id });
+                              qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+                              toast({ title: 'Invoice deleted' });
+                            }}>Delete</Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
