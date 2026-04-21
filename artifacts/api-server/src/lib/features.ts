@@ -34,6 +34,9 @@ const PLAN_FEATURES: Record<Plan, Set<string>> = {
     "review_requests",
     "reporting",
     "branded_booking",
+    "automations",
+    "autopay",
+    "customer_portal",
   ]),
   pro: new Set([
     "customers",

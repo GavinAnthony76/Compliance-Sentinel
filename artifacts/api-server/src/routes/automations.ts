@@ -5,6 +5,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
+import { executeActionDryRun } from "../lib/automations";
 
 const router = Router();
 router.use(requireAuth);
@@ -77,16 +78,17 @@ router.post("/:id/toggle", async (req: any, res) => {
   return res.json(updated);
 });
 
-// POST /automations/:id/test — dry-run: describe what would happen without actually sending
+// POST /automations/:id/test — real dry-run: evaluates rule against most recent entity,
+// executes all logic (data loading, condition checks, message composition) but skips sends.
 router.post("/:id/test", async (req: any, res) => {
   const { companyId } = req.user;
   const id = Number(req.params.id);
   const [rule] = await db.select().from(automationRulesTable).where(and(eq(automationRulesTable.id, id), eq(automationRulesTable.companyId, companyId))).limit(1);
   if (!rule) return res.status(404).json({ error: "NotFound" });
 
-  // Find the most recent eligible entity for this trigger
-  let entityDescription = "";
-  let eligible = false;
+  // Build an AutomationContext from the most recent entity matching the trigger type
+  let ctx: { customerId: number; appointmentId?: number; appointmentPrice?: number; appointmentServiceId?: number } | null = null;
+  let entityLabel = "";
 
   try {
     if (rule.triggerType === "appointment_completed" || rule.triggerType === "appointment_upcoming_24h") {
@@ -95,11 +97,13 @@ router.post("/:id/test", async (req: any, res) => {
         .orderBy(desc(appointmentsTable.createdAt))
         .limit(1);
       if (appt) {
-        const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1);
-        entityDescription = `appointment #${appt.id} for ${customer ? (customer.firstName || customer.phone) : "customer"}`;
-        eligible = true;
-      } else {
-        entityDescription = "no appointments found";
+        ctx = {
+          customerId: appt.customerId,
+          appointmentId: appt.id,
+          appointmentPrice: appt.price ? Number(appt.price) : undefined,
+          appointmentServiceId: (appt as any).serviceId ?? undefined,
+        };
+        entityLabel = `appointment #${appt.id}`;
       }
     } else if (rule.triggerType === "invoice_sent" || rule.triggerType === "invoice_overdue") {
       const [inv] = await db.select().from(invoicesTable)
@@ -107,10 +111,8 @@ router.post("/:id/test", async (req: any, res) => {
         .orderBy(desc(invoicesTable.createdAt))
         .limit(1);
       if (inv) {
-        entityDescription = `invoice ${inv.invoiceNumber} ($${Number(inv.total).toFixed(2)})`;
-        eligible = true;
-      } else {
-        entityDescription = "no invoices found";
+        ctx = { customerId: inv.customerId };
+        entityLabel = `invoice ${inv.invoiceNumber}`;
       }
     } else if (rule.triggerType === "customer_created") {
       const [cust] = await db.select().from(customersTable)
@@ -118,29 +120,38 @@ router.post("/:id/test", async (req: any, res) => {
         .orderBy(desc(customersTable.createdAt))
         .limit(1);
       if (cust) {
-        entityDescription = `customer ${cust.firstName || cust.phone}`;
-        eligible = true;
-      } else {
-        entityDescription = "no customers found";
+        ctx = { customerId: cust.id };
+        entityLabel = `customer ${cust.firstName || cust.phone}`;
       }
     }
   } catch {
-    entityDescription = "unknown entity";
+    return res.status(500).json({ error: "Failed to load entity context" });
   }
 
-  const actionDescriptions: Record<string, string> = {
-    send_review_request: "would send a review request SMS/email",
-    send_follow_up_email: "would send a follow-up thank-you email",
-    create_invoice: "would auto-create and send an invoice",
-    send_sms_reminder: "would send an SMS reminder",
-  };
+  if (!ctx) {
+    return res.json({
+      success: true,
+      eligible: false,
+      entityLabel: null,
+      wouldHave: `[DRY RUN] No ${rule.triggerType.replace(/_/g, " ")} entity found to test against.`,
+      outcome: "No entity available",
+      details: {},
+    });
+  }
 
-  const actionDesc = actionDescriptions[rule.actionType] ?? `would execute action: ${rule.actionType}`;
-  const wouldHave = eligible
-    ? `[DRY RUN] "${rule.name}": For ${entityDescription} — ${actionDesc}. No actual message was sent.`
-    : `[DRY RUN] "${rule.name}": ${entityDescription} — nothing to test against.`;
-
-  return res.json({ success: true, wouldHave, eligible });
+  try {
+    const result = await executeActionDryRun(rule, companyId, ctx);
+    return res.json({
+      success: true,
+      eligible: result.eligible,
+      entityLabel,
+      wouldHave: `[DRY RUN] "${rule.name}" tested against ${entityLabel}: ${result.outcome}. No actual message was sent.`,
+      outcome: result.outcome,
+      details: result.details,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: "DryRunFailed", message: err?.message });
+  }
 });
 
 export default router;

@@ -408,7 +408,7 @@ export function InvoicesPage() {
           <p className="text-muted-foreground mt-1">Track payments and billing</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {['pro', 'growth'].includes(plan) && (
+          {plan === 'pro' && (
             <Button variant="outline" onClick={handleSendReminders} isLoading={sendingReminders}>
               <Bell className="w-4 h-4 mr-2" />Send Reminders
             </Button>

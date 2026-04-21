@@ -240,6 +240,100 @@ async function executeAction(
 }
 
 /**
+ * Dry-run version of executeAction: loads all the same data and evaluates
+ * conditions, but skips actual sends and DB writes. Returns a structured
+ * result describing exactly what would have happened.
+ */
+export async function executeActionDryRun(
+  rule: any,
+  companyId: number,
+  ctx: AutomationContext,
+): Promise<{ eligible: boolean; outcome: string; details: Record<string, unknown> }> {
+  const { customerId, appointmentId, appointmentPrice, appointmentServiceId } = ctx;
+
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  const companyName = company?.name ?? "Your Company";
+  const reviewUrl = (company as any)?.reviewUrl ?? "https://g.page/review";
+
+  switch (rule.actionType) {
+    case "send_review_request": {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      if (!customer) return { eligible: false, outcome: "Customer not found", details: {} };
+      const channel = customer.phone ? "sms" : customer.email ? "email" : null;
+      if (!channel) return { eligible: false, outcome: "Customer has no phone or email", details: {} };
+      return {
+        eligible: true,
+        outcome: `Would send a review request ${channel.toUpperCase()} to ${customer.firstName || "customer"} (${customer.phone || customer.email})`,
+        details: { channel, reviewUrl, customerName: `${customer.firstName} ${customer.lastName}`.trim() },
+      };
+    }
+
+    case "send_follow_up_email": {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      if (!customer?.email) return { eligible: false, outcome: "Customer has no email address", details: {} };
+      return {
+        eligible: true,
+        outcome: `Would send a thank-you email to ${customer.firstName || "customer"} at ${customer.email}`,
+        details: {
+          to: customer.email,
+          subject: `Thank you for choosing ${companyName}!`,
+          preview: `Hi ${customer.firstName}, thank you for your recent service with ${companyName}...`,
+        },
+      };
+    }
+
+    case "send_sms_reminder": {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      if (!customer?.phone) return { eligible: false, outcome: "Customer has no phone number for SMS", details: {} };
+      let message = `Hi ${customer.firstName}, this is a reminder from ${companyName}.`;
+      if (appointmentId) {
+        const [appt] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, appointmentId)).limit(1);
+        if (appt) {
+          const dateStr = new Date(appt.scheduledStart).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+          const timeStr = new Date(appt.scheduledStart).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+          message = `Hi ${customer.firstName}, reminder: your appointment with ${companyName} is on ${dateStr} at ${timeStr}. Reply STOP to opt out.`;
+        }
+      }
+      return {
+        eligible: true,
+        outcome: `Would send SMS to ${customer.phone}: "${message}"`,
+        details: { to: customer.phone, message },
+      };
+    }
+
+    case "create_invoice": {
+      if (!appointmentId) return { eligible: false, outcome: "No appointment in context — rule requires appointment_completed trigger", details: {} };
+      const [existingInv] = await db.select({ id: invoicesTable.id }).from(invoicesTable)
+        .where(and(eq(invoicesTable.appointmentId, appointmentId), eq(invoicesTable.companyId, companyId))).limit(1);
+      if (existingInv) return { eligible: false, outcome: `Invoice already exists for appointment #${appointmentId} (INV #${existingInv.id}) — would skip`, details: { existingInvoiceId: existingInv.id } };
+
+      let serviceName = "Service Rendered";
+      let price = appointmentPrice ?? 0;
+      if (appointmentServiceId) {
+        const [svc] = await db.select().from(servicesTable).where(eq(servicesTable.id, appointmentServiceId)).limit(1);
+        if (svc) { serviceName = svc.name; if (!appointmentPrice && svc.basePrice) price = Number(svc.basePrice); }
+      } else {
+        const [appt] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, appointmentId)).limit(1);
+        if (appt?.serviceId) {
+          const [svc] = await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1);
+          if (svc) { serviceName = svc.name; if (!appointmentPrice && svc.basePrice) price = Number(svc.basePrice); }
+        }
+      }
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 14);
+      return {
+        eligible: true,
+        outcome: `Would create and send invoice for "${serviceName}" ($${Number(price).toFixed(2)}) due ${dueDate.toLocaleDateString()}`,
+        details: { serviceName, total: price, dueDate: dueDate.toISOString(), status: "sent" },
+      };
+    }
+
+    default:
+      return { eligible: false, outcome: `Unknown action type: ${rule.actionType}`, details: {} };
+  }
+}
+
+/**
  * Background scheduler: runs every 5 minutes, checks for appointments
  * scheduled 24–25 hours from now and fires appointment_upcoming_24h automations.
  */
