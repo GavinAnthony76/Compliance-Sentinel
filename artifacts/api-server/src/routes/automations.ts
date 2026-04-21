@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db, automationRulesTable, appointmentsTable, invoicesTable, customersTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lte, between } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -91,30 +91,53 @@ router.post("/:id/test", async (req: any, res) => {
   let entityLabel = "";
 
   try {
-    if (rule.triggerType === "appointment_completed" || rule.triggerType === "appointment_upcoming_24h") {
+    if (rule.triggerType === "appointment_completed") {
+      // Select most recently completed appointment
       const [appt] = await db.select().from(appointmentsTable)
-        .where(eq(appointmentsTable.companyId, companyId))
-        .orderBy(desc(appointmentsTable.createdAt))
+        .where(and(eq(appointmentsTable.companyId, companyId), eq(appointmentsTable.status, "completed")))
+        .orderBy(desc(appointmentsTable.updatedAt))
         .limit(1);
       if (appt) {
-        ctx = {
-          customerId: appt.customerId,
-          appointmentId: appt.id,
-          appointmentPrice: appt.price ? Number(appt.price) : undefined,
-          appointmentServiceId: appt.serviceId ?? undefined,
-        };
-        entityLabel = `appointment #${appt.id}`;
+        ctx = { customerId: appt.customerId, appointmentId: appt.id, appointmentPrice: appt.price ? Number(appt.price) : undefined, appointmentServiceId: appt.serviceId ?? undefined };
+        entityLabel = `completed appointment #${appt.id}`;
       }
-    } else if (rule.triggerType === "invoice_sent" || rule.triggerType === "invoice_overdue") {
+    } else if (rule.triggerType === "appointment_upcoming_24h") {
+      // Prefer appointment in the 24h scheduling window; fall back to nearest upcoming
+      const now = new Date();
+      const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const candidates = await db.select().from(appointmentsTable)
+        .where(and(eq(appointmentsTable.companyId, companyId), gte(appointmentsTable.scheduledStart, now.toISOString())))
+        .orderBy(appointmentsTable.scheduledStart)
+        .limit(5);
+      const inWindow = candidates.find(a => new Date(a.scheduledStart) <= in24h);
+      const appt = inWindow ?? candidates[0] ?? null;
+      if (appt) {
+        const isEligible = new Date(appt.scheduledStart) <= in24h;
+        ctx = { customerId: appt.customerId, appointmentId: appt.id, appointmentPrice: appt.price ? Number(appt.price) : undefined, appointmentServiceId: appt.serviceId ?? undefined };
+        entityLabel = isEligible ? `upcoming appointment #${appt.id} (within 24h)` : `nearest upcoming appointment #${appt.id} (outside 24h window — dry run only)`;
+      }
+    } else if (rule.triggerType === "invoice_overdue") {
+      // Select most recent overdue invoice
       const [inv] = await db.select().from(invoicesTable)
-        .where(eq(invoicesTable.companyId, companyId))
-        .orderBy(desc(invoicesTable.createdAt))
+        .where(and(eq(invoicesTable.companyId, companyId), eq(invoicesTable.status, "overdue")))
+        .orderBy(desc(invoicesTable.updatedAt))
         .limit(1);
       if (inv) {
         ctx = { customerId: inv.customerId };
-        entityLabel = `invoice ${inv.invoiceNumber}`;
+        entityLabel = `overdue invoice ${inv.invoiceNumber}`;
+      }
+    } else if (rule.triggerType === "invoice_sent") {
+      // Select most recently sent invoice
+      const [inv] = await db.select().from(invoicesTable)
+        .where(and(eq(invoicesTable.companyId, companyId), eq(invoicesTable.status, "sent")))
+        .orderBy(desc(invoicesTable.updatedAt))
+        .limit(1);
+      if (inv) {
+        ctx = { customerId: inv.customerId };
+        entityLabel = `sent invoice ${inv.invoiceNumber}`;
       }
     } else if (rule.triggerType === "customer_created") {
+      // Select newest customer
       const [cust] = await db.select().from(customersTable)
         .where(eq(customersTable.companyId, companyId))
         .orderBy(desc(customersTable.createdAt))

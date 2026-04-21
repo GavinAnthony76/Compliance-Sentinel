@@ -317,8 +317,13 @@ router.get("/invoices/:id", requirePortalAuth, async (req: any, res) => {
     db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1).then(r => r[0]),
   ]);
 
+  const parsePaymentMethods = (raw: string | null | undefined): string[] => {
+    if (!raw) return ["cash", "check"];
+    try { return JSON.parse(raw); } catch { return ["cash", "check"]; }
+  };
+
   const paymentConfig = {
-    acceptedPaymentMethods: company?.acceptedPaymentMethods ? JSON.parse(company.acceptedPaymentMethods) : ["cash", "check"],
+    acceptedPaymentMethods: parsePaymentMethods(company?.acceptedPaymentMethods),
     paymentInstructions: company?.paymentInstructions ?? "",
     zelleInfo: company?.zelleInfo ?? "",
     venmoHandle: company?.venmoHandle ?? "",
@@ -371,9 +376,11 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
   }
 
   // --- PAYMENT METHOD ENFORCEMENT: company must have 'card' in accepted methods ---
-  const acceptedMethods: string[] = company?.acceptedPaymentMethods
-    ? JSON.parse(company.acceptedPaymentMethods)
-    : ["cash", "check"];
+  const parseAcceptedMethods = (raw: string | null | undefined): string[] => {
+    if (!raw) return ["cash", "check"];
+    try { return JSON.parse(raw); } catch { return ["cash", "check"]; }
+  };
+  const acceptedMethods: string[] = parseAcceptedMethods(company?.acceptedPaymentMethods);
   if (!acceptedMethods.includes("card")) {
     return res.status(403).json({ error: "PaymentMethodNotEnabled", message: "Online card payments are not enabled for this company." });
   }

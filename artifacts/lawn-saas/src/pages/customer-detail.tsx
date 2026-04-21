@@ -427,7 +427,7 @@ function NewInvoiceModal({ customerId, onClose }: { customerId: number; onClose:
       toast({ title: 'Add at least one line item', variant: 'destructive' }); return;
     }
     try {
-      const payload: CreateInvoiceRequest & { lineItems: InvoiceLineItemInput[] } = {
+      const payload: CreateInvoiceRequest = {
         customerId,
         subtotal,
         tax: taxNum,
@@ -436,7 +436,7 @@ function NewInvoiceModal({ customerId, onClose }: { customerId: number; onClose:
         notes: notes || undefined,
         dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       };
-      await createMut.mutateAsync({ data: payload as CreateInvoiceRequest });
+      await createMut.mutateAsync({ data: payload });
       qc.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
       toast({ title: 'Invoice created' });
       onClose();

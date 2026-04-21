@@ -13,8 +13,6 @@ import { format } from 'date-fns';
 
 // Extended payload types that include lineItems beyond the generated schema
 type InvoiceLineItemInput = { description: string; quantity: number; unitPrice: number; lineTotal: number };
-type CreateInvoicePayload = CreateInvoiceRequest & { lineItems?: InvoiceLineItemInput[]; appointmentId?: number };
-type UpdateInvoicePayload = UpdateInvoiceRequest & { lineItems?: InvoiceLineItemInput[] };
 
 function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
@@ -142,7 +140,7 @@ function NewInvoiceModal({ onClose, preselectedApptId }: { onClose: () => void; 
     if (lineItems.length === 0 || lineItems.every(li => !li.description)) {
       toast({ title: 'Add at least one line item', variant: 'destructive' }); return;
     }
-    const payload: CreateInvoicePayload = {
+    const payload: CreateInvoiceRequest = {
       customerId: Number(form.customerId),
       appointmentId: form.appointmentId ? Number(form.appointmentId) : undefined,
       lineItems,
@@ -153,7 +151,7 @@ function NewInvoiceModal({ onClose, preselectedApptId }: { onClose: () => void; 
       dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
     };
     try {
-      await createMut.mutateAsync({ data: payload as CreateInvoiceRequest });
+      await createMut.mutateAsync({ data: payload });
       toast({ title: 'Invoice created' });
       qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
       onClose();
@@ -432,7 +430,7 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: { id: number; invoice
     if (lineItems.every(li => !li.description)) {
       toast({ title: 'Add at least one line item', variant: 'destructive' }); return;
     }
-    const payload: UpdateInvoicePayload = {
+    const payload: UpdateInvoiceRequest = {
       lineItems,
       subtotal,
       tax: taxNum,
@@ -441,7 +439,7 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: { id: number; invoice
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
     };
     try {
-      await updateMut.mutateAsync({ id: invoice.id, data: payload as UpdateInvoiceRequest });
+      await updateMut.mutateAsync({ id: invoice.id, data: payload });
       toast({ title: 'Invoice updated' });
       qc.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
       onClose();

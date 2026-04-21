@@ -421,6 +421,13 @@ export const CreateInvoiceRequestStatus = {
   cancelled: "cancelled",
 } as const;
 
+export interface InvoiceLineItemRequest {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
 export interface CreateInvoiceRequest {
   customerId: number;
   appointmentId?: number;
@@ -430,6 +437,7 @@ export interface CreateInvoiceRequest {
   status?: CreateInvoiceRequestStatus;
   dueDate?: string;
   notes?: string;
+  lineItems?: InvoiceLineItemRequest[];
 }
 
 export type UpdateInvoiceRequestStatus =
@@ -451,6 +459,7 @@ export interface UpdateInvoiceRequest {
   dueDate?: string;
   notes?: string;
   paidAt?: string;
+  lineItems?: InvoiceLineItemRequest[];
 }
 
 export type EstimateStatus =
