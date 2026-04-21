@@ -373,12 +373,12 @@ export function startAutomationScheduler(): void {
               appointmentPrice: appt.price ? Number(appt.price) : null,
               appointmentServiceId: appt.serviceId,
             });
+            // Only mark reminderSent after rules have actually fired,
+            // so a company that enables a rule later can still reach this appointment
+            await db.update(appointmentsTable)
+              .set({ reminderSent: true, updatedAt: new Date() })
+              .where(eq(appointmentsTable.id, appt.id));
           }
-
-          // Mark reminder sent regardless (avoid spam even if no rule)
-          await db.update(appointmentsTable)
-            .set({ reminderSent: true, updatedAt: new Date() })
-            .where(eq(appointmentsTable.id, appt.id));
         } catch {
           // Non-fatal per appointment
         }

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useListAppointments, useCreateAppointment, useUpdateAppointment, useDeleteAppointment, useCompleteAppointment, useListCustomers, useListServices, useListTeam } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, Calendar, Filter, ChevronDown, Download } from 'lucide-react';
+import { Plus, Calendar, Filter, ChevronDown, Download, FileText } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
+import { useLocation } from 'wouter';
 
 function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
@@ -237,6 +238,7 @@ export function AppointmentsPage() {
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [creatingInvoice, setCreatingInvoice] = useState<number | null>(null);
   const { user } = useAuthState();
   const plan = user?.company?.subscriptionPlan ?? 'starter';
   const isStaff = user?.role === 'staff';
@@ -250,6 +252,29 @@ export function AppointmentsPage() {
   const qc = useQueryClient();
   const deleteMut = useDeleteAppointment();
   const completeMut = useCompleteAppointment();
+  const [, setLocation] = useLocation();
+
+  const handleCreateInvoice = async (apptId: number) => {
+    setCreatingInvoice(apptId);
+    try {
+      const res = await fetch(`/api/invoices/from-appointment/${apptId}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` },
+      });
+      if (!res.ok) throw new Error('Could not load appointment data');
+      const data = await res.json();
+      if (data.existingInvoiceId) {
+        toast({ title: 'Invoice already exists', description: `Navigating to invoice #${data.existingInvoiceId}` });
+      } else {
+        toast({ title: 'Opening invoice editor', description: 'Pre-filled from this appointment.' });
+      }
+      setLocation('/invoices');
+    } catch {
+      toast({ title: 'Could not create invoice', variant: 'destructive' });
+    } finally {
+      setCreatingInvoice(null);
+    }
+  };
 
   const statuses = ['', 'pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'];
 
@@ -324,6 +349,17 @@ export function AppointmentsPage() {
                           <Button size="sm" variant="outline" onClick={() => setEditing(apt)}>
                             Edit
                           </Button>
+                          {apt.status === 'completed' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              isLoading={creatingInvoice === apt.id}
+                              onClick={() => handleCreateInvoice(apt.id)}
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                            >
+                              <FileText className="w-3.5 h-3.5 mr-1" />Invoice
+                            </Button>
+                          )}
                           {apt.status !== 'completed' && apt.status !== 'cancelled' && (
                             <Button
                               size="sm"

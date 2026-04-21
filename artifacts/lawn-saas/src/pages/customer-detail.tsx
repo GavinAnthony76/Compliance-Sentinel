@@ -8,6 +8,7 @@ import {
   useListServices, useListTeam,
   getListCustomersQueryKey,
 } from '@workspace/api-client-react';
+import type { CreateInvoiceRequest } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button, Input } from '@/components/ui';
 import { AppointmentStatusBadge } from '@/components/status-badge';
@@ -370,25 +371,72 @@ function NewAppointmentModal({ customerId, onClose }: { customerId: number; onCl
   );
 }
 
+type InvoiceLineItemInput = { description: string; quantity: number; unitPrice: number; lineTotal: number };
+
+function LineItemsEditor({ items, onChange }: { items: InvoiceLineItemInput[]; onChange: (items: InvoiceLineItemInput[]) => void }) {
+  const addRow = () => onChange([...items, { description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
+  const removeRow = (i: number) => onChange(items.filter((_, idx) => idx !== i));
+  const update = (i: number, field: keyof InvoiceLineItemInput, val: string) => {
+    const updated = items.map((li, idx) => {
+      if (idx !== i) return li;
+      const next = { ...li, [field]: field === 'description' ? val : Number(val) };
+      next.lineTotal = Number((next.quantity * next.unitPrice).toFixed(2));
+      return next;
+    });
+    onChange(updated);
+  };
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-12 gap-1 text-xs font-semibold text-muted-foreground px-1">
+        <span className="col-span-5">Description</span>
+        <span className="col-span-2 text-center">Qty</span>
+        <span className="col-span-2 text-right">Unit $</span>
+        <span className="col-span-2 text-right">Total</span>
+        <span className="col-span-1" />
+      </div>
+      {items.map((li, i) => (
+        <div key={i} className="grid grid-cols-12 gap-1 items-center">
+          <Input className="col-span-5 h-8 text-sm" value={li.description} onChange={e => update(i, 'description', e.target.value)} placeholder="Service" required />
+          <Input className="col-span-2 h-8 text-sm text-center" type="number" min="0.01" step="0.01" value={li.quantity} onChange={e => update(i, 'quantity', e.target.value)} />
+          <Input className="col-span-2 h-8 text-sm text-right" type="number" min="0" step="0.01" value={li.unitPrice} onChange={e => update(i, 'unitPrice', e.target.value)} />
+          <div className="col-span-2 text-right text-xs font-medium pr-1">${li.lineTotal.toFixed(2)}</div>
+          <button type="button" onClick={() => removeRow(i)} className="col-span-1 flex justify-center text-muted-foreground hover:text-destructive text-xs">✕</button>
+        </div>
+      ))}
+      <button type="button" onClick={addRow} className="text-xs text-primary underline underline-offset-2 hover:opacity-80">+ Add Line Item</button>
+    </div>
+  );
+}
+
 function NewInvoiceModal({ customerId, onClose }: { customerId: number; onClose: () => void }) {
-  const [form, setForm] = useState({ subtotal: '', tax: '0', notes: '', dueDate: '' });
+  const [lineItems, setLineItems] = useState<InvoiceLineItemInput[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
+  const [tax, setTax] = useState('0');
+  const [notes, setNotes] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateInvoice();
 
+  const subtotal = lineItems.reduce((s, li) => s + li.lineTotal, 0);
+  const taxNum = Number(tax) || 0;
+  const total = subtotal + taxNum;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lineItems.every(li => !li.description)) {
+      toast({ title: 'Add at least one line item', variant: 'destructive' }); return;
+    }
     try {
-      await createMut.mutateAsync({
-        data: {
-          customerId,
-          subtotal: Number(form.subtotal),
-          tax: Number(form.tax),
-          total: Number(form.subtotal) + Number(form.tax),
-          notes: form.notes || undefined,
-          dueDate: form.dueDate ? new Date(form.dueDate).toISOString() : undefined,
-        },
-      });
+      const payload: CreateInvoiceRequest & { lineItems: InvoiceLineItemInput[] } = {
+        customerId,
+        subtotal,
+        tax: taxNum,
+        total,
+        lineItems,
+        notes: notes || undefined,
+        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+      };
+      await createMut.mutateAsync({ data: payload as CreateInvoiceRequest });
       qc.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
       toast({ title: 'Invoice created' });
       onClose();
@@ -399,26 +447,32 @@ function NewInvoiceModal({ customerId, onClose }: { customerId: number; onClose:
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-6">New Invoice</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Subtotal ($) *</label>
-              <Input type="number" step="0.01" value={form.subtotal} onChange={e => setForm(f => ({ ...f, subtotal: e.target.value }))} placeholder="0.00" required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Tax ($)</label>
-              <Input type="number" step="0.01" value={form.tax} onChange={e => setForm(f => ({ ...f, tax: e.target.value }))} placeholder="0.00" />
+          <div>
+            <label className="text-sm font-medium mb-2 block">Line Items *</label>
+            <div className="border border-border rounded-xl p-3">
+              <LineItemsEditor items={lineItems} onChange={setLineItems} />
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Due Date</label>
-            <Input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+          <div className="flex justify-end gap-4 text-sm">
+            <div className="text-muted-foreground">Subtotal: <span className="font-semibold text-foreground">${subtotal.toFixed(2)}</span></div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">Tax ($):</span>
+              <Input type="number" step="0.01" min="0" value={tax} onChange={e => setTax(e.target.value)} className="w-16 h-7 text-sm text-right" />
+            </div>
+            <div className="font-bold">Total: ${total.toFixed(2)}</div>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Notes</label>
-            <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Due Date</label>
+              <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Notes</label>
+              <Input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes..." />
+            </div>
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
