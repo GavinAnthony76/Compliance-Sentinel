@@ -264,11 +264,14 @@ export function AppointmentsPage() {
       if (!res.ok) throw new Error('Could not load appointment data');
       const data = await res.json();
       if (data.existingInvoiceId) {
-        toast({ title: 'Invoice already exists', description: `Navigating to invoice #${data.existingInvoiceId}` });
+        // Navigate to invoices page — auto-opens detail modal for existing invoice
+        toast({ title: 'Invoice already exists', description: 'Opening that invoice now.' });
+        setLocation(`/invoices?openInvoice=${data.existingInvoiceId}`);
       } else {
+        // Navigate to invoices page — auto-opens create modal prefilled from this appointment
         toast({ title: 'Opening invoice editor', description: 'Pre-filled from this appointment.' });
+        setLocation(`/invoices?fromAppt=${apptId}`);
       }
-      setLocation('/invoices');
     } catch {
       toast({ title: 'Could not create invoice', variant: 'destructive' });
     } finally {

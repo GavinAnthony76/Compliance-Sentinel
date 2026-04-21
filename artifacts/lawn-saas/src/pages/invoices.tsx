@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useListInvoices, useCreateInvoice, useMarkInvoicePaid, useSendInvoice, useDeleteInvoice, useListCustomers, useListAppointments, useUpdateInvoice } from '@workspace/api-client-react';
 import type { CreateInvoiceRequest, UpdateInvoiceRequest } from '@workspace/api-client-react';
+import { useSearch, useLocation } from 'wouter';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, FileText, Download, Bell, Trash2, Banknote, Pencil, Eye } from 'lucide-react';
@@ -81,21 +82,30 @@ function LineItemsEditor({ items, onChange }: { items: InvoiceLineItemInput[]; o
   );
 }
 
-function NewInvoiceModal({ onClose }: { onClose: () => void }) {
+function NewInvoiceModal({ onClose, preselectedApptId }: { onClose: () => void; preselectedApptId?: number }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateInvoice();
   const { data: customers } = useListCustomers({ page: 1, limit: 200 } as Parameters<typeof useListCustomers>[0]);
-  const { data: apptData } = useListAppointments({ limit: 100, status: 'scheduled' } as Parameters<typeof useListAppointments>[0]);
+  const { data: apptData } = useListAppointments({ limit: 200 } as Parameters<typeof useListAppointments>[0]);
   const token = localStorage.getItem('greensync_token');
 
-  const [form, setForm] = useState({ customerId: '', appointmentId: '', tax: '0', notes: '', dueDate: '' });
+  const [form, setForm] = useState({ customerId: '', appointmentId: preselectedApptId ? String(preselectedApptId) : '', tax: '0', notes: '', dueDate: '' });
   const [lineItems, setLineItems] = useState<InvoiceLineItemInput[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const [loadingAppt, setLoadingAppt] = useState(false);
+  const didAutoload = useRef(false);
 
   const subtotal = lineItems.reduce((s, li) => s + li.lineTotal, 0);
   const tax = Number(form.tax) || 0;
   const total = subtotal + tax;
+
+  useEffect(() => {
+    if (preselectedApptId && !didAutoload.current) {
+      didAutoload.current = true;
+      handleAppointmentChange(String(preselectedApptId));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedApptId]);
 
   const handleAppointmentChange = async (apptId: string) => {
     setForm(f => ({ ...f, appointmentId: apptId }));
@@ -486,6 +496,7 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: { id: number; invoice
 
 export function InvoicesPage() {
   const [showNew, setShowNew] = useState(false);
+  const [preselectedApptId, setPreselectedApptId] = useState<number | undefined>(undefined);
   const [markingPaid, setMarkingPaid] = useState<{ id: number; invoiceNumber: string; total: string | number } | null>(null);
   const [editingDraft, setEditingDraft] = useState<{ id: number; invoiceNumber: string } | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<{ id: number; invoiceNumber: string; status: string } | null>(null);
@@ -498,6 +509,38 @@ export function InvoicesPage() {
   const { user } = useAuthState();
   const plan = user?.company?.subscriptionPlan ?? 'starter';
   const [sendingReminders, setSendingReminders] = useState(false);
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const [pendingOpenInvoiceId, setPendingOpenInvoiceId] = useState<number | null>(null);
+  const didHandleParams = useRef(false);
+
+  // Parse URL params once on mount
+  useEffect(() => {
+    if (didHandleParams.current) return;
+    const params = new URLSearchParams(search);
+    const fromAppt = params.get('fromAppt');
+    const openInvoice = params.get('openInvoice');
+    if (!fromAppt && !openInvoice) return;
+    didHandleParams.current = true;
+    setLocation('/invoices', { replace: true });
+    if (fromAppt) {
+      setPreselectedApptId(Number(fromAppt));
+      setShowNew(true);
+    } else if (openInvoice) {
+      setPendingOpenInvoiceId(Number(openInvoice));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  // Once invoice data is loaded and we have a pending open request, find and open it
+  useEffect(() => {
+    if (!pendingOpenInvoiceId || !data?.invoices) return;
+    const inv = data.invoices.find(i => i.id === pendingOpenInvoiceId);
+    if (inv) {
+      setViewingInvoice({ id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status });
+      setPendingOpenInvoiceId(null);
+    }
+  }, [pendingOpenInvoiceId, data]);
 
   const handleSendReminders = async () => {
     setSendingReminders(true);
@@ -519,7 +562,7 @@ export function InvoicesPage() {
 
   return (
     <AppLayout>
-      {showNew && <NewInvoiceModal onClose={() => setShowNew(false)} />}
+      {showNew && <NewInvoiceModal onClose={() => { setShowNew(false); setPreselectedApptId(undefined); }} preselectedApptId={preselectedApptId} />}
       {markingPaid && <MarkPaidDialog invoice={markingPaid} onClose={() => setMarkingPaid(null)} onPaid={() => setMarkingPaid(null)} />}
       {editingDraft && <EditInvoiceModal invoice={editingDraft} onClose={() => setEditingDraft(null)} />}
       {viewingInvoice && <InvoiceDetailModal invoice={viewingInvoice} onClose={() => setViewingInvoice(null)} />}
