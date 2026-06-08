@@ -75,14 +75,14 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
       const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-      // Passwordless magic link — clicking it signs the customer straight into the portal.
-      portalUrl = `${baseUrl}/portal/${company.slug}/login?token=${inviteToken}`;
+      // Invite link takes customers to the set-password page so they create a password on first access.
+      portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
       const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
       if (customer.email) {
         await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
       }
       if (customer.phone && hasFeature(company.subscriptionPlan, "sms_notifications")) {
-        await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Sign in here (no password needed): ${portalUrl}` });
+        await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Create your password here: ${portalUrl}` });
       }
     }
   } catch { /* non-fatal — invite can be re-sent from customer detail */ }

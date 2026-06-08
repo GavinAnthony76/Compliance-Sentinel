@@ -128,8 +128,8 @@ router.post("/auth/send-invite", async (req: any, res) => {
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, businessCompanyId)).limit(1);
   const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
-  // Passwordless magic link — clicking it signs the customer straight into the portal.
-  const portalUrl = `${baseUrl}/portal/${company.slug}/login?token=${inviteToken}`;
+  // Invite link takes customers to the set-password page so they create a password on first access.
+  const portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
   const customerName = customer.firstName || customer.email || "there";
 
   const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
