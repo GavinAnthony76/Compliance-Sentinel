@@ -32,6 +32,7 @@ export function PortalDashboardPage() {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [receipt, setReceipt] = useState<{ invoiceId: string | null } | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
 
   // Detect Stripe payment-success redirect and show a receipt.
   // Stash the intent so it survives an auth round-trip (e.g. an expired
@@ -43,6 +44,7 @@ export function PortalDashboardPage() {
       const validId = invoiceParam && /^\d+$/.test(invoiceParam) ? invoiceParam : null;
       try { sessionStorage.setItem('portal_receipt', validId ?? 'generic'); } catch {}
       setReceipt({ invoiceId: validId });
+      if (validId) setPendingConfirm(validId);
       return;
     }
     try {
@@ -51,10 +53,26 @@ export function PortalDashboardPage() {
     } catch {}
   }, []);
 
+  // Once authenticated, confirm the payment with Stripe so the invoice is
+  // marked paid in the DB (fallback for when the webhook hasn't fired yet).
+  useEffect(() => {
+    if (!isAuthenticated || !pendingConfirm) return;
+    portalFetch(`/api/portal/invoices/${pendingConfirm}/confirm-payment`, { method: 'POST' })
+      .catch(() => {});
+    setPendingConfirm(null);
+  }, [isAuthenticated, pendingConfirm]);
+
   const dismissReceipt = () => {
+    const invoiceId = receipt?.invoiceId;
     setReceipt(null);
     try { sessionStorage.removeItem('portal_receipt'); } catch {}
     setLocation(`/portal/${slug}`, { replace: true });
+    // Re-fetch invoices so the dashboard reflects the updated paid status.
+    if (invoiceId) {
+      portalFetch('/api/portal/invoices').then((r: any) => r.json())
+        .then((invs: any) => setInvoices(Array.isArray(invs) ? invs.slice(0, 5) : []))
+        .catch(() => {});
+    }
   };
 
   useEffect(() => {

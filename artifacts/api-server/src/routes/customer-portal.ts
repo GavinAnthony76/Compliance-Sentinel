@@ -483,10 +483,51 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
     metadata: { invoiceId: String(invoice.id), companyId: String(companyId), customerId: String(customerId), source: "customer_portal" },
   });
 
-  // Store payment intent reference
-  await db.update(invoicesTable).set({ stripePaymentIntentId: session.payment_intent as string || session.id, updatedAt: new Date() }).where(eq(invoicesTable.id, id));
+  // Store checkout session ID so confirm-payment can retrieve and verify it
+  await db.update(invoicesTable).set({ stripePaymentIntentId: session.id, updatedAt: new Date() }).where(eq(invoicesTable.id, id));
 
   return res.json({ url: session.url });
+});
+
+// POST /portal/invoices/:id/confirm-payment
+// Called by the portal client on the payment-success redirect as a reliable
+// fallback for when the Stripe webhook hasn't fired yet. Retrieves the stored
+// checkout session, verifies payment_status === "paid", and marks the invoice.
+router.post("/invoices/:id/confirm-payment", requirePortalAuth, async (req: any, res) => {
+  const { customerId, companyId } = req.portal;
+  const id = Number(req.params.id);
+
+  const [invoice] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.customerId, customerId), eq(invoicesTable.companyId, companyId)))
+    .limit(1);
+  if (!invoice) return res.status(404).json({ error: "NotFound" });
+
+  if (invoice.status === "paid") return res.json({ confirmed: true });
+
+  if (!invoice.stripePaymentIntentId) {
+    return res.status(400).json({ error: "NoPendingPayment", message: "No pending payment session found for this invoice." });
+  }
+
+  let stripe: any;
+  try {
+    const { getUncachableStripeClient } = await import("../lib/stripe");
+    stripe = await getUncachableStripeClient();
+  } catch {
+    return res.status(503).json({ error: "BillingUnavailable", message: "Payment processing not available." });
+  }
+
+  const session = await stripe.checkout.sessions.retrieve(invoice.stripePaymentIntentId);
+  if (!session || session.payment_status !== "paid") {
+    return res.status(402).json({ error: "NotPaid", message: "Payment not yet confirmed by Stripe." });
+  }
+
+  await db.update(invoicesTable).set({
+    status: "paid",
+    paidAt: new Date(),
+    updatedAt: new Date(),
+  }).where(eq(invoicesTable.id, id));
+
+  return res.json({ confirmed: true });
 });
 
 export default router;
