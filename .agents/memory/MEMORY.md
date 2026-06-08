@@ -6,3 +6,4 @@
 - [AI integration lazy import](ai-integration-lazy-import.md) — Replit OpenAI integration client throws at import time if env unset; lazy-import inside the function after an env check, never top-level.
 - [GreenSynk rebrand & email](greensynk-rebrand.md) — app renamed to GreenSynk; Resend verified on greensynk.com; noreply@greensynk.com is the from address.
 - [Portal fetch monkey-patch collision](portal-fetch-monkey-patch.md) — App.tsx global fetch override injects company JWT; guard against overwriting caller-supplied Authorization or portal auth breaks.
+- [Stripe Connect account mismatch](stripe-connect-account.md) — Replit Stripe connector and Stripe sandbox are DIFFERENT accounts; set STRIPE_SECRET_KEY + STRIPE_PUBLISHABLE_KEY secrets to override connector; re-seed products after switching; price IDs are account-scoped.

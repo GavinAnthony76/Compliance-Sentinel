@@ -1,6 +1,12 @@
 import Stripe from "stripe";
 
 async function getStripeClient() {
+  // Prefer explicit env var (e.g. sandbox key) over Replit connector
+  if (process.env.STRIPE_SECRET_KEY) {
+    console.log("Using STRIPE_SECRET_KEY env var");
+    return new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-08-27.basil" as any });
+  }
+
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY
     ? "repl " + process.env.REPL_IDENTITY

@@ -33,6 +33,6 @@ channel = "stable-25_05"
 
 [userenv.shared]
 RESEND_FROM_EMAIL = "noreply@greensynk.com"
-STRIPE_STARTER_PRICE_ID = "price_1Tg7hjRaRIkwxM43h1PsCIha"
-STRIPE_GROWTH_PRICE_ID = "price_1Tg7hjRaRIkwxM43m0IJjlG3"
-STRIPE_PRO_PRICE_ID = "price_1Tg7hkRaRIkwxM43zuuD86fA"
+STRIPE_STARTER_PRICE_ID = "price_1Tg8WkR09LuV20zMHO0EKb7U"
+STRIPE_GROWTH_PRICE_ID = "price_1Tg8WkR09LuV20zMFZ3eJszV"
+STRIPE_PRO_PRICE_ID = "price_1Tg8WlR09LuV20zMnjWLihG0"
