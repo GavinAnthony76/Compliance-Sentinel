@@ -1,7 +1,7 @@
 import { db, invoicesTable, customersTable, companiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
-import { resolveEmailCredentials } from "./sendgrid";
+import { resolveEmailCredentials } from "./resend";
 
 interface EmailPayload {
   to: string;
@@ -53,23 +53,26 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   }
 
   try {
-    const sgMail = (await import("@sendgrid/mail")).default;
-    sgMail.setApiKey(creds.apiKey);
+    const { Resend } = await import("resend");
+    const resend = new Resend(creds.apiKey);
 
-    const fromAddress = creds.fromEmail || process.env.SENDGRID_FROM_EMAIL || "noreply@greensync.app";
-
-    await sgMail.send({
-      from: fromAddress,
+    const { error } = await resend.emails.send({
+      from: creds.fromEmail,
       to: payload.to,
       subject: payload.subject,
       text: payload.body,
       ...(payload.html ? { html: payload.html } : {}),
-      ...(payload.replyTo ? { replyTo: payload.replyTo } : {}),
+      ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
     });
 
-    logger.info({ to: payload.to, subject: payload.subject, via: creds.source }, "Email sent via SendGrid");
+    if (error) {
+      logger.error({ error, to: payload.to, subject: payload.subject }, "Resend rejected email");
+      return;
+    }
+
+    logger.info({ to: payload.to, subject: payload.subject }, "Email sent via Resend");
   } catch (err) {
-    logger.error({ err, to: payload.to, subject: payload.subject }, "Failed to send email via SendGrid");
+    logger.error({ err, to: payload.to, subject: payload.subject }, "Failed to send email via Resend");
   }
 }
 
