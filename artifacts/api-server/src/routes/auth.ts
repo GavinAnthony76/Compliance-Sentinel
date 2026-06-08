@@ -51,7 +51,7 @@ router.post("/register", async (req, res) => {
     // they can evaluate that tier's features. This is a time-boxed trial,
     // not a paid subscription — converting to paid still requires Stripe.
     subscriptionPlan: selectedPlan ?? "growth",
-    subscriptionStatus: "trial",
+    subscriptionStatus: "trialing",
     trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
     isActive: true,
   }).returning();
