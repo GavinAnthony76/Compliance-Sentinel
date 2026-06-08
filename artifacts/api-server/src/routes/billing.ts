@@ -55,6 +55,10 @@ router.post("/webhook", async (req: Request, res) => {
               updatedAt: new Date(),
             }).where(eq(invoicesTable.id, invoiceId));
             logger.info({ invoiceId, sessionId: session.id }, "Invoice marked paid via portal checkout");
+            if (companyId) {
+              const { dispatchPaymentReceiptEmail } = await import("../lib/notifications");
+              dispatchPaymentReceiptEmail(invoiceId, companyId);
+            }
           }
           break;
         }

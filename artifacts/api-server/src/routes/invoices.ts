@@ -4,7 +4,7 @@ import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
-import { sendInvoiceEmail, resolveBaseUrl } from "../lib/notifications";
+import { sendInvoiceEmail, resolveBaseUrl, dispatchPaymentReceiptEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -287,6 +287,9 @@ router.post("/:id/mark-paid", async (req: any, res) => {
   if (req.body.paymentMethodNote) updateData.paymentMethodNote = req.body.paymentMethodNote;
   const [updated] = await db.update(invoicesTable).set(updateData).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "invoice.paid", entityType: "invoice", entityId: id, metadata: { paymentMethod: req.body.paymentMethod } });
+  if (existing.status !== "paid") {
+    dispatchPaymentReceiptEmail(id, companyId);
+  }
   const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
   return res.json(fmt(updated, undefined, lineItems.map(fmtLineItem)));
 });

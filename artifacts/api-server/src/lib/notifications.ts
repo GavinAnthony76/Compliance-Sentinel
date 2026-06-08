@@ -1,3 +1,5 @@
+import { db, invoicesTable, customersTable, companiesTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 
 interface EmailPayload {
@@ -310,6 +312,67 @@ export async function sendInvoiceEmail(opts: {
     body,
     html,
   });
+}
+
+export async function sendPaymentReceiptEmail(opts: {
+  customerEmail: string;
+  customerName: string;
+  companyName: string;
+  invoiceNumber: string;
+  amountPaid: number;
+  paymentDate: Date;
+  portalUrl?: string;
+}): Promise<void> {
+  const paymentDateStr = new Date(opts.paymentDate).toLocaleDateString("en-US", {
+    year: "numeric", month: "long", day: "numeric",
+  });
+
+  const body = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `Thank you for your payment! We've received your payment for invoice ${opts.invoiceNumber}.`,
+    ``,
+    `Invoice Number: ${opts.invoiceNumber}`,
+    `Amount Paid: $${opts.amountPaid.toFixed(2)}`,
+    `Payment Date: ${paymentDateStr}`,
+    ``,
+    ...(opts.portalUrl ? [`View your invoice online:`, opts.portalUrl, ``] : []),
+    `We appreciate your business!`,
+    ``,
+    `${opts.companyName}`,
+  ].join("\n");
+
+  await sendEmail({
+    to: opts.customerEmail,
+    subject: `Payment Received for Invoice ${opts.invoiceNumber} — Thank You!`,
+    body,
+  });
+}
+
+export async function dispatchPaymentReceiptEmail(invoiceId: number, companyId: number): Promise<void> {
+  try {
+    const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.companyId, companyId))).limit(1);
+    if (!inv) return;
+    const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, inv.customerId), eq(customersTable.companyId, companyId))).limit(1);
+    if (!customer?.email) return;
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    const companyName = company?.name || "Your Service Provider";
+    const companySlug = company?.slug || "";
+    const baseUrl = resolveBaseUrl();
+    const portalUrl = companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : undefined;
+    const customerName = `${customer.firstName} ${customer.lastName}`.trim() || customer.email;
+    await sendPaymentReceiptEmail({
+      customerEmail: customer.email,
+      customerName,
+      companyName,
+      invoiceNumber: inv.invoiceNumber,
+      amountPaid: Number(inv.total),
+      paymentDate: inv.paidAt ? new Date(inv.paidAt) : new Date(),
+      portalUrl,
+    });
+  } catch (err) {
+    logger.error({ err, invoiceId, companyId }, "Failed to dispatch payment receipt email");
+  }
 }
 
 export async function sendTeamInviteEmail(opts: {
