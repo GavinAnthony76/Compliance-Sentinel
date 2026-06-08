@@ -5,3 +5,4 @@
 - [Private object storage read auth](storage-object-auth.md) — `/api/storage/objects/*` ships auth commented OUT; lock it with requireAuth + DB tenant-ownership check, and render authed images via fetch→blob (not `<img src>`).
 - [AI integration lazy import](ai-integration-lazy-import.md) — Replit OpenAI integration client throws at import time if env unset; lazy-import inside the function after an env check, never top-level.
 - [GreenSynk rebrand & email](greensynk-rebrand.md) — app renamed to GreenSynk; Resend verified on greensynk.com; noreply@greensynk.com is the from address.
+- [Portal fetch monkey-patch collision](portal-fetch-monkey-patch.md) — App.tsx global fetch override injects company JWT; guard against overwriting caller-supplied Authorization or portal auth breaks.

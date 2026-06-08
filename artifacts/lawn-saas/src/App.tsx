@@ -74,6 +74,12 @@ window.fetch = async (...args) => {
       const existingHeaders = config?.headers instanceof Headers
         ? Object.fromEntries((config.headers as Headers).entries())
         : (config?.headers ?? {});
+      // Caller-supplied Authorization takes precedence — never overwrite it.
+      // This matters for portal pages: the portal token is passed explicitly,
+      // and the company token must not clobber it (same-browser testing).
+      if (existingHeaders['authorization'] || existingHeaders['Authorization']) {
+        return originalFetch(resource, config);
+      }
       const newConfig = {
         ...config,
         headers: {
