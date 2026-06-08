@@ -159,6 +159,10 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `EMAIL_PROVIDER_API_KEY` — Email (optional)
 - `FRONTEND_URL` — For CORS/redirects
 
+## Parked / Backlog (tabled — revisit later)
+- **Admin manages a company's customers**: no platform-admin endpoint or UI exists to add/edit/remove a company's customers on their behalf. Admin can only see customer counts. Would add admin routes (currently customers are `requireAuth` company-only) + admin UI under company detail.
+- **Starter plan tag/notes inconsistency**: Add Customer form shows a `tags` field, but `customer_notes_tags` is a Growth-tier feature in `features.ts`. Decide whether to hide tags for Starter users or make it available; align frontend form with backend gating.
+
 ## Monorepo Commands
 - `pnpm --filter @workspace/api-server run dev` — API server
 - `pnpm --filter @workspace/lawn-saas run dev` — Frontend

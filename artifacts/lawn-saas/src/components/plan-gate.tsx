@@ -14,13 +14,15 @@ export type FeatureKey =
   | 'growth_analytics'
   | 'advanced_analytics'
   | 'advanced_automations'
-  | 'lead_pipeline';
+  | 'lead_pipeline'
+  | 'follow_up_campaigns';
 
 const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   recurring_plans: 'growth',
   route_optimization: 'growth',
   review_requests: 'growth',
   growth_analytics: 'growth',
+  follow_up_campaigns: 'growth',
   advanced_analytics: 'pro',
   advanced_automations: 'pro',
   lead_pipeline: 'pro',
@@ -114,6 +116,11 @@ const FEATURE_DESCRIPTIONS: Record<FeatureKey, { title: string; description: str
     title: 'Lead Pipeline',
     description: 'Capture, track, and convert prospects through a visual sales pipeline — never let a lead slip through the cracks.',
     bullets: ['Kanban pipeline with drag-and-drop stages', 'Auto-capture leads from your booking page', 'AI-scored lead prioritization'],
+  },
+  follow_up_campaigns: {
+    title: 'Follow-Up Campaigns',
+    description: 'Automatically nurture leads and customers with timed email & SMS follow-ups triggered by key events.',
+    bullets: ['Trigger on new leads, sent estimates, completed jobs & invoices', 'Email & SMS with custom delay timing', 'Per-campaign send logs & test sends'],
   },
 };
 

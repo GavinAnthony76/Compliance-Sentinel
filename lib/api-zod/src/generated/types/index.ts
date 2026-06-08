@@ -123,3 +123,5 @@ export * from "./updateInvoiceRequestStatus";
 export * from "./updateSettingsRequest";
 export * from "./updateTeamMemberRequest";
 export * from "./updateTeamMemberRequestRole";
+export * from "./uploadUrlRequest";
+export * from "./uploadUrlResponse";

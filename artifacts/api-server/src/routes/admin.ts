@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, companiesTable, usersTable, customersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable } from "@workspace/db";
+import { db, companiesTable, usersTable, customersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable, leadsTable, followUpCampaignsTable, followUpLogsTable, communicationEventsTable } from "@workspace/db";
 import { eq, sql, desc, ilike, and, inArray, or } from "drizzle-orm";
 import { requireAdminAuth, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
@@ -19,6 +19,29 @@ const PLAN_LABEL: Record<string, string> = Object.fromEntries(
 
 const router = Router();
 router.use(requireAdminAuth);
+
+// Block all admin functionality until a forced password change is completed.
+// The change happens via /admin/auth/change-password (mounted separately), so
+// this gate cannot lock an admin out of resolving it.
+router.use(async (req: any, res, next) => {
+  try {
+    const { adminId } = req.admin;
+    const [admin] = await db
+      .select({ mustChangePassword: platformAdminsTable.mustChangePassword })
+      .from(platformAdminsTable)
+      .where(eq(platformAdminsTable.id, adminId))
+      .limit(1);
+    if (admin?.mustChangePassword) {
+      return res.status(403).json({
+        error: "PasswordChangeRequired",
+        message: "You must change your password before continuing.",
+      });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 router.get("/dashboard", async (_req, res) => {
@@ -88,6 +111,91 @@ router.get("/dashboard", async (_req, res) => {
     monthlySignups: monthlySignups.map(m => ({ month: m.month, count: Number(m.count) })),
     planBreakdown: Object.fromEntries(planBreakdown.map(p => [p.plan, Number(p.count)])),
   });
+});
+
+// ─── Beta Readiness ─────────────────────────────────────────────────────────
+router.get("/beta-readiness", async (_req, res) => {
+  const [
+    totalCompanies,
+    betaTenants,
+    pendingFollowUps,
+    failedCommunications,
+    missingBilling,
+    missingSlug,
+    usersWithoutRole,
+    apptsWithoutCustomer,
+    recentActivity,
+    recentErrors,
+    lastAutomation,
+  ] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(companiesTable),
+    db.select().from(companiesTable).where(eq(companiesTable.betaEnabled, true)).orderBy(desc(companiesTable.createdAt)),
+    db.select({ count: sql<number>`count(*)` }).from(followUpLogsTable).where(eq(followUpLogsTable.status, "pending")),
+    db.select({ count: sql<number>`count(*)` }).from(communicationEventsTable).where(eq(communicationEventsTable.status, "failed")),
+    db.select({ count: sql<number>`count(*)` }).from(companiesTable).where(or(sql`subscription_status is null`, sql`subscription_status = ''`)),
+    db.select({ count: sql<number>`count(*)` }).from(companiesTable).where(or(sql`slug is null`, sql`slug = ''`)),
+    db.select({ count: sql<number>`count(*)` }).from(usersTable).where(or(sql`role is null`, sql`role = ''`)),
+    db.select({ count: sql<number>`count(*)` }).from(appointmentsTable).where(sql`customer_id is null`),
+    db.select().from(activityLogsTable).orderBy(desc(activityLogsTable.createdAt)).limit(10),
+    db.select().from(activityLogsTable).where(ilike(activityLogsTable.action, "%error%")).orderBy(desc(activityLogsTable.createdAt)).limit(10),
+    db.select().from(activityLogsTable).where(ilike(activityLogsTable.action, "automation%")).orderBy(desc(activityLogsTable.createdAt)).limit(1),
+  ]);
+
+  // DB connectivity: if the queries above resolved, the DB is reachable.
+  let dbConnected = true;
+  try {
+    await db.select({ ok: sql<number>`1` }).from(companiesTable).limit(1);
+  } catch {
+    dbConnected = false;
+  }
+
+  const integrations = {
+    stripe: { configured: !!(process.env.STRIPE_SECRET_KEY || process.env.REPLIT_CONNECTORS_HOSTNAME), label: "Stripe" },
+    sendgrid: { configured: !!process.env.SENDGRID_API_KEY, label: "SendGrid (Email)" },
+    twilio: { configured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER), label: "Twilio (SMS)" },
+    openai: { configured: !!(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL && process.env.AI_INTEGRATIONS_OPENAI_API_KEY), label: "OpenAI (AI Estimates)" },
+    database: { configured: dbConnected, label: "Database" },
+  };
+
+  // Enrich activity with company names
+  const allLogs = [...recentActivity, ...recentErrors];
+  const companyIds = [...new Set(allLogs.map(l => l.companyId).filter(Boolean))] as number[];
+  const companies = companyIds.length > 0
+    ? await db.select({ id: companiesTable.id, name: companiesTable.name }).from(companiesTable).where(inArray(companiesTable.id, companyIds))
+    : [];
+  const companyMap = Object.fromEntries(companies.map(c => [c.id, c.name]));
+  const withName = (l: any) => ({ ...l, companyName: l.companyId ? companyMap[l.companyId] ?? null : null });
+
+  return res.json({
+    counts: {
+      totalCompanies: Number(totalCompanies[0].count),
+      betaTenants: betaTenants.length,
+      pendingFollowUps: Number(pendingFollowUps[0].count),
+      failedCommunications: Number(failedCommunications[0].count),
+    },
+    dataIntegrity: {
+      companiesMissingBilling: Number(missingBilling[0].count),
+      companiesMissingSlug: Number(missingSlug[0].count),
+      usersWithoutRole: Number(usersWithoutRole[0].count),
+      appointmentsWithoutCustomer: Number(apptsWithoutCustomer[0].count),
+    },
+    integrations,
+    betaTenants: betaTenants.map(c => ({ id: c.id, name: c.name, slug: c.slug, subscriptionPlan: c.subscriptionPlan, subscriptionStatus: c.subscriptionStatus, isActive: c.isActive })),
+    lastAutomationRun: lastAutomation[0] ? withName(lastAutomation[0]) : null,
+    recentActivity: recentActivity.map(withName),
+    recentErrors: recentErrors.map(withName),
+  });
+});
+
+// Toggle a company's beta tenant flag
+router.put("/companies/:id/beta", async (req: any, res) => {
+  const id = Number(req.params.id);
+  const betaEnabled = !!req.body?.betaEnabled;
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, id)).limit(1);
+  if (!company) return res.status(404).json({ error: "NotFound" });
+  await db.update(companiesTable).set({ betaEnabled, updatedAt: new Date() }).where(eq(companiesTable.id, id));
+  await logActivity({ adminId: req.admin.adminId, action: "admin.company_beta_toggled", entityType: "company", entityId: id, metadata: { betaEnabled } });
+  return res.json({ success: true, betaEnabled });
 });
 
 // ─── Revenue ──────────────────────────────────────────────────────────────────

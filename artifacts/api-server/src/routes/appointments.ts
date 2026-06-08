@@ -48,7 +48,7 @@ const createAppointmentSchema = z.object({
   propertyId: z.number().int().positive().optional().nullable(),
   serviceId: z.number().int().positive().optional().nullable(),
   assignedUserId: z.number().int().positive().optional().nullable(),
-  status: z.enum(["pending", "confirmed", "completed", "cancelled"]).optional(),
+  status: z.enum(["pending", "confirmed", "in_progress", "completed", "cancelled", "no_show"]).optional(),
   scheduledStart: z.string().datetime(),
   scheduledEnd: z.string().datetime().optional().nullable(),
   price: z.number().nonnegative().optional().nullable(),

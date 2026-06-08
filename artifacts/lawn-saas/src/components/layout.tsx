@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, CalendarDays, MapPin, Wrench, 
   Clock, RotateCw, FileText, CreditCard, Route as RouteIcon, 
-  Zap, Users2, Settings, LogOut, Menu, Lock, Star, BarChart3, Filter
+  Zap, Users2, Settings, LogOut, Menu, Lock, Star, BarChart3, Filter, Megaphone
 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Button } from './ui';
@@ -79,6 +79,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: '/team',         icon: Users2,           label: 'Team',            requiredPlan: 'growth' },
     { href: '/reporting',    icon: BarChart3,        label: 'Reporting',       requiredPlan: 'growth' },
     { href: '/automations',  icon: Zap,              label: 'Automations',     requiredPlan: 'growth' },
+    { href: '/follow-ups',   icon: Megaphone,        label: 'Follow-Ups',      requiredPlan: 'growth' },
     { href: '/settings',     icon: Settings,         label: 'Settings' },
   ];
 

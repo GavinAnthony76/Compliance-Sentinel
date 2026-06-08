@@ -76,6 +76,7 @@ app.use("/api/auth/reset-password", rateLimit(10, 60_000));
 app.use("/api/admin/auth/login", rateLimit(10, 60_000));
 app.use("/api/admin/auth/forgot-password", rateLimit(10, 60_000));
 app.use("/api/admin/auth/reset-password", rateLimit(10, 60_000));
+app.use("/api/admin/auth/change-password", rateLimit(10, 60_000));
 app.use("/api/portal/auth/login", rateLimit(20, 60_000));
 app.use("/api/portal/auth/forgot-password", rateLimit(10, 60_000));
 app.use("/api/portal/auth/set-password", rateLimit(10, 60_000));

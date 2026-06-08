@@ -35,7 +35,7 @@ router.post("/login", async (req, res) => {
 
   const token = signAdminToken({ adminId: admin.id, role: admin.role });
   return res.json({
-    admin: { id: admin.id, email: admin.email, firstName: admin.firstName, lastName: admin.lastName, role: admin.role, isActive: admin.isActive, createdAt: admin.createdAt },
+    admin: { id: admin.id, email: admin.email, firstName: admin.firstName, lastName: admin.lastName, role: admin.role, isActive: admin.isActive, mustChangePassword: admin.mustChangePassword, createdAt: admin.createdAt },
     token,
   });
 });
@@ -48,7 +48,37 @@ router.get("/me", requireAdminAuth, async (req: any, res) => {
   const { adminId } = req.admin;
   const [admin] = await db.select().from(platformAdminsTable).where(eq(platformAdminsTable.id, adminId)).limit(1);
   if (!admin) return res.status(401).json({ error: "Unauthorized" });
-  return res.json({ id: admin.id, email: admin.email, firstName: admin.firstName, lastName: admin.lastName, role: admin.role, isActive: admin.isActive, createdAt: admin.createdAt });
+  return res.json({ id: admin.id, email: admin.email, firstName: admin.firstName, lastName: admin.lastName, role: admin.role, isActive: admin.isActive, mustChangePassword: admin.mustChangePassword, createdAt: admin.createdAt });
+});
+
+router.post("/change-password", requireAdminAuth, async (req: any, res) => {
+  const parsed = z.object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const { adminId } = req.admin;
+  const { currentPassword, newPassword } = parsed.data;
+
+  const [admin] = await db.select().from(platformAdminsTable).where(eq(platformAdminsTable.id, adminId)).limit(1);
+  if (!admin || !admin.isActive) return res.status(401).json({ error: "Unauthorized" });
+
+  const valid = await verifyPassword(currentPassword, admin.passwordHash);
+  if (!valid) return res.status(400).json({ error: "InvalidPassword", message: "Current password is incorrect." });
+
+  if (await verifyPassword(newPassword, admin.passwordHash)) {
+    return res.status(400).json({ error: "SamePassword", message: "New password must be different from your current password." });
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+  await db.update(platformAdminsTable)
+    .set({ passwordHash, mustChangePassword: false, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() })
+    .where(eq(platformAdminsTable.id, adminId));
+
+  await logActivity({ adminId, action: "admin.password_changed", entityType: "admin", entityId: adminId });
+
+  return res.json({ success: true, message: "Password updated successfully." });
 });
 
 router.post("/forgot-password", async (req, res) => {

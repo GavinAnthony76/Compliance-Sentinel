@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useListCustomers, useGetEstimate } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, FileText, PenLine, Send } from 'lucide-react';
+import { Plus, FileText, PenLine, Send, Sparkles, X } from 'lucide-react';
+import { useAuthState } from '@/hooks/use-auth-state';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getListEstimatesQueryKey } from '@workspace/api-client-react';
@@ -20,6 +21,11 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
   const isEdit = !!estimate?.id;
   const [form, setForm] = useState({ customerId: '', subtotal: '', tax: '0', notes: '', validUntil: '', lineItems: [{ description: '', quantity: '1', unitPrice: '' }] });
   const [initialized, setInitialized] = useState(false);
+  const [showAi, setShowAi] = useState(false);
+  const [aiForm, setAiForm] = useState({ jobDescription: '', propertySize: '' });
+  const [aiLoading, setAiLoading] = useState(false);
+  const { user } = useAuthState();
+  const isPro = user?.company?.subscriptionPlan === 'pro';
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateEstimate();
@@ -90,6 +96,29 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
 
   const addLineItem = () => setForm(f => ({ ...f, lineItems: [...f.lineItems, { description: '', quantity: '1', unitPrice: '' }] }));
 
+  const handleAiDraft = async () => {
+    if (aiForm.jobDescription.trim().length < 3) { toast({ title: 'Describe the job first', variant: 'destructive' }); return; }
+    setAiLoading(true);
+    try {
+      const res = await fetch('/api/estimates/ai-draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('greensync_token')}` },
+        body: JSON.stringify({ jobDescription: aiForm.jobDescription.trim(), propertySize: aiForm.propertySize.trim() || null }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || d.error || 'Failed to draft');
+      const items = (d.lineItems ?? []).map((li: any) => ({ description: li.description, quantity: String(li.quantity), unitPrice: String(li.unitPrice) }));
+      if (items.length === 0) { toast({ title: 'No items generated', description: 'Try adding more detail.', variant: 'destructive' }); return; }
+      setForm(f => ({ ...f, lineItems: items }));
+      setShowAi(false);
+      toast({ title: 'Draft generated', description: `${items.length} line item${items.length === 1 ? '' : 's'} added${d.source === 'mock' ? ' (sample estimate)' : ''}. Review before sending.` });
+    } catch (err: any) {
+      toast({ title: 'AI draft failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-card rounded-2xl shadow-2xl w-full max-w-xl p-6 my-4">
@@ -107,8 +136,40 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium">Line Items</label>
-              <button type="button" onClick={addLineItem} className="text-xs text-primary hover:underline">+ Add Item</button>
+              <div className="flex items-center gap-3">
+                {isPro && (
+                  <button type="button" onClick={() => setShowAi(s => !s)} className="text-xs text-violet-600 hover:underline inline-flex items-center gap-1 font-medium">
+                    <Sparkles className="w-3.5 h-3.5" /> AI Draft
+                  </button>
+                )}
+                <button type="button" onClick={addLineItem} className="text-xs text-primary hover:underline">+ Add Item</button>
+              </div>
             </div>
+            {isPro && showAi && (
+              <div className="mb-3 rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-violet-700 inline-flex items-center gap-1"><Sparkles className="w-3.5 h-3.5" /> AI Estimate Draft</p>
+                  <button type="button" onClick={() => setShowAi(false)} className="text-violet-400 hover:text-violet-600"><X className="w-4 h-4" /></button>
+                </div>
+                <textarea
+                  className="w-full min-h-[64px] rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm"
+                  placeholder="Describe the job, e.g. 'Weekly mowing, edging and leaf cleanup for a medium suburban lawn with flower beds.'"
+                  value={aiForm.jobDescription}
+                  onChange={e => setAiForm(a => ({ ...a, jobDescription: e.target.value }))}
+                />
+                <Input
+                  placeholder="Property size (optional), e.g. 0.25 acre"
+                  value={aiForm.propertySize}
+                  onChange={e => setAiForm(a => ({ ...a, propertySize: e.target.value }))}
+                />
+                <div className="flex justify-end">
+                  <Button type="button" size="sm" onClick={handleAiDraft} isLoading={aiLoading} className="gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5" /> Generate Line Items
+                  </Button>
+                </div>
+                <p className="text-[11px] text-violet-500">AI-generated estimates are a starting point — review prices before sending.</p>
+              </div>
+            )}
             <div className="space-y-2">
               {form.lineItems.map((li, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2">

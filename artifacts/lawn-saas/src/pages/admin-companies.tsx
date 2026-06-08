@@ -668,6 +668,25 @@ export function AdminCompanyDetailPage() {
                   <option value="canceled">Canceled</option>
                 </select>
               </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
+                <div>
+                  <p className="text-sm text-white font-medium">Beta Tenant</p>
+                  <p className="text-xs text-slate-400">{(company as any).betaEnabled ? 'Enrolled in beta program' : 'Not in beta program'}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!!(company as any).betaEnabled}
+                  onClick={async () => {
+                    await adminFetch(`/api/admin/companies/${company.id}/beta`, { method: 'PUT', body: JSON.stringify({ betaEnabled: !(company as any).betaEnabled }) });
+                    invalidate();
+                    toast({ title: (company as any).betaEnabled ? 'Removed from beta' : 'Marked as beta tenant' });
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(company as any).betaEnabled ? 'bg-primary' : 'bg-slate-600'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${(company as any).betaEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
               {company.isActive ? (
                 <Button size="sm" variant="destructive" className="w-full" onClick={async () => {
                   await suspendMut.mutateAsync({ id: company.id });
