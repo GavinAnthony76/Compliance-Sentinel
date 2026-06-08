@@ -4,6 +4,7 @@ import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
+import { logCommunicationEvent } from "../lib/communications";
 import { sendReviewRequestNotification } from "../lib/notifications";
 
 const router = Router();
@@ -55,6 +56,17 @@ router.post("/", async (req: any, res) => {
     reviewUrl,
     companyName: company?.name ?? "Lawn Care",
     channel,
+  });
+
+  await logCommunicationEvent({
+    companyId,
+    customerId,
+    appointmentId: appointmentId ?? null,
+    channel: channel === "sms" ? "sms" : "email",
+    subject: "Review request",
+    bodyPreview: `Review request sent to ${customer.firstName} ${customer.lastName}`,
+    status: "sent",
+    createdByUserId: userId,
   });
 
   await logActivity({ companyId, userId, action: "review_request.sent", entityType: "review_request", entityId: request.id });

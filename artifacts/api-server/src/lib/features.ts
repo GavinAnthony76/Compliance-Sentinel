@@ -37,6 +37,7 @@ const PLAN_FEATURES: Record<Plan, Set<string>> = {
     "automations",
     "autopay",
     "customer_portal",
+    "follow_ups",
   ]),
   pro: new Set([
     "customers",
@@ -65,6 +66,7 @@ const PLAN_FEATURES: Record<Plan, Set<string>> = {
     "ai_hooks",
     "custom_intake_fields",
     "customer_portal",
+    "follow_ups",
   ]),
 };
 

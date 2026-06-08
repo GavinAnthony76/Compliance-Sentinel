@@ -12,3 +12,8 @@ export * from "./routes";
 export * from "./review-requests";
 export * from "./automations";
 export * from "./activity-logs";
+export * from "./leads";
+export * from "./job-tracking";
+export * from "./appointment-photos";
+export * from "./follow-ups";
+export * from "./communications";

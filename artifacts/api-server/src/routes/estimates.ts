@@ -4,11 +4,42 @@ import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
+import { generateEstimateDraft } from "../lib/ai-estimate";
+import { z } from "zod";
 import crypto from "crypto";
 
 const router = Router();
 router.use(requireAuth);
 router.use(requireFeature("estimates"));
+
+const aiDraftSchema = z.object({
+  jobDescription: z.string().min(3).max(2000),
+  propertySize: z.string().max(120).optional().nullable(),
+  services: z.array(z.string().max(120)).max(20).optional().nullable(),
+});
+
+// POST /api/estimates/ai-draft — AI-generated draft line items (Pro/ai gated, not persisted)
+router.post("/ai-draft", requireFeature("ai_hooks"), async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const parsed = aiDraftSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "ValidationError", message: parsed.error.issues[0]?.message ?? "Invalid input" });
+  }
+
+  const { companiesTable } = await import("@workspace/db");
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+
+  const draft = await generateEstimateDraft({
+    jobDescription: parsed.data.jobDescription,
+    propertySize: parsed.data.propertySize,
+    services: parsed.data.services,
+    companyName: company?.name ?? null,
+  });
+
+  const subtotal = draft.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0);
+  await logActivity({ companyId, userId, action: "estimate.ai_drafted", entityType: "estimate", metadata: { source: draft.source, lineItems: draft.lineItems.length } });
+  return res.json({ ...draft, subtotal: Math.round(subtotal * 100) / 100 });
+});
 
 async function nextEstimateNumber(companyId: number): Promise<string> {
   const [result] = await db.select({ count: sql<number>`count(*)` }).from(estimatesTable).where(eq(estimatesTable.companyId, companyId));

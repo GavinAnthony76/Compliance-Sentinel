@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { db, companiesTable, servicesTable, customersTable, propertiesTable, appointmentsTable } from "@workspace/db";
+import { db, companiesTable, servicesTable, customersTable, propertiesTable, appointmentsTable, leadsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logActivity } from "../lib/activity";
+import { hasFeature } from "../lib/features";
+import { enqueueFollowUps } from "../lib/follow-ups";
 import { z } from "zod";
 
 const router = Router();
@@ -101,6 +103,33 @@ router.post("/book/:slug/submit", async (req, res) => {
     entityId: appointment.id,
     metadata: { source: "booking_page", slug },
   });
+
+  // Create a pipeline lead for companies that have the lead pipeline feature.
+  if (hasFeature(company.subscriptionPlan, "lead_pipeline")) {
+    try {
+      const [lead] = await db.insert(leadsTable).values({
+        companyId: company.id,
+        customerId: customer.id,
+        propertyId: property.id,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email ?? null,
+        phone: data.phone,
+        address: [data.addressLine1, data.city, data.state, data.zip].filter(Boolean).join(", "),
+        source: "public_booking",
+        status: "new",
+        notes: data.notes ?? null,
+      }).returning();
+      await logActivity({
+        companyId: company.id,
+        action: "lead.created",
+        entityType: "lead",
+        entityId: lead.id,
+        metadata: { source: "public_booking", appointmentId: appointment.id },
+      });
+      await enqueueFollowUps(company.id, "lead_created", { entityType: "lead", entityId: lead.id, customerId: customer.id, leadId: lead.id });
+    } catch { /* non-fatal — booking already succeeded */ }
+  }
 
   return res.status(201).json({
     success: true,

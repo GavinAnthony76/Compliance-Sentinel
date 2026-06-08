@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, routesTable, routeStopsTable, appointmentsTable, usersTable, customersTable, servicesTable, companiesTable } from "@workspace/db";
+import { db, routesTable, routeStopsTable, appointmentsTable, usersTable, customersTable, servicesTable, companiesTable, propertiesTable } from "@workspace/db";
 import { eq, and, sql, desc, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
@@ -102,14 +102,116 @@ router.post("/:id/stops", async (req: any, res) => {
   const routeId = Number(req.params.id);
   const [route] = await db.select().from(routesTable).where(and(eq(routesTable.id, routeId), eq(routesTable.companyId, companyId))).limit(1);
   if (!route) return res.status(404).json({ error: "NotFound" });
+  const appointmentId = Number(req.body.appointmentId);
+  if (!Number.isInteger(appointmentId) || appointmentId <= 0) {
+    return res.status(400).json({ error: "ValidationError", message: "Valid appointmentId is required" });
+  }
+  const [appt] = await db.select().from(appointmentsTable)
+    .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.companyId, companyId))).limit(1);
+  if (!appt) return res.status(404).json({ error: "AppointmentNotFound", message: "Appointment not found for this company" });
   const [stop] = await db.insert(routeStopsTable).values({
     companyId,
     routeId,
-    appointmentId: req.body.appointmentId,
+    appointmentId,
     stopOrder: req.body.stopOrder,
     estimatedArrival: req.body.estimatedArrival ? new Date(req.body.estimatedArrival) : null,
   }).returning();
   return res.status(201).json(stop);
+});
+
+// POST /:id/optimize — reorder stops via nearest-neighbor on property coordinates
+router.post("/:id/optimize", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const id = Number(req.params.id);
+  const [route] = await db.select().from(routesTable).where(and(eq(routesTable.id, id), eq(routesTable.companyId, companyId))).limit(1);
+  if (!route) return res.status(404).json({ error: "NotFound" });
+
+  const stops = await db.select().from(routeStopsTable)
+    .where(and(eq(routeStopsTable.routeId, id), eq(routeStopsTable.companyId, companyId)))
+    .orderBy(routeStopsTable.stopOrder);
+  if (stops.length < 2) {
+    return res.json({ optimized: false, message: "Need at least 2 stops to optimize", stops });
+  }
+
+  const appointmentIds = stops.map(s => s.appointmentId);
+  const appointments = await db.select().from(appointmentsTable)
+    .where(and(inArray(appointmentsTable.id, appointmentIds), eq(appointmentsTable.companyId, companyId)));
+  const apptMap = Object.fromEntries(appointments.map(a => [a.id, a]));
+  const propertyIds = [...new Set(appointments.map(a => a.propertyId).filter(Boolean))] as number[];
+  const properties = propertyIds.length > 0
+    ? await db.select().from(propertiesTable).where(and(inArray(propertiesTable.id, propertyIds), eq(propertiesTable.companyId, companyId)))
+    : [];
+  const propMap = Object.fromEntries(properties.map(p => [p.id, p]));
+
+  type Pt = { stop: typeof stops[number]; lat: number | null; lng: number | null };
+  const points: Pt[] = stops.map(s => {
+    const appt = apptMap[s.appointmentId];
+    const prop = appt?.propertyId ? propMap[appt.propertyId] : null;
+    const lat = prop?.latitude != null ? Number(prop.latitude) : null;
+    const lng = prop?.longitude != null ? Number(prop.longitude) : null;
+    return { stop: s, lat, lng };
+  });
+
+  const withCoords = points.filter(p => p.lat != null && p.lng != null);
+  const withoutCoords = points.filter(p => p.lat == null || p.lng == null);
+
+  if (withCoords.length < 2) {
+    return res.json({
+      optimized: false,
+      message: "Not enough stops have geocoded coordinates to optimize",
+      geocodedCount: withCoords.length,
+    });
+  }
+
+  const haversine = (a: Pt, b: Pt) => {
+    const R = 6371; // km
+    const dLat = ((b.lat! - a.lat!) * Math.PI) / 180;
+    const dLng = ((b.lng! - a.lng!) * Math.PI) / 180;
+    const la1 = (a.lat! * Math.PI) / 180;
+    const la2 = (b.lat! * Math.PI) / 180;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+
+  // Greedy nearest-neighbor starting from the earliest-scheduled stop with coords.
+  const remaining = [...withCoords];
+  remaining.sort((a, b) => {
+    const ta = apptMap[a.stop.appointmentId]?.scheduledStart ? new Date(apptMap[a.stop.appointmentId].scheduledStart).getTime() : 0;
+    const tb = apptMap[b.stop.appointmentId]?.scheduledStart ? new Date(apptMap[b.stop.appointmentId].scheduledStart).getTime() : 0;
+    return ta - tb;
+  });
+
+  const ordered: Pt[] = [remaining.shift()!];
+  let totalKm = 0;
+  while (remaining.length > 0) {
+    const last = ordered[ordered.length - 1];
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const d = haversine(last, remaining[i]);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    totalKm += bestDist;
+    ordered.push(remaining.splice(bestIdx, 1)[0]);
+  }
+
+  const finalOrder = [...ordered, ...withoutCoords];
+  await Promise.all(finalOrder.map((p, i) =>
+    db.update(routeStopsTable)
+      .set({ stopOrder: i + 1, updatedAt: new Date() })
+      .where(and(eq(routeStopsTable.id, p.stop.id), eq(routeStopsTable.companyId, companyId)))
+  ));
+
+  await logActivity({ companyId, userId, action: "route.optimized", entityType: "route", entityId: id, metadata: { stops: finalOrder.length, totalKm: Math.round(totalKm * 10) / 10 } });
+
+  return res.json({
+    optimized: true,
+    stopCount: finalOrder.length,
+    geocodedCount: withCoords.length,
+    ungeocodedCount: withoutCoords.length,
+    totalDistanceKm: Math.round(totalKm * 10) / 10,
+    totalDistanceMiles: Math.round(totalKm * 0.621371 * 10) / 10,
+  });
 });
 
 router.delete("/:routeId/stops/:stopId", async (req: any, res) => {
@@ -131,10 +233,10 @@ router.post("/:routeId/stops/:stopId/on-my-way", async (req: any, res) => {
     .limit(1);
   if (!stop) return res.status(404).json({ error: "NotFound" });
 
-  const [appt] = await db.select().from(appointmentsTable).where(eq(appointmentsTable.id, stop.appointmentId)).limit(1);
+  const [appt] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, stop.appointmentId), eq(appointmentsTable.companyId, companyId))).limit(1);
   if (!appt) return res.status(404).json({ error: "AppointmentNotFound" });
 
-  const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1);
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, appt.customerId), eq(customersTable.companyId, companyId))).limit(1);
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   const service = appt.serviceId ? await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1).then(r => r[0]) : null;
 

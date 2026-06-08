@@ -19,6 +19,9 @@ export const appointmentsTable = pgTable("appointments", {
   internalNotes: text("internal_notes"),
   reminderSent: boolean("reminder_sent").notNull().default(false),
   completionNotes: text("completion_notes"),
+  actualStartedAt: timestamp("actual_started_at"),
+  actualCompletedAt: timestamp("actual_completed_at"),
+  checkedInByUserId: integer("checked_in_by_user_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

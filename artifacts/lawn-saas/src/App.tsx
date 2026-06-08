@@ -38,6 +38,8 @@ import { InvoicesPage } from "@/pages/invoices";
 import { RecurringPage } from "@/pages/recurring";
 import { EstimatesPage } from "@/pages/estimates";
 import { RoutesPage } from "@/pages/routes";
+import { LeadsPage } from "@/pages/leads";
+import { TechPage } from "@/pages/tech";
 import { ReviewsPage } from "@/pages/reviews";
 import { AutomationsPage } from "@/pages/automations";
 import { TeamPage } from "@/pages/team";
@@ -168,6 +170,8 @@ function Router() {
       {/* Company dashboard routes */}
       <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
       <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
+      <Route path="/leads"><ProtectedRoute component={LeadsPage} /></Route>
+      <Route path="/tech"><ProtectedRoute component={TechPage} /></Route>
       <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
       <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>
       <Route path="/properties"><ProtectedRoute component={PropertiesPage} /></Route>

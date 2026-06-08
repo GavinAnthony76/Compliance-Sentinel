@@ -76,6 +76,11 @@ app.use("/api/auth/reset-password", rateLimit(10, 60_000));
 app.use("/api/admin/auth/login", rateLimit(10, 60_000));
 app.use("/api/admin/auth/forgot-password", rateLimit(10, 60_000));
 app.use("/api/admin/auth/reset-password", rateLimit(10, 60_000));
+app.use("/api/portal/auth/login", rateLimit(20, 60_000));
+app.use("/api/portal/auth/forgot-password", rateLimit(10, 60_000));
+app.use("/api/portal/auth/set-password", rateLimit(10, 60_000));
+app.use("/api/public/book", rateLimit(15, 60_000));
+app.use("/api/public/estimates", rateLimit(15, 60_000));
 app.use("/api/export", rateLimit(30, 60_000));
 
 // Raw body capture for Stripe webhooks (must be before express.json())
@@ -108,5 +113,11 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction): void => {
 
 // Start background automation scheduler (24h appointment reminders)
 startAutomationScheduler();
+
+// Start background follow-up campaign processor
+import("./lib/follow-ups").then(({ processPendingFollowUps }) => {
+  processPendingFollowUps();
+  setInterval(processPendingFollowUps, 5 * 60 * 1000);
+});
 
 export default app;

@@ -1,1 +1,2 @@
 - [pdfkit esbuild externalize](pdfkit-esbuild.md) — pdfkit can't be bundled by esbuild (fontkit/brotli/@swc/helpers); add to `external` in api-server build.mjs or server won't start.
+- [AI integration lazy import](ai-integration-lazy-import.md) — Replit OpenAI integration client throws at import time if env unset; lazy-import inside the function after an env check, never top-level.

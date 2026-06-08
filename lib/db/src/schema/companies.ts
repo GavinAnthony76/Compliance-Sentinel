@@ -26,6 +26,7 @@ export const companiesTable = pgTable("companies", {
   reviewUrl: text("review_url"),
   internalNotes: text("internal_notes"),
   isActive: boolean("is_active").notNull().default(true),
+  betaEnabled: boolean("beta_enabled").notNull().default(false),
   // Payment acceptance configuration
   acceptedPaymentMethods: text("accepted_payment_methods"),
   paymentInstructions: text("payment_instructions"),

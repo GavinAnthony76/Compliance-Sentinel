@@ -13,7 +13,8 @@ export type FeatureKey =
   | 'automations'
   | 'advanced_analytics'
   | 'reporting'
-  | 'csv_export';
+  | 'csv_export'
+  | 'lead_pipeline';
 
 const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   recurring_plans: 'growth',
@@ -25,6 +26,7 @@ const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   automations: 'growth',
   advanced_analytics: 'pro',
   csv_export: 'pro',
+  lead_pipeline: 'pro',
 };
 
 const PLAN_FEATURES: Record<string, Set<string>> = {
@@ -106,6 +108,11 @@ const FEATURE_DESCRIPTIONS: Record<FeatureKey, { title: string; description: str
     title: 'CSV Export',
     description: 'Export any data — customers, invoices, appointments — to CSV for reporting or migration.',
     bullets: ['Export customers, invoices, jobs', 'Custom date range filters', 'Instant download'],
+  },
+  lead_pipeline: {
+    title: 'Lead Pipeline',
+    description: 'Capture, track, and convert prospects through a visual sales pipeline — never let a lead slip through the cracks.',
+    bullets: ['Kanban pipeline with drag-and-drop stages', 'Auto-capture leads from your booking page', 'One-click convert to customer & estimate'],
   },
 };
 

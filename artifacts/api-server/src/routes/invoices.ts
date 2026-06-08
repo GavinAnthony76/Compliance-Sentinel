@@ -5,6 +5,7 @@ import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
 import { sendInvoiceEmail, resolveBaseUrl, dispatchPaymentReceiptEmail } from "../lib/notifications";
+import { logCommunicationEvent } from "../lib/communications";
 import { logger } from "../lib/logger";
 import PDFDocument from "pdfkit";
 
@@ -60,6 +61,15 @@ async function dispatchInvoiceEmail(invoiceId: number, companyId: number): Promi
       portalUrl,
       logoUrl: company?.logoUrl ?? null,
       primaryColor: company?.primaryColor ?? null,
+    });
+    await logCommunicationEvent({
+      companyId,
+      customerId: inv.customerId,
+      invoiceId: inv.id,
+      channel: "email",
+      subject: `Invoice ${inv.invoiceNumber}`,
+      bodyPreview: `Invoice ${inv.invoiceNumber} for $${Number(inv.total).toFixed(2)} sent to ${customerName}`,
+      status: "sent",
     });
   } catch (err) {
     logger.error({ err, invoiceId, companyId }, "Failed to dispatch invoice email");

@@ -24,6 +24,9 @@ import reportingRouter from "./reporting";
 import customerPortalRouter from "./customer-portal";
 import publicEstimatesRouter from "./public-estimates";
 import autopayRouter from "./autopay";
+import leadsRouter from "./leads";
+import communicationsRouter from "./communications";
+import followUpsRouter from "./follow-ups";
 
 const router: IRouter = Router();
 
@@ -52,5 +55,8 @@ router.use("/export", exportRouter);
 router.use("/reporting", reportingRouter);
 router.use("/portal", customerPortalRouter);
 router.use("/autopay", autopayRouter);
+router.use("/leads", leadsRouter);
+router.use("/communications", communicationsRouter);
+router.use("/follow-ups", followUpsRouter);
 
 export default router;

@@ -1,11 +1,46 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db, appointmentsTable, customersTable, servicesTable, usersTable, companiesTable } from "@workspace/db";
-import { eq, and, gte, lte, sql, desc, inArray } from "drizzle-orm";
+import { db, appointmentsTable, customersTable, servicesTable, usersTable, companiesTable, jobTrackingEventsTable } from "@workspace/db";
+import { eq, and, gte, lte, sql, desc, asc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
+import { logCommunicationEvent } from "../lib/communications";
 import { sendReminder, sendSMS, sendEmail } from "../lib/notifications";
 import { fireAutomations } from "../lib/automations";
+
+// ─── GPS job-tracking helpers ────────────────────────────────────────────────
+
+const geoSchema = z.object({
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  accuracy: z.number().nonnegative().optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+const TRACKING_EVENT_TYPES = ["check_in", "start", "complete", "location_ping", "note"] as const;
+
+async function recordTrackingEvent(args: {
+  companyId: number;
+  appointmentId: number;
+  userId: number;
+  eventType: (typeof TRACKING_EVENT_TYPES)[number];
+  latitude?: number | null;
+  longitude?: number | null;
+  accuracy?: number | null;
+  notes?: string | null;
+}) {
+  const [event] = await db.insert(jobTrackingEventsTable).values({
+    companyId: args.companyId,
+    appointmentId: args.appointmentId,
+    userId: args.userId,
+    eventType: args.eventType,
+    latitude: args.latitude != null ? String(args.latitude) : null,
+    longitude: args.longitude != null ? String(args.longitude) : null,
+    accuracy: args.accuracy != null ? String(args.accuracy) : null,
+    notes: args.notes ?? null,
+  }).returning();
+  return event;
+}
 
 const createAppointmentSchema = z.object({
   customerId: z.number().int().positive(),
@@ -45,6 +80,15 @@ async function sendAppointmentNotification(appt: any, companyId: number, channel
     } else {
       await sendReminder({ customerName: `${customer.firstName} ${customer.lastName}`, customerEmail: customer.email || undefined, customerPhone: customer.phone || undefined, scheduledStart: new Date(appt.scheduledStart), serviceName, channel: customer.phone ? 'sms' : 'email' });
     }
+    await logCommunicationEvent({
+      companyId,
+      customerId: appt.customerId,
+      appointmentId: appt.id,
+      channel: customer.phone ? "sms" : "email",
+      subject: channel === "confirmation" ? `Appointment confirmed — ${serviceName}` : `Appointment reminder — ${serviceName}`,
+      bodyPreview: `${serviceName} on ${dateStr} at ${timeStr}`,
+      status: "sent",
+    });
   } catch (_err) {
     // Non-fatal: SMS failure should not block main response
   }
@@ -197,13 +241,21 @@ router.delete("/:id", async (req: any, res) => {
 router.post("/:id/complete", async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
+  const geo = geoSchema.safeParse(req.body ?? {});
+  const geoData = geo.success ? geo.data : {};
   const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
   const [updated] = await db.update(appointmentsTable).set({
     status: "completed",
     completionNotes: req.body.completionNotes ?? null,
+    actualCompletedAt: existing.actualCompletedAt ?? new Date(),
     updatedAt: new Date(),
   }).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).returning();
+  await recordTrackingEvent({
+    companyId, appointmentId: id, userId, eventType: "complete",
+    latitude: geoData.latitude, longitude: geoData.longitude, accuracy: geoData.accuracy,
+    notes: req.body.completionNotes ?? geoData.notes ?? null,
+  });
   await logActivity({ companyId, userId, action: "appointment.completed", entityType: "appointment", entityId: id });
 
   // Fire all active appointment_completed automations (non-blocking)
@@ -216,6 +268,65 @@ router.post("/:id/complete", async (req: any, res) => {
   });
 
   return res.json(fmtAppt(updated));
+});
+
+// ─── GPS job-tracking lifecycle ──────────────────────────────────────────────
+
+// POST /:id/check-in — technician arrives on site
+router.post("/:id/check-in", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const id = Number(req.params.id);
+  const parsed = geoSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
+  if (!existing) return res.status(404).json({ error: "NotFound" });
+
+  await db.update(appointmentsTable)
+    .set({ checkedInByUserId: userId, updatedAt: new Date() })
+    .where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId)));
+  const event = await recordTrackingEvent({
+    companyId, appointmentId: id, userId, eventType: "check_in",
+    latitude: parsed.data.latitude, longitude: parsed.data.longitude, accuracy: parsed.data.accuracy, notes: parsed.data.notes,
+  });
+  await logActivity({ companyId, userId, action: "appointment.checked_in", entityType: "appointment", entityId: id });
+  return res.status(201).json({ event });
+});
+
+// POST /:id/start — technician begins the job
+router.post("/:id/start", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const id = Number(req.params.id);
+  const parsed = geoSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
+  if (!existing) return res.status(404).json({ error: "NotFound" });
+
+  const [updated] = await db.update(appointmentsTable)
+    .set({ actualStartedAt: existing.actualStartedAt ?? new Date(), checkedInByUserId: existing.checkedInByUserId ?? userId, updatedAt: new Date() })
+    .where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).returning();
+  const event = await recordTrackingEvent({
+    companyId, appointmentId: id, userId, eventType: "start",
+    latitude: parsed.data.latitude, longitude: parsed.data.longitude, accuracy: parsed.data.accuracy, notes: parsed.data.notes,
+  });
+  await logActivity({ companyId, userId, action: "appointment.started", entityType: "appointment", entityId: id });
+  return res.status(201).json({ event, appointment: fmtAppt(updated) });
+});
+
+// GET /:id/tracking — full event timeline for one appointment
+router.get("/:id/tracking", async (req: any, res) => {
+  const { companyId } = req.user;
+  const id = Number(req.params.id);
+  const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
+  if (!existing) return res.status(404).json({ error: "NotFound" });
+  const events = await db.select().from(jobTrackingEventsTable)
+    .where(and(eq(jobTrackingEventsTable.appointmentId, id), eq(jobTrackingEventsTable.companyId, companyId)))
+    .orderBy(asc(jobTrackingEventsTable.createdAt));
+  return res.json({
+    events,
+    actualStartedAt: existing.actualStartedAt,
+    actualCompletedAt: existing.actualCompletedAt,
+    checkedInByUserId: existing.checkedInByUserId,
+  });
 });
 
 export default router;

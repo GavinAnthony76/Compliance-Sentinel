@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, CalendarDays, MapPin, Wrench, 
   Clock, RotateCw, FileText, CreditCard, Route as RouteIcon, 
-  Zap, Users2, Settings, LogOut, Menu, Lock, Star, BarChart3
+  Zap, Users2, Settings, LogOut, Menu, Lock, Star, BarChart3, Filter
 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Button } from './ui';
@@ -66,6 +66,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const navItems: { href: string; icon: React.ElementType; label: string; requiredPlan?: 'growth' | 'pro' | null }[] = [
     { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/calendar',     icon: CalendarDays,    label: 'Calendar' },
+    { href: '/leads',        icon: Filter,           label: 'Leads',           requiredPlan: 'pro' },
     { href: '/customers',    icon: Users,            label: 'Customers' },
     { href: '/properties',   icon: MapPin,           label: 'Properties' },
     { href: '/services',     icon: Wrench,           label: 'Services' },
