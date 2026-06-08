@@ -154,17 +154,18 @@ For growing teams. **Everything in Starter, plus:**
 - Reporting & analytics
 - Branded booking page
 - Workflow automations
-- Autopay (automatic invoice charging)
 - Customer self-service portal
 
 ### Pro — $199/month
 For high-scale operations. **Everything in Growth, plus:**
 
+- Autopay (automatic invoice charging)
 - Advanced analytics
 - CSV data export (customers, appointments, invoices)
 - Lead pipeline
-- AI hooks
+- AI hooks (estimate builder, lead qualification, upsell suggestions)
 - Custom intake fields
+- White-label booking page
 
 > **Gating logic:** The plan-to-feature map lives in `artifacts/api-server/src/lib/features.ts`. `hasFeature(plan, feature)` checks membership; `requireFeature(feature)` is the Express middleware that blocks access and tells the client which plan is required.
 
