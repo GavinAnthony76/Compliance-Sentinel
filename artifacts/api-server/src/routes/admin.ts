@@ -5,7 +5,7 @@ import { requireAdminAuth, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 import { getPlanUsageSummary, type Plan } from "../lib/features";
-import { isEmailConfigured } from "../lib/sendgrid";
+import { isEmailConfigured } from "../lib/resend";
 import { STRIPE_PLANS } from "../lib/stripe";
 import { z } from "zod";
 
