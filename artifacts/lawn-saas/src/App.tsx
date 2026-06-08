@@ -11,6 +11,7 @@ import { LoginPage } from "@/pages/login";
 import { RegisterPage } from "@/pages/register";
 import { AdminLoginPage } from "@/pages/admin-login";
 import { ForgotPasswordPage } from "@/pages/forgot-password";
+import { ForgotUsernamePage } from "@/pages/forgot-username";
 import { ResetPasswordPage } from "@/pages/reset-password";
 import { AdminForgotPasswordPage } from "@/pages/admin-forgot-password";
 import { AdminResetPasswordPage } from "@/pages/admin-reset-password";
@@ -146,6 +147,7 @@ function Router() {
       <Route path="/register" component={RegisterPage} />
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/forgot-password" component={ForgotPasswordPage} />
+      <Route path="/forgot-username" component={ForgotUsernamePage} />
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin/forgot-password" component={AdminForgotPasswordPage} />
       <Route path="/admin/reset-password" component={AdminResetPasswordPage} />

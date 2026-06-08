@@ -198,6 +198,8 @@ router.get("/me", requireAuth, async (req: any, res) => {
   });
 });
 
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+
 router.post("/forgot-password", async (req, res) => {
   const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
@@ -214,7 +216,21 @@ router.post("/forgot-password", async (req, res) => {
     await sendEmail({
       to: user.email,
       subject: "Reset your GreenSync password",
-      body: `Hi ${user.firstName},\n\nClick the link below to reset your password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
+      body: [
+        `Hi ${user.firstName},`,
+        "",
+        "We received a request to reset the password for your GreenSync account.",
+        "",
+        "Click the link below to set a new password. This link is valid for 1 hour:",
+        "",
+        resetUrl,
+        "",
+        "Your new password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.",
+        "",
+        "If you did not request a password reset, you can safely ignore this email. Your password will not change.",
+        "",
+        "— The GreenSync Team",
+      ].join("\n"),
     });
   }
 
@@ -226,6 +242,14 @@ router.post("/reset-password", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
   const { token, password } = parsed.data;
+
+  if (!PASSWORD_REGEX.test(password)) {
+    return res.status(400).json({
+      error: "WeakPassword",
+      message: "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.",
+    });
+  }
+
   const [user] = await db.select().from(usersTable).where(eq(usersTable.passwordResetToken, token)).limit(1);
   if (!user) return res.status(400).json({ error: "InvalidToken", message: "Invalid or expired reset link" });
   if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
@@ -233,9 +257,76 @@ router.post("/reset-password", async (req, res) => {
   }
 
   const passwordHash = await hashPassword(password);
-  await db.update(usersTable).set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
+  await db.update(usersTable)
+    .set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() })
+    .where(eq(usersTable.id, user.id));
+
+  await logActivity({ companyId: user.companyId, userId: user.id, action: "user.password_reset", entityType: "user", entityId: user.id });
+
+  // Send security confirmation email
+  await sendEmail({
+    to: user.email,
+    subject: "Your GreenSync password was changed",
+    body: [
+      `Hi ${user.firstName},`,
+      "",
+      "This is a confirmation that the password for your GreenSync account (${user.email}) was successfully changed.",
+      "",
+      `Password changed at: ${new Date().toUTCString()}`,
+      "",
+      "If you made this change, no further action is needed.",
+      "",
+      "If you did NOT request this change, your account may be compromised. Please contact us immediately or reset your password again:",
+      "",
+      `${resolveBaseUrl()}/forgot-password`,
+      "",
+      "— The GreenSync Team",
+    ].join("\n").replace("${user.email}", user.email),
+  });
 
   return res.json({ success: true, message: "Password updated successfully." });
+});
+
+router.post("/forgot-username", async (req, res) => {
+  const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email)).limit(1);
+
+  // Always return success to avoid account enumeration
+  if (user && user.isActive) {
+    const loginUrl = `${resolveBaseUrl()}/login`;
+    await sendEmail({
+      to: user.email,
+      subject: "Your GreenSync login (username) details",
+      body: [
+        `Hi ${user.firstName},`,
+        "",
+        "We received a request to look up the login details for your GreenSync account.",
+        "",
+        "Your username (login email) is:",
+        "",
+        `  ${user.email}`,
+        "",
+        `Account name: ${user.firstName} ${user.lastName}`,
+        `Account role: ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}`,
+        "",
+        "You can sign in here:",
+        "",
+        loginUrl,
+        "",
+        "If you've also forgotten your password, you can reset it at:",
+        "",
+        `${resolveBaseUrl()}/forgot-password`,
+        "",
+        "If you did not request this email, you can safely ignore it.",
+        "",
+        "— The GreenSync Team",
+      ].join("\n"),
+    });
+  }
+
+  return res.json({ success: true, message: "If that email is registered, your account details have been sent." });
 });
 
 export default router;
