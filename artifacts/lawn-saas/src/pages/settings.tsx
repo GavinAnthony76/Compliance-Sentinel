@@ -20,7 +20,13 @@ const PAYMENT_METHODS = [
 ];
 
 function useConnectStatus() {
-  const [status, setStatus] = useState<{ connected: boolean; chargesEnabled?: boolean; payoutsEnabled?: boolean; detailsSubmitted?: boolean } | null>(null);
+  const [status, setStatus] = useState<{
+    connected: boolean;
+    accountId?: string | null;
+    readyToProcessPayments?: boolean;
+    onboardingComplete?: boolean;
+    requirementsStatus?: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = () => {
@@ -326,19 +332,26 @@ export function SettingsPage() {
               ) : connectStatus?.connected ? (
                 <div className="rounded-xl border p-4 space-y-3">
                   <div className="flex items-center gap-2">
-                    {connectStatus.chargesEnabled
+                    {connectStatus.readyToProcessPayments
                       ? <CheckCircle className="w-5 h-5 text-green-500" />
                       : <AlertCircle className="w-5 h-5 text-amber-500" />}
                     <span className="text-sm font-medium">
-                      {connectStatus.chargesEnabled ? 'Stripe account connected and active' : 'Stripe account connected — setup incomplete'}
+                      {connectStatus.readyToProcessPayments
+                        ? 'Stripe account connected and ready to accept payments'
+                        : connectStatus.onboardingComplete
+                          ? 'Stripe account connected — awaiting capability approval'
+                          : 'Stripe account connected — onboarding incomplete'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                    <span>Charges enabled: <strong className={connectStatus.chargesEnabled ? 'text-green-600' : 'text-amber-600'}>{connectStatus.chargesEnabled ? 'Yes' : 'No'}</strong></span>
-                    <span>Payouts enabled: <strong className={connectStatus.payoutsEnabled ? 'text-green-600' : 'text-amber-600'}>{connectStatus.payoutsEnabled ? 'Yes' : 'No'}</strong></span>
+                    <span>Card payments: <strong className={connectStatus.readyToProcessPayments ? 'text-green-600' : 'text-amber-600'}>{connectStatus.readyToProcessPayments ? 'Active' : 'Pending'}</strong></span>
+                    <span>Onboarding: <strong className={connectStatus.onboardingComplete ? 'text-green-600' : 'text-amber-600'}>{connectStatus.onboardingComplete ? 'Complete' : 'Incomplete'}</strong></span>
+                    {connectStatus.requirementsStatus && (
+                      <span className="col-span-2">Requirements: <strong className="text-amber-600">{connectStatus.requirementsStatus}</strong></span>
+                    )}
                   </div>
                   <div className="flex gap-2 flex-wrap">
-                    {!connectStatus.detailsSubmitted && (
+                    {!connectStatus.onboardingComplete && (
                       <Button type="button" size="sm" onClick={handleConnectOnboard} isLoading={connectWorking}>
                         Complete Setup
                       </Button>

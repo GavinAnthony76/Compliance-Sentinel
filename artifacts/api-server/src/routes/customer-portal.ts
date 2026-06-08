@@ -471,10 +471,22 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
     });
   }
 
-  // Verify the Connect account can actually accept charges
+  // Verify the Connect account can accept charges via V2 API (falls back to V1 for legacy accounts)
   try {
-    const account = await stripe.accounts.retrieve(company.stripeConnectAccountId);
-    if (!account.charges_enabled) {
+    let readyToProcessPayments = false;
+    try {
+      const account = await (stripe as any).v2.core.accounts.retrieve(
+        company.stripeConnectAccountId,
+        { include: ["configuration.merchant"] },
+      );
+      readyToProcessPayments =
+        account?.configuration?.merchant?.capabilities?.card_payments?.status === "active";
+    } catch {
+      // V1 fallback for legacy Express accounts
+      const v1Account = await stripe.accounts.retrieve(company.stripeConnectAccountId);
+      readyToProcessPayments = v1Account.charges_enabled ?? false;
+    }
+    if (!readyToProcessPayments) {
       return res.status(403).json({
         error: "ConnectIncomplete",
         message: "The company's Stripe account setup is not complete. Online payments are temporarily unavailable.",

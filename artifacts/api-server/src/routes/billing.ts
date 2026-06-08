@@ -138,6 +138,77 @@ router.post("/webhook", async (req: Request, res) => {
   return res.json({ success: true });
 });
 
+// POST /billing/webhook/v2 — Stripe V2 thin-event webhook
+// Handles account requirements and capability status changes for Connect accounts.
+// Set up in Stripe Dashboard → Developers → Webhooks → Add destination:
+//   - Events from: Connected accounts
+//   - Payload style: Thin
+//   - Events: v2.core.account[requirements].updated,
+//             v2.core.account[configuration.merchant].capability_status_updated,
+//             v2.core.account[configuration.customer].capability_status_updated
+// Store the signing secret as STRIPE_V2_WEBHOOK_SECRET.
+router.post("/webhook/v2", async (req: Request, res) => {
+  const webhookSecret = process.env.STRIPE_V2_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    logger.warn("STRIPE_V2_WEBHOOK_SECRET not configured; skipping V2 webhook processing");
+    return res.json({ received: true });
+  }
+
+  const sig = req.headers["stripe-signature"];
+  if (!sig) {
+    return res.status(400).json({ error: "MissingSignature" });
+  }
+
+  let stripe: any;
+  try {
+    stripe = await getUncachableStripeClient();
+  } catch (err) {
+    logger.error({ err }, "Stripe client init failed for V2 webhook");
+    return res.json({ received: true });
+  }
+
+  let thinEvent: any;
+  try {
+    // parseThinEvent verifies the signature and returns a lightweight event object
+    thinEvent = stripe.parseThinEvent((req as any).rawBody || req.body, sig, webhookSecret);
+  } catch (err) {
+    logger.error({ err }, "V2 webhook signature verification failed");
+    return res.status(400).json({ error: "Webhook signature verification failed" });
+  }
+
+  try {
+    // Fetch the full event data from Stripe (thin events only contain the ID + type)
+    const event = await (stripe as any).v2.core.events.retrieve(thinEvent.id);
+
+    switch (event.type) {
+      case "v2.core.account[requirements].updated": {
+        // Account requirements changed (e.g. new KYC docs required by a regulator).
+        // We read status live from the API, so no DB update needed — just log.
+        const accountId = event.related_object?.id ?? "unknown";
+        logger.info({ accountId }, "V2 Connect account requirements updated");
+        break;
+      }
+      case "v2.core.account[configuration.merchant].capability_status_updated": {
+        // Merchant card_payments capability status changed (e.g. became active).
+        const accountId = event.related_object?.id ?? "unknown";
+        logger.info({ accountId }, "V2 Connect merchant capability status updated");
+        break;
+      }
+      case "v2.core.account[configuration.customer].capability_status_updated": {
+        const accountId = event.related_object?.id ?? "unknown";
+        logger.info({ accountId }, "V2 Connect customer capability status updated");
+        break;
+      }
+      default:
+        logger.info({ type: event.type }, "Unhandled V2 thin event");
+    }
+  } catch (err) {
+    logger.error({ err, thinEventId: thinEvent?.id }, "Error processing V2 thin event");
+  }
+
+  return res.json({ received: true });
+});
+
 // All other billing routes require auth
 router.use(requireAuth);
 
@@ -243,16 +314,17 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
   }
 });
 
-// ── Stripe Connect ────────────────────────────────────────────────────────────
+// ── Stripe Connect (V2 API) ───────────────────────────────────────────────────
 
-// GET /billing/connect/status — is this company's Connect account linked?
+// GET /billing/connect/status
+// Uses the V2 accounts API to get live onboarding + capability status.
 router.get("/connect/status", async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound" });
 
   if (!company.stripeConnectAccountId) {
-    return res.json({ connected: false, accountId: null, chargesEnabled: false, payoutsEnabled: false });
+    return res.json({ connected: false, accountId: null, readyToProcessPayments: false, onboardingComplete: false });
   }
 
   let stripe: any;
@@ -263,25 +335,50 @@ router.get("/connect/status", async (req: any, res) => {
   }
 
   try {
-    const account = await stripe.accounts.retrieve(company.stripeConnectAccountId);
+    // V2 retrieve — includes merchant configuration and requirements so we can
+    // compute readyToProcessPayments and onboardingComplete without storing state.
+    const account = await (stripe as any).v2.core.accounts.retrieve(
+      company.stripeConnectAccountId,
+      { include: ["configuration.merchant", "requirements"] },
+    );
+
+    const readyToProcessPayments =
+      account?.configuration?.merchant?.capabilities?.card_payments?.status === "active";
+    const requirementsStatus =
+      account?.requirements?.summary?.minimum_deadline?.status ?? null;
+    const onboardingComplete =
+      requirementsStatus !== "currently_due" && requirementsStatus !== "past_due";
+
     return res.json({
       connected: true,
       accountId: company.stripeConnectAccountId,
-      chargesEnabled: account.charges_enabled,
-      payoutsEnabled: account.payouts_enabled,
-      detailsSubmitted: account.details_submitted,
+      readyToProcessPayments,
+      onboardingComplete,
+      requirementsStatus,
     });
   } catch (err: any) {
-    if (err?.code === "account_invalid") {
-      await db.update(companiesTable).set({ stripeConnectAccountId: null }).where(eq(companiesTable.id, companyId));
-      return res.json({ connected: false, accountId: null, chargesEnabled: false, payoutsEnabled: false });
+    // Fallback: legacy V1 Express accounts created before the V2 migration
+    try {
+      const v1 = await stripe.accounts.retrieve(company.stripeConnectAccountId);
+      return res.json({
+        connected: true,
+        accountId: company.stripeConnectAccountId,
+        readyToProcessPayments: v1.charges_enabled ?? false,
+        onboardingComplete: v1.details_submitted ?? false,
+        requirementsStatus: null,
+      });
+    } catch (v1Err: any) {
+      if (v1Err?.code === "account_invalid") {
+        await db.update(companiesTable).set({ stripeConnectAccountId: null }).where(eq(companiesTable.id, companyId));
+        return res.json({ connected: false, accountId: null, readyToProcessPayments: false, onboardingComplete: false });
+      }
+      logger.error({ err, v1Err }, "Error retrieving Connect account");
+      return res.status(500).json({ error: "ConnectError", message: "Could not retrieve account status" });
     }
-    logger.error({ err }, "Error retrieving Connect account");
-    return res.status(500).json({ error: "ConnectError", message: "Could not retrieve account status" });
   }
 });
 
-// POST /billing/connect/onboard — create/resume Express onboarding link
+// POST /billing/connect/onboard — create or resume a V2 onboarding link
 router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
@@ -300,22 +397,46 @@ router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, 
     let accountId = company.stripeConnectAccountId;
 
     if (!accountId) {
-      const account = await stripe.accounts.create({
-        type: "express",
-        email: company.email || undefined,
-        business_profile: { name: company.name },
-        metadata: { companyId: String(companyId) },
-        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+      // V2 account creation — do NOT pass top-level `type`.
+      // `fees_collector: stripe` / `losses_collector: stripe` means Stripe covers
+      // disputes and collects its own fees rather than passing them to us.
+      const account = await (stripe as any).v2.core.accounts.create({
+        display_name: company.name,
+        contact_email: company.email || undefined,
+        identity: { country: "us" },
+        dashboard: "full",
+        defaults: {
+          responsibilities: {
+            fees_collector: "stripe",
+            losses_collector: "stripe",
+          },
+        },
+        configuration: {
+          customer: {},
+          merchant: {
+            capabilities: {
+              card_payments: { requested: true },
+            },
+          },
+        },
       });
       accountId = account.id;
-      await db.update(companiesTable).set({ stripeConnectAccountId: accountId, updatedAt: new Date() }).where(eq(companiesTable.id, companyId));
+      await db.update(companiesTable)
+        .set({ stripeConnectAccountId: accountId, updatedAt: new Date() })
+        .where(eq(companiesTable.id, companyId));
     }
 
-    const accountLink = await stripe.accountLinks.create({
+    // V2 account links — use_case replaces the old `type: "account_onboarding"`
+    const accountLink = await (stripe as any).v2.core.accountLinks.create({
       account: accountId,
-      refresh_url: `${baseUrl}/settings?connect=refresh`,
-      return_url: `${baseUrl}/settings?connect=success`,
-      type: "account_onboarding",
+      use_case: {
+        type: "account_onboarding",
+        account_onboarding: {
+          configurations: ["merchant", "customer"],
+          refresh_url: `${baseUrl}/settings?connect=refresh`,
+          return_url: `${baseUrl}/settings?connect=success&accountId=${accountId}`,
+        },
+      },
     });
 
     return res.json({ url: accountLink.url });
@@ -325,7 +446,7 @@ router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, 
   }
 });
 
-// POST /billing/connect/dashboard — redirect to Express dashboard
+// POST /billing/connect/dashboard — open the Stripe dashboard for the connected account
 router.post("/connect/dashboard", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
@@ -339,11 +460,14 @@ router.post("/connect/dashboard", requireRole("owner", "admin"), async (req: any
   }
 
   try {
+    // V2 accounts with dashboard:"full" log in to dashboard.stripe.com directly
+    // (no login-link needed). Try a V1 login link first for legacy Express accounts;
+    // fall back to the full dashboard URL for V2 accounts.
     const loginLink = await stripe.accounts.createLoginLink(company.stripeConnectAccountId);
     return res.json({ url: loginLink.url });
-  } catch (err) {
-    logger.error({ err }, "Error creating Connect dashboard link");
-    return res.status(500).json({ error: "ConnectError", message: "Could not open Stripe dashboard" });
+  } catch {
+    // V2 full-dashboard accounts don't support login links — return the dashboard URL
+    return res.json({ url: "https://dashboard.stripe.com" });
   }
 });
 
