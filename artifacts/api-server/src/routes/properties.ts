@@ -2,10 +2,12 @@ import { Router } from "express";
 import { db, propertiesTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { logActivity } from "../lib/activity";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;

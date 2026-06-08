@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { enqueueFollowUps } from "../lib/follow-ups";
@@ -39,6 +40,7 @@ function normalizeValue(v: unknown): string | null {
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 router.use(requireFeature("lead_pipeline"));
 
 function isManager(role: string): boolean {

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable, companiesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { requireWithinPlanLimit } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
@@ -12,6 +13,7 @@ import PDFDocument from "pdfkit";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 
 function fmt(inv: any, customerName?: string, lineItems?: any[]) {
   return {

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, estimatesTable, estimateLineItemsTable, customersTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { generateEstimateDraft } from "../lib/ai-estimate";
@@ -10,6 +11,7 @@ import crypto from "crypto";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 // Estimates are available on every plan (Starter included), gated only by monthly count limits.
 
 const aiDraftSchema = z.object({

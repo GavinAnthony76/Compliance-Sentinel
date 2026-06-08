@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, reviewRequestsTable, customersTable, companiesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
@@ -9,6 +10,7 @@ import { sendReviewRequestNotification } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 router.use(requireFeature("review_requests"));
 
 router.get("/", async (req: any, res) => {

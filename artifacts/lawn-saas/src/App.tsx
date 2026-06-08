@@ -97,12 +97,16 @@ const queryCache = new QueryCache({
       const url: string = error?.url ?? '';
       if (url.includes('/api/admin')) {
         localStorage.removeItem(ADMIN_TOKEN_KEY);
-        // Reset the auth/me query so useAdminGetMe re-fires → clears React state
         queryClient.resetQueries({ queryKey: ['/api/admin/auth/me'] });
       } else if (url.includes('/api/')) {
         localStorage.removeItem(TOKEN_KEY);
-        // Reset the auth/me query so useGetMe re-fires → clears React state
         queryClient.resetQueries({ queryKey: ['/api/auth/me'] });
+      }
+    }
+    if (error?.status === 402) {
+      // Trial expired or subscription required — redirect to billing
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/billing')) {
+        window.location.href = '/billing';
       }
     }
   },

@@ -3,12 +3,14 @@ import { z } from "zod";
 import { db, automationRulesTable, appointmentsTable, invoicesTable, customersTable } from "@workspace/db";
 import { eq, and, desc, gte, lte, between } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { executeActionDryRun } from "../lib/automations";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 // Generic rule-based automation engine — Pro's "Advanced Automation Engine"
 router.use(requireFeature("advanced_automations"));
 

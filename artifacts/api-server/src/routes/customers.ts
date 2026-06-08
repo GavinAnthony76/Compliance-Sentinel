@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, customersTable, propertiesTable, appointmentsTable, invoicesTable, companiesTable } from "@workspace/db";
 import { eq, and, ilike, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
@@ -25,6 +26,7 @@ const customerBodySchema = z.object({
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;

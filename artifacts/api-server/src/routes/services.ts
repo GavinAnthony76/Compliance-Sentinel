@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, servicesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { logActivity } from "../lib/activity";
 
 const serviceBodySchema = z.object({
@@ -16,6 +17,7 @@ const serviceBodySchema = z.object({
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;
