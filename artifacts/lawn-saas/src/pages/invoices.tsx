@@ -42,6 +42,15 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cashapp: 'Cash App', bank_transfer: 'Bank Transfer', card: 'Card (Online)', other: 'Other',
 };
 
+// Resolve the human-readable payment method for a paid invoice. Falls back to the
+// online card label when a Stripe payment intent exists but no method was recorded
+// (e.g. invoices paid online before the method was stored).
+function displayPaymentMethod(inv: { paymentMethod?: string | null; stripePaymentIntentId?: string | null }): string | null {
+  if (inv.paymentMethod) return PAYMENT_METHOD_LABELS[inv.paymentMethod] ?? inv.paymentMethod;
+  if (inv.stripePaymentIntentId) return PAYMENT_METHOD_LABELS.card;
+  return null;
+}
+
 function LineItemsEditor({ items, onChange }: { items: InvoiceLineItemInput[]; onChange: (items: InvoiceLineItemInput[]) => void }) {
   const addRow = () => onChange([...items, { description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const removeRow = (i: number) => onChange(items.filter((_, idx) => idx !== i));
@@ -289,6 +298,7 @@ type InvoiceDetail = {
   notes?: string;
   paymentMethod?: string;
   paymentMethodNote?: string;
+  stripePaymentIntentId?: string | null;
   lineItems: InvoiceLineItemInput[];
 };
 
@@ -367,8 +377,8 @@ function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoi
               {detail.dueDate && (
                 <div><span className="text-muted-foreground">Due Date: </span>{format(new Date(detail.dueDate), 'MMM d, yyyy')}</div>
               )}
-              {detail.paymentMethod && (
-                <div><span className="text-muted-foreground">Payment: </span>{PAYMENT_METHOD_LABELS[detail.paymentMethod] ?? detail.paymentMethod}</div>
+              {displayPaymentMethod(detail) && (
+                <div><span className="text-muted-foreground">Payment: </span>{displayPaymentMethod(detail)}</div>
               )}
             </div>
 
@@ -630,7 +640,8 @@ export function InvoicesPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {data?.invoices.map(inv => {
-                    const invExt = inv as typeof inv & { paymentMethod?: string };
+                    const invExt = inv as typeof inv & { paymentMethod?: string | null; stripePaymentIntentId?: string | null };
+                    const methodLabel = displayPaymentMethod(invExt);
                     return (
                       <tr key={inv.id} className="hover:bg-accent/30 transition-colors">
                         <td className="p-4 font-mono text-sm font-medium">
@@ -648,8 +659,8 @@ export function InvoicesPage() {
                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] || 'bg-gray-100 text-gray-600'}`}>
                               {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
                             </span>
-                            {inv.status === 'paid' && invExt.paymentMethod && (
-                              <span className="text-xs text-muted-foreground">· {PAYMENT_METHOD_LABELS[invExt.paymentMethod] ?? invExt.paymentMethod}</span>
+                            {inv.status === 'paid' && methodLabel && (
+                              <span className="text-xs text-muted-foreground">· {methodLabel}</span>
                             )}
                           </div>
                         </td>

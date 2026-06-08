@@ -50,6 +50,7 @@ router.post("/webhook", async (req: Request, res) => {
             await db.update(invoicesTable).set({
               status: "paid",
               paidAt: new Date(),
+              paymentMethod: "card",
               stripePaymentIntentId: paymentIntentId,
               updatedAt: new Date(),
             }).where(eq(invoicesTable.id, invoiceId));

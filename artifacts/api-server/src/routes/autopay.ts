@@ -176,6 +176,7 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
       await db.update(invoicesTable).set({
         status: "paid",
         paidAt: new Date(),
+        paymentMethod: "card",
         stripePaymentIntentId: paymentIntent.id,
         updatedAt: new Date(),
       }).where(eq(invoicesTable.id, invoiceId));
