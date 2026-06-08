@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useLocation } from 'wouter';
 import { usePortalAuth } from '@/hooks/use-portal-auth';
-import { useToast } from '@/hooks/use-toast';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { Calendar, CreditCard, FileText, LogOut, Leaf, Clock, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 import { useSearch } from 'wouter';
+import { PortalReceiptView } from '@/pages/portal-receipt';
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
@@ -28,18 +28,34 @@ export function PortalDashboardPage() {
   const search = useSearch();
   const { session, isLoading, isAuthenticated, logout, portalFetch } = usePortalAuth();
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
   const [appointments, setAppointments] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [receipt, setReceipt] = useState<{ invoiceId: string | null } | null>(null);
 
-  // Show payment success notification
+  // Detect Stripe payment-success redirect and show a receipt.
+  // Stash the intent so it survives an auth round-trip (e.g. an expired
+  // session bouncing through login on return from Stripe).
   useEffect(() => {
     const params = new URLSearchParams(search);
     if (params.get('payment') === 'success') {
-      toast({ title: 'Payment successful!', description: 'Your invoice has been paid.' });
+      const invoiceParam = params.get('invoice');
+      const validId = invoiceParam && /^\d+$/.test(invoiceParam) ? invoiceParam : null;
+      try { sessionStorage.setItem('portal_receipt', validId ?? 'generic'); } catch {}
+      setReceipt({ invoiceId: validId });
+      return;
     }
+    try {
+      const stashed = sessionStorage.getItem('portal_receipt');
+      if (stashed) setReceipt({ invoiceId: stashed === 'generic' ? null : stashed });
+    } catch {}
   }, []);
+
+  const dismissReceipt = () => {
+    setReceipt(null);
+    try { sessionStorage.removeItem('portal_receipt'); } catch {}
+    setLocation(`/portal/${slug}`, { replace: true });
+  };
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -60,6 +76,19 @@ export function PortalDashboardPage() {
 
   if (isLoading || !isAuthenticated) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
+  }
+
+  if (receipt) {
+    return (
+      <PortalReceiptView
+        invoiceId={receipt.invoiceId}
+        slug={slug}
+        companyName={session?.company.name}
+        customerName={session?.customer.firstName}
+        portalFetch={portalFetch}
+        onDone={dismissReceipt}
+      />
+    );
   }
 
   const unpaidInvoices = invoices.filter(i => i.status !== 'paid');
