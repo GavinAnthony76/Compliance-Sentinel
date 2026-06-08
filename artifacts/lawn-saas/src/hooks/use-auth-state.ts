@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
-import { useGetMe, useAdminGetMe } from '@workspace/api-client-react';
+import { useGetMe, useAdminGetMe, getGetMeQueryKey, getAdminGetMeQueryKey } from '@workspace/api-client-react';
 
 export const TOKEN_KEY = 'greensync_token';
 export const ADMIN_TOKEN_KEY = 'greensync_admin_token';
@@ -17,6 +17,7 @@ export function useAuthState() {
     refetch: refetchUser,
   } = useGetMe({
     query: {
+      queryKey: getGetMeQueryKey(),
       enabled: !!token,
       retry: false,
     },
@@ -29,6 +30,7 @@ export function useAuthState() {
     refetch: refetchAdmin,
   } = useAdminGetMe({
     query: {
+      queryKey: getAdminGetMeQueryKey(),
       enabled: !!adminToken,
       retry: false,
     },

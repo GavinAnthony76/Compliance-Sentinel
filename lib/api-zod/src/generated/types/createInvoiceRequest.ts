@@ -5,11 +5,13 @@
  * GreenSync Lawn Care SaaS API
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateInvoiceLineItemRequest } from "./createInvoiceLineItemRequest";
 import type { CreateInvoiceRequestStatus } from "./createInvoiceRequestStatus";
 
 export interface CreateInvoiceRequest {
   customerId: number;
   appointmentId?: number;
+  lineItems?: CreateInvoiceLineItemRequest[];
   subtotal: number;
   tax?: number;
   total: number;

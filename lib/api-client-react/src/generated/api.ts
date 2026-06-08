@@ -96,6 +96,7 @@ import type {
   TeamListResponse,
   TeamMember,
   UpdateAppointmentRequest,
+  UpdateEstimateRequest,
   UpdateInvoiceRequest,
   UpdateSettingsRequest,
   UpdateTeamMemberRequest,
@@ -3533,14 +3534,14 @@ export const getUpdateEstimateUrl = (id: number) => {
 
 export const updateEstimate = async (
   id: number,
-  createEstimateRequest: CreateEstimateRequest,
+  updateEstimateRequest: UpdateEstimateRequest,
   options?: RequestInit,
 ): Promise<Estimate> => {
   return customFetch<Estimate>(getUpdateEstimateUrl(id), {
     ...options,
     method: "PUT",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(createEstimateRequest),
+    body: JSON.stringify(updateEstimateRequest),
   });
 };
 
@@ -3551,14 +3552,14 @@ export const getUpdateEstimateMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateEstimate>>,
     TError,
-    { id: number; data: BodyType<CreateEstimateRequest> },
+    { id: number; data: BodyType<UpdateEstimateRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof updateEstimate>>,
   TError,
-  { id: number; data: BodyType<CreateEstimateRequest> },
+  { id: number; data: BodyType<UpdateEstimateRequest> },
   TContext
 > => {
   const mutationKey = ["updateEstimate"];
@@ -3572,7 +3573,7 @@ export const getUpdateEstimateMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof updateEstimate>>,
-    { id: number; data: BodyType<CreateEstimateRequest> }
+    { id: number; data: BodyType<UpdateEstimateRequest> }
   > = (props) => {
     const { id, data } = props ?? {};
 
@@ -3585,7 +3586,7 @@ export const getUpdateEstimateMutationOptions = <
 export type UpdateEstimateMutationResult = NonNullable<
   Awaited<ReturnType<typeof updateEstimate>>
 >;
-export type UpdateEstimateMutationBody = BodyType<CreateEstimateRequest>;
+export type UpdateEstimateMutationBody = BodyType<UpdateEstimateRequest>;
 export type UpdateEstimateMutationError = ErrorType<unknown>;
 
 /**
@@ -3598,14 +3599,14 @@ export const useUpdateEstimate = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof updateEstimate>>,
     TError,
-    { id: number; data: BodyType<CreateEstimateRequest> },
+    { id: number; data: BodyType<UpdateEstimateRequest> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof updateEstimate>>,
   TError,
-  { id: number; data: BodyType<CreateEstimateRequest> },
+  { id: number; data: BodyType<UpdateEstimateRequest> },
   TContext
 > => {
   return useMutation(getUpdateEstimateMutationOptions(options));

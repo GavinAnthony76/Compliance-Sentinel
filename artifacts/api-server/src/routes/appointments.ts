@@ -6,7 +6,7 @@ import { requireAuth } from "../lib/auth";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
-import { sendReminder, sendSMS, sendEmail } from "../lib/notifications";
+import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail } from "../lib/notifications";
 import { fireAutomations } from "../lib/automations";
 
 // ─── GPS job-tracking helpers ────────────────────────────────────────────────
@@ -94,6 +94,66 @@ async function sendAppointmentNotification(appt: any, companyId: number, channel
     });
   } catch (_err) {
     // Non-fatal: SMS failure should not block main response
+  }
+}
+
+// Customer-facing copy for each appointment status change.
+function statusNotificationCopy(status: string, companyName: string, serviceName: string, dateStr: string) {
+  switch (status) {
+    case "confirmed":
+      return { subject: `Appointment Confirmed — ${serviceName}`, message: `Good news! Your ${serviceName} appointment with ${companyName} is confirmed.`, sms: `Your ${serviceName} appointment with ${companyName} on ${dateStr} is confirmed.` };
+    case "in_progress":
+      return { subject: `We're on the way — ${serviceName}`, message: `Your ${serviceName} service with ${companyName} is now in progress. Our team is working on it.`, sms: `${companyName}: your ${serviceName} service is now in progress.` };
+    case "completed":
+      return { subject: `Service Complete — ${serviceName}`, message: `Your ${serviceName} service with ${companyName} is complete. Thank you for your business!`, sms: `${companyName}: your ${serviceName} service is complete. Thank you!` };
+    case "cancelled":
+      return { subject: `Appointment Cancelled — ${serviceName}`, message: `Your ${serviceName} appointment with ${companyName} scheduled for ${dateStr} has been cancelled. Please contact us to reschedule.`, sms: `${companyName}: your ${serviceName} appointment on ${dateStr} has been cancelled.` };
+    case "no_show":
+      return { subject: `We missed you — ${serviceName}`, message: `We were unable to complete your ${serviceName} appointment with ${companyName} on ${dateStr}. Please reach out so we can reschedule.`, sms: `${companyName}: we missed you for your ${serviceName} appointment on ${dateStr}. Contact us to reschedule.` };
+    default:
+      return null;
+  }
+}
+
+// Notify the customer when an appointment's status changes.
+async function sendAppointmentStatusNotification(appt: any, companyId: number, status: string) {
+  try {
+    const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1);
+    if (!customer) return;
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    const [service] = appt.serviceId ? await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1) : [null];
+
+    const dateStr = appt.scheduledStart ? new Date(appt.scheduledStart).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) : 'TBD';
+    const timeStr = appt.scheduledStart ? new Date(appt.scheduledStart).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+    const companyName = company?.name || 'Your service provider';
+    const serviceName = service?.name || 'lawn care service';
+    const copy = statusNotificationCopy(status, companyName, serviceName, dateStr);
+    if (!copy) return;
+
+    const smsAllowed = hasFeature(company?.subscriptionPlan, "sms_notifications");
+    if (customer.phone && smsAllowed) await sendSMS({ to: customer.phone, body: `${copy.sms} Reply STOP to opt out.` });
+    if (customer.email) await sendAppointmentStatusEmail({
+      to: customer.email,
+      customerName: customer.firstName,
+      companyName,
+      serviceName,
+      dateStr,
+      timeStr,
+      subject: copy.subject,
+      message: copy.message,
+    });
+
+    await logCommunicationEvent({
+      companyId,
+      customerId: appt.customerId,
+      appointmentId: appt.id,
+      channel: customer.phone && smsAllowed ? "sms" : "email",
+      subject: copy.subject,
+      bodyPreview: `${serviceName} on ${dateStr}${timeStr ? ` at ${timeStr}` : ""} — ${status}`,
+      status: "sent",
+    });
+  } catch (_err) {
+    // Non-fatal: notification failure must not block the status update
   }
 }
 
@@ -214,9 +274,9 @@ router.put("/:id", async (req: any, res) => {
 
   const [updated] = await db.update(appointmentsTable).set(updateData).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "appointment.updated", entityType: "appointment", entityId: id });
-  // If status changed to confirmed, send confirmation notification
-  if (updateData.status === "confirmed" && existing.status !== "confirmed") {
-    sendAppointmentNotification(updated, companyId, 'confirmation');
+  // If the status actually changed, notify the customer (email + SMS where enabled).
+  if (updateData.status && updateData.status !== existing.status) {
+    void sendAppointmentStatusNotification(updated, companyId, updateData.status);
   }
   // If status changed to completed, fire appointment_completed automations
   if (updateData.status === "completed" && existing.status !== "completed") {

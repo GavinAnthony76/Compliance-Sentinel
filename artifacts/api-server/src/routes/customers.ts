@@ -68,15 +68,19 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
   let portalUrl: string | undefined;
   try {
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
-    if (company && hasFeature(company.subscriptionPlan, "customer_portal") && customer.phone) {
+    if (company && hasFeature(company.subscriptionPlan, "customer_portal") && (customer.email || customer.phone)) {
       const inviteToken = crypto.randomBytes(32).toString("hex");
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
       const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-      portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
-      if (hasFeature(company.subscriptionPlan, "sms_notifications")) {
-        const { sendSMS } = await import("../lib/notifications");
-        await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Set up your account here: ${portalUrl}` });
+      // Passwordless magic link — clicking it signs the customer straight into the portal.
+      portalUrl = `${baseUrl}/portal/${company.slug}/login?token=${inviteToken}`;
+      const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
+      if (customer.email) {
+        await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
+      }
+      if (customer.phone && hasFeature(company.subscriptionPlan, "sms_notifications")) {
+        await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Sign in here (no password needed): ${portalUrl}` });
       }
     }
   } catch { /* non-fatal — invite can be re-sent from customer detail */ }

@@ -375,6 +375,102 @@ export async function dispatchPaymentReceiptEmail(invoiceId: number, companyId: 
   }
 }
 
+export async function sendWelcomeEmail(opts: {
+  to: string;
+  firstName: string;
+  companyName: string;
+  loginUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: opts.to,
+    subject: `Welcome to GreenSync, ${opts.firstName}!`,
+    body: [
+      `Hi ${opts.firstName},`,
+      ``,
+      `Welcome to GreenSync! Your company "${opts.companyName}" is all set up and your 14-day free trial has started.`,
+      ``,
+      `Here are a few things you can do right away:`,
+      `  • Add your customers and properties`,
+      `  • Schedule appointments and dispatch your crew`,
+      `  • Send estimates and invoices, and get paid online`,
+      ``,
+      `Log in any time here:`,
+      opts.loginUrl,
+      ``,
+      `If you have any questions, just reply to this email — we're happy to help.`,
+      ``,
+      `Welcome aboard,`,
+      `The GreenSync Team`,
+    ].join("\n"),
+  });
+}
+
+// Passwordless customer-portal access email. Used both for the initial invite
+// and for "email me a login link". The link signs the customer straight in —
+// no password required.
+export async function sendPortalAccessEmail(opts: {
+  to: string;
+  customerName: string;
+  companyName: string;
+  loginUrl: string;
+  intent: "invite" | "login";
+  expiresLabel: string;
+}): Promise<void> {
+  const subject =
+    opts.intent === "invite"
+      ? `${opts.companyName} invited you to your customer portal`
+      : `Your ${opts.companyName} portal login link`;
+  const intro =
+    opts.intent === "invite"
+      ? `${opts.companyName} has set up a customer portal for you. You can view your appointments, invoices, and service history any time.`
+      : `Here is your secure login link for the ${opts.companyName} customer portal.`;
+  await sendEmail({
+    to: opts.to,
+    subject,
+    body: [
+      `Hi ${opts.customerName},`,
+      ``,
+      intro,
+      ``,
+      `Click the link below to sign in — no password required:`,
+      opts.loginUrl,
+      ``,
+      `This link expires ${opts.expiresLabel}. If you didn't request it, you can safely ignore this email.`,
+      ``,
+      `Thank you,`,
+      opts.companyName,
+    ].join("\n"),
+  });
+}
+
+// Customer-facing notification when an appointment's status changes.
+export async function sendAppointmentStatusEmail(opts: {
+  to: string;
+  customerName: string;
+  companyName: string;
+  serviceName: string;
+  dateStr: string;
+  timeStr: string;
+  subject: string;
+  message: string;
+}): Promise<void> {
+  await sendEmail({
+    to: opts.to,
+    subject: opts.subject,
+    body: [
+      `Hi ${opts.customerName},`,
+      ``,
+      opts.message,
+      ``,
+      `Service: ${opts.serviceName}`,
+      `Date: ${opts.dateStr}${opts.timeStr ? ` at ${opts.timeStr}` : ""}`,
+      ``,
+      `Thank you,`,
+      opts.companyName,
+    ].join("\n"),
+  });
+}
+
 export async function sendTeamInviteEmail(opts: {
   to: string;
   firstName: string;

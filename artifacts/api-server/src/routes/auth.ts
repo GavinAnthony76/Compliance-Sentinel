@@ -3,7 +3,7 @@ import { db, usersTable, companiesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signUserToken, hashPassword, verifyPassword, requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
-import { sendEmail, resolveBaseUrl } from "../lib/notifications";
+import { sendEmail, sendWelcomeEmail, resolveBaseUrl } from "../lib/notifications";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -77,6 +77,14 @@ router.post("/register", async (req, res) => {
   });
 
   const token = signUserToken({ userId: user.id, companyId: company.id, role: user.role });
+
+  // Send a welcome email (non-fatal — must never block signup)
+  void sendWelcomeEmail({
+    to: user.email,
+    firstName: user.firstName,
+    companyName: company.name,
+    loginUrl: `${resolveBaseUrl()}/login`,
+  }).catch(() => { /* logged inside sendEmail */ });
 
   return res.status(201).json({
     user: {

@@ -113,7 +113,9 @@ router.post("/auth/send-invite", async (req: any, res) => {
 
   const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, parsed.data.customerId), eq(customersTable.companyId, businessCompanyId))).limit(1);
   if (!customer) return res.status(404).json({ error: "NotFound" });
-  if (!customer.phone) return res.status(400).json({ error: "NoPhone", message: "Customer has no phone number. Add a phone number first." });
+  if (!customer.email && !customer.phone) {
+    return res.status(400).json({ error: "NoContact", message: "Customer has no email or phone number. Add one first." });
+  }
 
   const inviteToken = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -126,16 +128,71 @@ router.post("/auth/send-invite", async (req: any, res) => {
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, businessCompanyId)).limit(1);
   const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
-  const portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
+  // Passwordless magic link — clicking it signs the customer straight into the portal.
+  const portalUrl = `${baseUrl}/portal/${company.slug}/login?token=${inviteToken}`;
+  const customerName = customer.firstName || customer.email || "there";
 
-  // Send SMS invite (mock or real via Twilio)
-  const { sendSMS } = await import("../lib/notifications");
-  await sendSMS({
-    to: customer.phone,
-    body: `${company.name} has invited you to your customer portal. Set up your account here: ${portalUrl} (link expires in 7 days)`,
+  const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
+  const sentTo: string[] = [];
+  if (customer.email) {
+    await sendPortalAccessEmail({ to: customer.email, customerName, companyName: company.name, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
+    sentTo.push(customer.email);
+  }
+  if (customer.phone && hasFeature(businessCompany?.subscriptionPlan, "sms_notifications")) {
+    await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Sign in here (no password needed): ${portalUrl} (link expires in 7 days)` });
+    sentTo.push(customer.phone);
+  }
+
+  return res.json({ success: true, portalUrl, sentTo: sentTo.join(", ") || customer.email || customer.phone });
+});
+
+// POST /portal/auth/request-link — customer requests a passwordless email login link
+router.post("/auth/request-link", async (req, res) => {
+  const parsed = z.object({ email: z.string().email(), companySlug: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const { email, companySlug } = parsed.data;
+  const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
+  // Always respond success to avoid leaking which emails/slugs exist
+  if (company) {
+    const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.email, email))).limit(1);
+    if (customer && customer.email) {
+      const loginToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      await db.update(customersTable).set({ portalInviteToken: loginToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+      const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+      const loginUrl = `${baseUrl}/portal/${company.slug}/login?token=${loginToken}`;
+      const { sendPortalAccessEmail } = await import("../lib/notifications");
+      await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, loginUrl, intent: "login", expiresLabel: "in 1 hour" });
+    }
+  }
+  return res.json({ success: true, message: "If that email has portal access, a login link has been sent." });
+});
+
+// POST /portal/auth/verify-link — exchange a magic-link token for a portal session
+router.post("/auth/verify-link", async (req, res) => {
+  const parsed = z.object({ token: z.string().min(1), companySlug: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+
+  const { token, companySlug } = parsed.data;
+  const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
+  if (!company) return res.status(404).json({ error: "NotFound", message: "Company not found" });
+
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.portalInviteToken, token))).limit(1);
+  if (!customer) return res.status(400).json({ error: "InvalidToken", message: "This login link is invalid or has already been used" });
+  if (customer.portalInviteExpiresAt && customer.portalInviteExpiresAt < new Date()) {
+    return res.status(400).json({ error: "ExpiredToken", message: "This login link has expired. Please request a new one." });
+  }
+
+  // Consume the single-use token
+  await db.update(customersTable).set({ portalInviteToken: null, portalInviteExpiresAt: null, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+
+  const portalToken = signPortalToken({ customerId: customer.id, companyId: company.id });
+  return res.json({
+    token: portalToken,
+    customer: { id: customer.id, firstName: customer.firstName, lastName: customer.lastName, email: customer.email },
+    company: { id: company.id, name: company.name, slug: company.slug, logoUrl: company.logoUrl, primaryColor: company.primaryColor },
   });
-
-  return res.json({ success: true, portalUrl, sentTo: customer.phone });
 });
 
 // POST /portal/auth/set-password — customer sets password via invite token

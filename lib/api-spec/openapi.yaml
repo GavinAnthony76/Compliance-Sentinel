@@ -912,7 +912,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateEstimateRequest"
+              $ref: "#/components/schemas/UpdateEstimateRequest"
       responses:
         "200":
           description: Updated
@@ -2167,6 +2167,12 @@ components:
           items:
             type: string
           nullable: true
+        autopayEnabled:
+          type: string
+          nullable: true
+        stripePaymentMethodId:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -2655,6 +2661,19 @@ components:
           type: integer
       required: [invoices, total, page, limit]
 
+    CreateInvoiceLineItemRequest:
+      type: object
+      required: [description, quantity, unitPrice]
+      properties:
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        total:
+          type: number
+
     CreateInvoiceRequest:
       type: object
       required: [customerId, subtotal, total]
@@ -2663,6 +2682,10 @@ components:
           type: integer
         appointmentId:
           type: integer
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInvoiceLineItemRequest"
         subtotal:
           type: number
         tax:
@@ -2681,6 +2704,10 @@ components:
     UpdateInvoiceRequest:
       type: object
       properties:
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateInvoiceLineItemRequest"
         subtotal:
           type: number
         tax:
@@ -2799,6 +2826,32 @@ components:
     CreateEstimateRequest:
       type: object
       required: [customerId]
+      properties:
+        customerId:
+          type: integer
+        propertyId:
+          type: integer
+        status:
+          type: string
+          enum: [draft, sent, accepted, rejected, expired]
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        validUntil:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateEstimateLineItemRequest"
+
+    UpdateEstimateRequest:
+      type: object
       properties:
         customerId:
           type: integer

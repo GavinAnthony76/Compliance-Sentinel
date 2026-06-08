@@ -119,6 +119,7 @@ GreenSync runs **four separate authentication contexts**, each with its own cred
 ### Customer portal authentication
 
 - Customers log in with email + password to a dedicated portal.
+- **Passwordless magic-link login** — a customer can request a one-time login link by email (`POST /api/portal/auth/request-link`). Clicking it opens a magic-link landing page that exchanges the token for a portal session (`POST /api/portal/auth/verify-link`). The link is single-use and short-lived; password login continues to work alongside it. Anti-enumeration: requesting a link always returns success regardless of whether the email exists.
 - Includes a "set password" first-time flow and a portal-specific forgot-password flow.
 
 ---
@@ -186,7 +187,9 @@ Manage the physical service locations tied to each customer. Appointments and ro
 The master catalog of service offerings (e.g. Lawn Mowing, Fertilization, Hedge Trimming, Aeration, Leaf Removal), each with a base price and duration.
 
 ### Appointments (`/appointments`) & Calendar (`/calendar`)
-Schedule one-off jobs, assign (dispatch) them to staff, and mark them complete. The calendar gives a monthly visual view of all scheduled work. Appointment statuses: `pending`, `completed`, `cancelled`.
+Schedule one-off jobs, assign (dispatch) them to staff, and mark them complete. The calendar gives a monthly visual view of all scheduled work. Appointment statuses include `pending`, `confirmed`, `in_progress`, `completed`, `cancelled`, and `no_show`.
+
+**Automatic customer notifications on status change** — whenever an appointment's status changes, the customer is automatically notified by email (and SMS when configured) with status-specific copy: confirmed ("Appointment Confirmed"), in progress ("We're on the way"), completed ("Service Complete"), cancelled ("Appointment Cancelled"), and no-show ("We missed you"). Notifications are best-effort and non-blocking — a delivery failure never blocks the status update, and the customer is only emailed/texted when they have an email address / phone number on file.
 
 ### Recurring Plans (`/recurring`) — Growth+
 Templates that automatically generate future appointments on a weekly / bi-weekly / custom cadence, so repeat service contracts run themselves.
@@ -286,10 +289,10 @@ GreenSync includes a background **trigger → action** automation engine.
 - Uses the Replit Stripe integration (`getUncachableStripeClient()`).
 
 ### SendGrid (email)
-The transactional email engine (`@sendgrid/mail`) powering invoice emails, reminders, account-recovery emails, security confirmations, review requests, and invites. Falls back to **mock mode** (logs instead of sends) when no API key is configured.
+The transactional email engine (`@sendgrid/client`) powering **welcome emails on company signup**, invoice emails, reminders, account-recovery emails, security confirmations, review requests, invites, **appointment status-change notifications**, and **customer magic-link logins**. When `SENDGRID_API_KEY` is set, real email delivery is active; with no key it falls back to **mock mode** (logs instead of sends). All sends are wrapped in non-blocking try/catch, so a provider error (e.g. an out-of-credits account returning `401 Maximum credits exceeded`) is logged but never breaks the request that triggered it.
 
 ### Twilio (SMS)
-Powers SMS reminders and notifications (Growth+). Also falls back to mock mode when credentials are absent.
+Powers SMS reminders and customer notifications (Growth+). SMS sending is best-effort and gated behind the SMS feature; it requires the `twilio` package and Twilio credentials to be present, and falls back gracefully (logged, non-fatal) when they are absent. Email delivery is unaffected by SMS availability.
 
 ---
 
@@ -351,6 +354,7 @@ All endpoints are mounted under `/api`.
 
 ### Customer Portal (portal auth)
 - Portal login / set-password / forgot-password
+- `POST /api/portal/auth/request-link` / `verify-link` — passwordless magic-link email login
 - View appointments, invoices (pay via Stripe), estimates (sign)
 
 ### Platform Admin (JWT: `greensync_admin_token`)
@@ -375,7 +379,7 @@ All endpoints are mounted under `/api`.
 | `SESSION_SECRET` | Session key |
 | `STRIPE_SECRET_KEY` | Stripe (via Replit integration) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification |
-| `SENDGRID_API_KEY` | Email (optional — mock mode if absent) |
+| `SENDGRID_API_KEY` | Email — real delivery when set & funded; mock mode (logs only) if absent |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS (optional) |
 | `FRONTEND_URL` | CORS / redirect base |
 

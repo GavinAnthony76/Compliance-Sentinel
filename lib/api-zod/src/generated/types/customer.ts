@@ -20,5 +20,7 @@ export interface Customer {
   notes?: string | null;
   leadSource?: string | null;
   tags?: string[] | null;
+  autopayEnabled?: string | null;
+  stripePaymentMethodId?: string | null;
   createdAt: Date;
 }

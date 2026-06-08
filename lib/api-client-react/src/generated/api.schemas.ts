@@ -188,6 +188,8 @@ export interface Customer {
   notes?: string | null;
   leadSource?: string | null;
   tags?: string[] | null;
+  autopayEnabled?: string | null;
+  stripePaymentMethodId?: string | null;
   createdAt: string;
 }
 
@@ -446,6 +448,13 @@ export interface InvoiceListResponse {
   limit: number;
 }
 
+export interface CreateInvoiceLineItemRequest {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total?: number;
+}
+
 export type CreateInvoiceRequestStatus =
   (typeof CreateInvoiceRequestStatus)[keyof typeof CreateInvoiceRequestStatus];
 
@@ -460,6 +469,7 @@ export const CreateInvoiceRequestStatus = {
 export interface CreateInvoiceRequest {
   customerId: number;
   appointmentId?: number;
+  lineItems?: CreateInvoiceLineItemRequest[];
   subtotal: number;
   tax?: number;
   total: number;
@@ -480,6 +490,7 @@ export const UpdateInvoiceRequestStatus = {
 } as const;
 
 export interface UpdateInvoiceRequest {
+  lineItems?: CreateInvoiceLineItemRequest[];
   subtotal?: number;
   tax?: number;
   total?: number;
@@ -558,6 +569,29 @@ export interface CreateEstimateRequest {
   customerId: number;
   propertyId?: number;
   status?: CreateEstimateRequestStatus;
+  subtotal?: number;
+  tax?: number;
+  total?: number;
+  validUntil?: string;
+  notes?: string;
+  lineItems?: CreateEstimateLineItemRequest[];
+}
+
+export type UpdateEstimateRequestStatus =
+  (typeof UpdateEstimateRequestStatus)[keyof typeof UpdateEstimateRequestStatus];
+
+export const UpdateEstimateRequestStatus = {
+  draft: "draft",
+  sent: "sent",
+  accepted: "accepted",
+  rejected: "rejected",
+  expired: "expired",
+} as const;
+
+export interface UpdateEstimateRequest {
+  customerId?: number;
+  propertyId?: number;
+  status?: UpdateEstimateRequestStatus;
   subtotal?: number;
   tax?: number;
   total?: number;

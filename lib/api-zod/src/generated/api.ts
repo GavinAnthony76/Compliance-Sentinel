@@ -196,6 +196,8 @@ export const GetDashboardResponse = zod.object({
       notes: zod.string().nullish(),
       leadSource: zod.string().nullish(),
       tags: zod.array(zod.string()).nullish(),
+      autopayEnabled: zod.string().nullish(),
+      stripePaymentMethodId: zod.string().nullish(),
       createdAt: zod.date(),
     }),
   ),
@@ -235,6 +237,8 @@ export const ListCustomersResponse = zod.object({
       notes: zod.string().nullish(),
       leadSource: zod.string().nullish(),
       tags: zod.array(zod.string()).nullish(),
+      autopayEnabled: zod.string().nullish(),
+      stripePaymentMethodId: zod.string().nullish(),
       createdAt: zod.date(),
     }),
   ),
@@ -283,6 +287,8 @@ export const GetCustomerResponse = zod.object({
     notes: zod.string().nullish(),
     leadSource: zod.string().nullish(),
     tags: zod.array(zod.string()).nullish(),
+    autopayEnabled: zod.string().nullish(),
+    stripePaymentMethodId: zod.string().nullish(),
     createdAt: zod.date(),
   }),
   properties: zod.array(
@@ -386,6 +392,8 @@ export const UpdateCustomerResponse = zod.object({
   notes: zod.string().nullish(),
   leadSource: zod.string().nullish(),
   tags: zod.array(zod.string()).nullish(),
+  autopayEnabled: zod.string().nullish(),
+  stripePaymentMethodId: zod.string().nullish(),
   createdAt: zod.date(),
 });
 
@@ -715,6 +723,8 @@ export const GetAppointmentResponse = zod.object({
     notes: zod.string().nullish(),
     leadSource: zod.string().nullish(),
     tags: zod.array(zod.string()).nullish(),
+    autopayEnabled: zod.string().nullish(),
+    stripePaymentMethodId: zod.string().nullish(),
     createdAt: zod.date(),
   }),
   property: zod
@@ -991,6 +1001,16 @@ export const ListInvoicesResponse = zod.object({
 export const CreateInvoiceBody = zod.object({
   customerId: zod.number(),
   appointmentId: zod.number().optional(),
+  lineItems: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number().optional(),
+      }),
+    )
+    .optional(),
   subtotal: zod.number(),
   tax: zod.number().optional(),
   total: zod.number(),
@@ -1033,6 +1053,16 @@ export const UpdateInvoiceParams = zod.object({
 });
 
 export const UpdateInvoiceBody = zod.object({
+  lineItems: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number().optional(),
+      }),
+    )
+    .optional(),
   subtotal: zod.number().optional(),
   tax: zod.number().optional(),
   total: zod.number().optional(),
@@ -1244,7 +1274,7 @@ export const UpdateEstimateParams = zod.object({
 });
 
 export const UpdateEstimateBody = zod.object({
-  customerId: zod.number(),
+  customerId: zod.number().optional(),
   propertyId: zod.number().optional(),
   status: zod
     .enum(["draft", "sent", "accepted", "rejected", "expired"])
