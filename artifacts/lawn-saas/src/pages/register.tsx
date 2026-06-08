@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useRegister } from '@workspace/api-client-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { User, Mail, Lock, Building2, Leaf, Check, ChevronRight } from 'lucide-react';
+import { User, Mail, Lock, Building2, Check, ChevronRight } from 'lucide-react';
+import { Logo } from '@/components/logo';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
@@ -52,7 +53,7 @@ export function RegisterPage() {
     try {
       const res = await registerMutation.mutateAsync({ data: form });
       login(res.token);
-      toast({ title: 'Account created!', description: 'Welcome to GreenSync. Complete your onboarding to get started.' });
+      toast({ title: 'Account created!', description: 'Welcome to Goshen Lawn Care Management. Complete your onboarding to get started.' });
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err.message || 'Please try again', variant: 'destructive' });
     }
@@ -66,9 +67,8 @@ export function RegisterPage() {
 
       <div className="w-full max-w-2xl">
         <div className="flex justify-center mb-8">
-          <Link href="/" className="flex items-center gap-2 text-primary font-display font-bold text-3xl">
-            <Leaf className="w-8 h-8 fill-primary" />
-            GreenSync
+          <Link href="/">
+            <Logo className="h-12" />
           </Link>
         </div>
 

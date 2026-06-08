@@ -49,7 +49,7 @@ export function AdminLoginPage() {
               <ShieldCheck className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <div className="font-display font-bold text-2xl">GreenSync</div>
+              <div className="font-display font-bold text-2xl">Goshen</div>
               <div className="text-xs text-slate-400 font-medium tracking-wider uppercase">Platform Admin</div>
             </div>
           </div>
@@ -66,7 +66,7 @@ export function AdminLoginPage() {
                 <label className="text-sm font-medium pl-1 text-slate-300">Email</label>
                 <Input
                   type="email"
-                  placeholder="admin@greensync.com"
+                  placeholder="admin@goshen.com"
                   icon={<Mail className="w-5 h-5" />}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

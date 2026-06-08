@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui';
-import { Leaf, CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield, Calendar, Navigation, FileText, Contact, ClipboardList, Zap, Clock, Fuel, Bell, Eye, PenLine, BadgeCheck, RefreshCw, Mail, Repeat, MessageSquare, ChevronRight } from 'lucide-react';
+import { Logo } from '@/components/logo';
+import { CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield, Calendar, Navigation, FileText, Contact, ClipboardList, Zap, Clock, Fuel, Bell, Eye, PenLine, BadgeCheck, RefreshCw, Mail, Repeat, MessageSquare, ChevronRight } from 'lucide-react';
 
 const TAB_DATA = [
   {
@@ -311,10 +312,7 @@ export function LandingPage() {
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-50 glass-panel border-b-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-primary font-display font-bold text-2xl tracking-tight">
-            <Leaf className="w-8 h-8 fill-primary" />
-            GreenSync
-          </div>
+          <Logo className="h-10" />
           <div className="hidden md:flex items-center gap-8 font-medium text-sm text-foreground/80">
             <a href="#features" className="hover:text-primary transition-colors">Features</a>
             <a href="#pricing" className="hover:text-primary transition-colors">Pricing</a>
@@ -420,7 +418,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Everything you need to grow</h2>
-            <p className="text-lg text-muted-foreground">Ditch the spreadsheets and disconnected apps. GreenSync brings your entire operation into one place.</p>
+            <p className="text-lg text-muted-foreground">Ditch the spreadsheets and disconnected apps. Goshen Lawn Care Management brings your entire operation into one place.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -655,7 +653,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center max-w-3xl mx-auto mb-12">
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Everything your business needs, in one place</h2>
-            <p className="text-lg text-muted-foreground">Go deep on any feature. GreenSync is built from the ground up for lawn care professionals.</p>
+            <p className="text-lg text-muted-foreground">Go deep on any feature. Goshen Lawn Care Management is built from the ground up for lawn care professionals.</p>
           </div>
 
           {/* Tab Strip */}
@@ -727,7 +725,7 @@ export function LandingPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.08)_0%,_transparent_60%)]" />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight mb-4">
-            See GreenSync in action
+            See Goshen in action
           </h2>
           <p className="text-lg text-white/80 mb-10 leading-relaxed">
             Join hundreds of lawn care businesses already saving time and growing revenue.
@@ -828,14 +826,14 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Trusted by lawn care pros</h2>
-            <p className="text-lg text-muted-foreground">See what business owners are saying about GreenSync.</p>
+            <p className="text-lg text-muted-foreground">See what business owners are saying about Goshen.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="bg-background rounded-3xl p-8 border border-border shadow-sm flex flex-col">
               <div className="flex gap-1 mb-4">
                 {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
               </div>
-              <p className="text-muted-foreground leading-relaxed flex-1">"GreenSync cut my admin time in half. I used to spend Sunday evenings doing invoices — now they go out automatically the moment I mark a job complete. My customers love how professional it looks."</p>
+              <p className="text-muted-foreground leading-relaxed flex-1">"Goshen cut my admin time in half. I used to spend Sunday evenings doing invoices — now they go out automatically the moment I mark a job complete. My customers love how professional it looks."</p>
               <div className="flex items-center gap-3 mt-6 pt-6 border-t border-border">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">TH</div>
                 <div>
@@ -848,7 +846,7 @@ export function LandingPage() {
               <div className="flex gap-1 mb-4">
                 {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-white text-white" />)}
               </div>
-              <p className="text-primary-foreground/90 leading-relaxed flex-1">"We grew from 40 to 110 customers in one season and GreenSync scaled right with us. The route planning alone saves my crew 45 minutes a day. Worth every penny of the Pro plan."</p>
+              <p className="text-primary-foreground/90 leading-relaxed flex-1">"We grew from 40 to 110 customers in one season and Goshen scaled right with us. The route planning alone saves my crew 45 minutes a day. Worth every penny of the Pro plan."</p>
               <div className="flex items-center gap-3 mt-6 pt-6 border-t border-primary-foreground/20">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shrink-0">MR</div>
                 <div>
@@ -880,10 +878,7 @@ export function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10 mb-12">
             {/* Brand column */}
             <div>
-              <div className="flex items-center gap-2 font-display font-bold text-xl mb-3">
-                <Leaf className="w-6 h-6 fill-primary text-primary" />
-                GreenSync
-              </div>
+              <Logo variant="white" className="h-9 mb-3" />
               <p className="text-background/60 text-sm leading-relaxed">
                 The all-in-one platform built for lawn care professionals who want to grow smarter.
               </p>
@@ -927,7 +922,7 @@ export function LandingPage() {
           </div>
 
           <div className="border-t border-background/10 pt-8 text-center">
-            <p className="text-background/40 text-sm">© 2025 GreenSync SaaS. All rights reserved.</p>
+            <p className="text-background/40 text-sm">© 2026 Goshen Lawn Care Management. All rights reserved.</p>
           </div>
         </div>
       </footer>

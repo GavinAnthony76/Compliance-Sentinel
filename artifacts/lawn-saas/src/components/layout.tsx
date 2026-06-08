@@ -3,10 +3,11 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, CalendarDays, MapPin, Wrench, 
   Clock, RotateCw, FileText, CreditCard, Route as RouteIcon, 
-  Zap, Users2, Settings, LogOut, Menu, Leaf, Lock, Star, BarChart3
+  Zap, Users2, Settings, LogOut, Menu, Lock, Star, BarChart3
 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Button } from './ui';
+import { Logo } from './logo';
 import { cn } from '@/lib/utils';
 
 const PLAN_ORDER: Record<string, number> = { starter: 0, growth: 1, pro: 2 };
@@ -84,10 +85,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-card border-b border-border sticky top-0 z-50">
-        <div className="flex items-center gap-2 text-primary font-display font-bold text-xl">
-          <Leaf className="w-6 h-6 fill-primary" />
-          GreenSync
-        </div>
+        <Logo className="h-8" />
         <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
           <Menu className="w-6 h-6" />
         </Button>
@@ -98,11 +96,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         "fixed inset-y-0 left-0 z-40 w-72 bg-card border-r border-border flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:w-72",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6 hidden md:flex items-center gap-3 text-primary font-display font-bold text-2xl tracking-tight">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Leaf className="w-6 h-6 fill-primary" />
-          </div>
-          GreenSync
+        <div className="p-6 hidden md:flex items-center">
+          <Logo className="h-10" />
         </div>
 
         <div className="px-4 py-2">

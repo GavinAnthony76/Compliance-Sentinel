@@ -78,7 +78,7 @@ export function PortalLoginPage() {
               </Button>
             </form>
             <div className="mt-3 text-center text-xs text-muted-foreground">
-              Access provided by your service provider. <Link href="/" className="text-primary hover:underline">GreenSync</Link>
+              Access provided by your service provider. <Link href="/" className="text-primary hover:underline">Goshen Lawn Care Management</Link>
             </div>
           </CardContent>
         </Card>

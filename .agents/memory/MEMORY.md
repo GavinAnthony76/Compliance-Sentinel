@@ -1,0 +1,1 @@
+- [pdfkit esbuild externalize](pdfkit-esbuild.md) — pdfkit can't be bundled by esbuild (fontkit/brotli/@swc/helpers); add to `external` in api-server build.mjs or server won't start.

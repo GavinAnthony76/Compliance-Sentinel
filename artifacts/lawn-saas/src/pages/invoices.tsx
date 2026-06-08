@@ -670,6 +670,9 @@ export function InvoicesPage() {
                             <Button size="sm" variant="ghost" onClick={() => setViewingInvoice({ id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status })}>
                               <Eye className="w-3.5 h-3.5" />
                             </Button>
+                            <Button size="sm" variant="ghost" title="Download PDF" onClick={() => downloadExport(`/api/invoices/${inv.id}/pdf`, `invoice-${inv.invoiceNumber}.pdf`, msg => toast({ title: msg, variant: 'destructive' }))}>
+                              <Download className="w-3.5 h-3.5" />
+                            </Button>
                             {inv.status === 'draft' && (
                               <>
                                 <Button size="sm" variant="outline" onClick={() => setEditingDraft({ id: inv.id, invoiceNumber: inv.invoiceNumber })}>

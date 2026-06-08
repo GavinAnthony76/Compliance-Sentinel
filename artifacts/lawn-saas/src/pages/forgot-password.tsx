@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Mail, Leaf, ArrowLeft } from 'lucide-react';
+import { Mail, ArrowLeft } from 'lucide-react';
+import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 
 export function ForgotPasswordPage() {
@@ -34,9 +35,8 @@ export function ForgotPasswordPage() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-3xl -z-10" />
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
-          <Link href="/" className="flex items-center gap-2 text-primary font-display font-bold text-3xl">
-            <Leaf className="w-8 h-8 fill-primary" />
-            GreenSync
+          <Link href="/">
+            <Logo className="h-12" />
           </Link>
         </div>
         <Card className="border-border/50 shadow-2xl shadow-black/5 bg-white/80 backdrop-blur-xl">

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useLogin } from '@workspace/api-client-react';
 import { useAuthState, TOKEN_KEY } from '@/hooks/use-auth-state';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Mail, Lock, Leaf, RotateCcw } from 'lucide-react';
+import { Mail, Lock, RotateCcw } from 'lucide-react';
+import { Logo } from '@/components/logo';
 import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 
@@ -47,9 +48,8 @@ export function LoginPage() {
       
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
-          <Link href="/" className="flex items-center gap-2 text-primary font-display font-bold text-3xl">
-            <Leaf className="w-8 h-8 fill-primary" />
-            GreenSync
+          <Link href="/">
+            <Logo className="h-12" />
           </Link>
         </div>
 

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'wouter';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { Mail, Leaf, ArrowLeft, User } from 'lucide-react';
+import { Mail, ArrowLeft, User } from 'lucide-react';
+import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 
 export function ForgotUsernamePage() {
@@ -34,9 +35,8 @@ export function ForgotUsernamePage() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/5 rounded-full blur-3xl -z-10" />
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
-          <Link href="/" className="flex items-center gap-2 text-primary font-display font-bold text-3xl">
-            <Leaf className="w-8 h-8 fill-primary" />
-            GreenSync
+          <Link href="/">
+            <Logo className="h-12" />
           </Link>
         </div>
 
@@ -80,7 +80,7 @@ export function ForgotUsernamePage() {
                   <Mail className="w-7 h-7 text-green-600" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  If <span className="font-semibold text-foreground">{email}</span> is registered with GreenSync, your login details have been sent to that address. Please check your inbox.
+                  If <span className="font-semibold text-foreground">{email}</span> is registered with Goshen Lawn Care Management, your login details have been sent to that address. Please check your inbox.
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Didn't receive it? Check your spam folder, or{' '}
