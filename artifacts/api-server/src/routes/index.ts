@@ -27,6 +27,8 @@ import autopayRouter from "./autopay";
 import leadsRouter from "./leads";
 import communicationsRouter from "./communications";
 import followUpsRouter from "./follow-ups";
+import storageRouter from "./storage";
+import appointmentPhotosRouter from "./appointment-photos";
 
 const router: IRouter = Router();
 
@@ -58,5 +60,7 @@ router.use("/autopay", autopayRouter);
 router.use("/leads", leadsRouter);
 router.use("/communications", communicationsRouter);
 router.use("/follow-ups", followUpsRouter);
+router.use(storageRouter);
+router.use("/appointment-photos", appointmentPhotosRouter);
 
 export default router;

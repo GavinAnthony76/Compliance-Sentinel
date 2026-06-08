@@ -19,6 +19,7 @@ import {
   ArrowLeft, User, MapPin, Phone, Mail, Globe, Edit2, Trash2,
   Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap, Pencil, Copy,
 } from 'lucide-react';
+import { CommunicationTimeline } from '@/components/communication-timeline';
 import { formatCurrency, formatDate } from '@/lib/utils';
 
 const STATUS_COLORS: Record<string, string> = {
@@ -484,7 +485,7 @@ function NewInvoiceModal({ customerId, onClose }: { customerId: number; onClose:
   );
 }
 
-type Tab = 'overview' | 'appointments' | 'invoices' | 'properties';
+type Tab = 'overview' | 'appointments' | 'invoices' | 'properties' | 'timeline';
 
 export function CustomerDetailPage() {
   const [, params] = useRoute('/customers/:id');
@@ -571,6 +572,7 @@ export function CustomerDetailPage() {
     { id: 'appointments', label: 'Appointments', count: recentAppointments.length },
     { id: 'invoices', label: 'Invoices', count: recentInvoices.length },
     { id: 'properties', label: 'Properties', count: properties.length },
+    { id: 'timeline', label: 'Timeline' },
   ];
 
   return (
@@ -983,6 +985,11 @@ export function CustomerDetailPage() {
             </div>
           )}
         </Card>
+      )}
+
+      {/* Tab: Timeline */}
+      {tab === 'timeline' && (
+        <CommunicationTimeline customerId={id} />
       )}
     </AppLayout>
   );

@@ -5,8 +5,8 @@
  * GreenSync Lawn Care SaaS API
  * OpenAPI spec version: 1.0.0
  */
-import type { EstimateStatus } from "./estimateStatus";
 import type { EstimateLineItem } from "./estimateLineItem";
+import type { EstimateStatus } from "./estimateStatus";
 
 export interface Estimate {
   id: number;
@@ -18,9 +18,9 @@ export interface Estimate {
   subtotal: number;
   tax: number;
   total: number;
-  validUntil?: string | null;
+  validUntil?: Date | null;
   notes?: string | null;
-  signedAt?: string | null;
+  signedAt?: Date | null;
   signerName?: string | null;
   customerName?: string | null;
   lineItems: EstimateLineItem[];

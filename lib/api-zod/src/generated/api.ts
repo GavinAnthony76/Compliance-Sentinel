@@ -1146,9 +1146,25 @@ export const ListEstimatesResponse = zod.object({
       propertyId: zod.number().nullish(),
       estimateNumber: zod.string(),
       status: zod.enum(["draft", "sent", "accepted", "rejected", "expired"]),
+      subtotal: zod.number(),
+      tax: zod.number(),
       total: zod.number(),
+      validUntil: zod.date().nullish(),
       notes: zod.string().nullish(),
+      signedAt: zod.date().nullish(),
+      signerName: zod.string().nullish(),
       customerName: zod.string().nullish(),
+      lineItems: zod.array(
+        zod.object({
+          id: zod.number(),
+          estimateId: zod.number(),
+          description: zod.string(),
+          quantity: zod.number(),
+          unitPrice: zod.number(),
+          total: zod.number(),
+          sortOrder: zod.number(),
+        }),
+      ),
       createdAt: zod.date(),
     }),
   ),
@@ -1166,8 +1182,21 @@ export const CreateEstimateBody = zod.object({
   status: zod
     .enum(["draft", "sent", "accepted", "rejected", "expired"])
     .optional(),
-  total: zod.number(),
+  subtotal: zod.number().optional(),
+  tax: zod.number().optional(),
+  total: zod.number().optional(),
+  validUntil: zod.date().optional(),
   notes: zod.string().optional(),
+  lineItems: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -1184,9 +1213,25 @@ export const GetEstimateResponse = zod.object({
   propertyId: zod.number().nullish(),
   estimateNumber: zod.string(),
   status: zod.enum(["draft", "sent", "accepted", "rejected", "expired"]),
+  subtotal: zod.number(),
+  tax: zod.number(),
   total: zod.number(),
+  validUntil: zod.date().nullish(),
   notes: zod.string().nullish(),
+  signedAt: zod.date().nullish(),
+  signerName: zod.string().nullish(),
   customerName: zod.string().nullish(),
+  lineItems: zod.array(
+    zod.object({
+      id: zod.number(),
+      estimateId: zod.number(),
+      description: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.number(),
+      total: zod.number(),
+      sortOrder: zod.number(),
+    }),
+  ),
   createdAt: zod.date(),
 });
 
@@ -1203,8 +1248,21 @@ export const UpdateEstimateBody = zod.object({
   status: zod
     .enum(["draft", "sent", "accepted", "rejected", "expired"])
     .optional(),
-  total: zod.number(),
+  subtotal: zod.number().optional(),
+  tax: zod.number().optional(),
+  total: zod.number().optional(),
+  validUntil: zod.date().optional(),
   notes: zod.string().optional(),
+  lineItems: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const UpdateEstimateResponse = zod.object({
@@ -1214,9 +1272,25 @@ export const UpdateEstimateResponse = zod.object({
   propertyId: zod.number().nullish(),
   estimateNumber: zod.string(),
   status: zod.enum(["draft", "sent", "accepted", "rejected", "expired"]),
+  subtotal: zod.number(),
+  tax: zod.number(),
   total: zod.number(),
+  validUntil: zod.date().nullish(),
   notes: zod.string().nullish(),
+  signedAt: zod.date().nullish(),
+  signerName: zod.string().nullish(),
   customerName: zod.string().nullish(),
+  lineItems: zod.array(
+    zod.object({
+      id: zod.number(),
+      estimateId: zod.number(),
+      description: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.number(),
+      total: zod.number(),
+      sortOrder: zod.number(),
+    }),
+  ),
   createdAt: zod.date(),
 });
 
@@ -1244,6 +1318,7 @@ export const ListRoutesResponse = zod.object({
     zod.object({
       id: zod.number(),
       companyId: zod.number(),
+      name: zod.string().nullish(),
       routeDate: zod.date(),
       assignedUserId: zod.number().nullish(),
       status: zod.string().nullish(),
@@ -1259,6 +1334,7 @@ export const ListRoutesResponse = zod.object({
  * @summary Create a route
  */
 export const CreateRouteBody = zod.object({
+  name: zod.string().optional(),
   routeDate: zod.date(),
   assignedUserId: zod.number().optional(),
   status: zod.string().optional(),
@@ -1276,6 +1352,7 @@ export const GetRouteResponse = zod.object({
   route: zod.object({
     id: zod.number(),
     companyId: zod.number(),
+    name: zod.string().nullish(),
     routeDate: zod.date(),
     assignedUserId: zod.number().nullish(),
     status: zod.string().nullish(),
@@ -1332,6 +1409,7 @@ export const UpdateRouteParams = zod.object({
 });
 
 export const UpdateRouteBody = zod.object({
+  name: zod.string().optional(),
   routeDate: zod.date(),
   assignedUserId: zod.number().optional(),
   status: zod.string().optional(),
@@ -1341,6 +1419,7 @@ export const UpdateRouteBody = zod.object({
 export const UpdateRouteResponse = zod.object({
   id: zod.number(),
   companyId: zod.number(),
+  name: zod.string().nullish(),
   routeDate: zod.date(),
   assignedUserId: zod.number().nullish(),
   status: zod.string().nullish(),
@@ -2087,4 +2166,57 @@ export const AdminDeleteAdminResponse = zod.object({
 export const AdminSeedDemoResponse = zod.object({
   success: zod.boolean(),
   message: zod.string().optional(),
+});
+
+/**
+ * Returns a presigned GCS URL for direct upload. The client sends JSON
+metadata here, then uploads the file directly to the returned URL.
+
+ * @summary Request a presigned URL for file upload
+ */
+
+export const RequestUploadUrlBody = zod.object({
+  name: zod.string().min(1).describe("Original file name."),
+  size: zod.number().min(1).describe("File size in bytes."),
+  contentType: zod
+    .string()
+    .min(1)
+    .describe("MIME type of the file (e.g. `image\/jpeg`)."),
+});
+
+export const RequestUploadUrlResponse = zod.object({
+  uploadURL: zod.string().url().describe("Presigned GCS URL for PUT upload."),
+  objectPath: zod
+    .string()
+    .describe("Normalized object path (e.g. `\/objects\/uploads\/uuid`)."),
+  metadata: zod
+    .object({
+      name: zod.string().min(1).describe("Original file name."),
+      size: zod.number().min(1).describe("File size in bytes."),
+      contentType: zod
+        .string()
+        .min(1)
+        .describe("MIME type of the file (e.g. `image\/jpeg`)."),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS
+ */
+export const GetPublicObjectParams = zod.object({
+  filePath: zod.coerce
+    .string()
+    .describe("Relative file path within the public search paths."),
+});
+
+/**
+ * @summary Serve an object entity from PRIVATE_OBJECT_DIR
+ */
+export const GetStorageObjectParams = zod.object({
+  objectPath: zod.coerce
+    .string()
+    .describe(
+      "Object path within the private object dir (e.g. `uploads\/some-uuid`).",
+    ),
 });

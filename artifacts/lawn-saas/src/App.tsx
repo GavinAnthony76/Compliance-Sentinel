@@ -40,6 +40,7 @@ import { EstimatesPage } from "@/pages/estimates";
 import { RoutesPage } from "@/pages/routes";
 import { LeadsPage } from "@/pages/leads";
 import { TechPage } from "@/pages/tech";
+import { FollowUpsPage } from "@/pages/follow-ups";
 import { ReviewsPage } from "@/pages/reviews";
 import { AutomationsPage } from "@/pages/automations";
 import { TeamPage } from "@/pages/team";
@@ -51,6 +52,7 @@ import { BillingPage } from "@/pages/billing";
 import { AdminDashboardPage } from "@/pages/admin-dashboard";
 import { AdminCompaniesPage, AdminCompanyDetailPage } from "@/pages/admin-companies";
 import { AdminActivityPage } from "@/pages/admin-activity";
+import { AdminBetaReadinessPage } from "@/pages/admin-beta-readiness";
 import { AdminAdminsPage } from "@/pages/admin-admins";
 import { AdminBillingPage } from "@/pages/admin-billing";
 import { AdminSettingsPage } from "@/pages/admin-settings";
@@ -183,6 +185,7 @@ function Router() {
       <Route path="/routes"><ProtectedRoute component={RoutesPage} /></Route>
       <Route path="/reviews"><ProtectedRoute component={ReviewsPage} /></Route>
       <Route path="/automations"><ProtectedRoute component={AutomationsPage} /></Route>
+      <Route path="/follow-ups"><ProtectedRoute component={FollowUpsPage} /></Route>
       <Route path="/team"><ProtectedRoute component={TeamPage} /></Route>
       <Route path="/reporting"><ProtectedRoute component={ReportingPage} /></Route>
       <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
@@ -194,6 +197,7 @@ function Router() {
       <Route path="/admin/companies"><ProtectedRoute component={AdminCompaniesPage} adminOnly /></Route>
       <Route path="/admin/billing"><ProtectedRoute component={AdminBillingPage} adminOnly /></Route>
       <Route path="/admin/activity"><ProtectedRoute component={AdminActivityPage} adminOnly /></Route>
+      <Route path="/admin/beta-readiness"><ProtectedRoute component={AdminBetaReadinessPage} adminOnly /></Route>
       <Route path="/admin/admins"><ProtectedRoute component={AdminAdminsPage} adminOnly /></Route>
       <Route path="/admin/settings"><ProtectedRoute component={AdminSettingsPage} adminOnly /></Route>
 

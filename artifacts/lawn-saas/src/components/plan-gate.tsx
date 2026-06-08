@@ -14,7 +14,8 @@ export type FeatureKey =
   | 'advanced_analytics'
   | 'reporting'
   | 'csv_export'
-  | 'lead_pipeline';
+  | 'lead_pipeline'
+  | 'follow_ups';
 
 const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   recurring_plans: 'growth',
@@ -24,6 +25,7 @@ const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   review_requests: 'growth',
   reporting: 'growth',
   automations: 'growth',
+  follow_ups: 'growth',
   advanced_analytics: 'pro',
   csv_export: 'pro',
   lead_pipeline: 'pro',
@@ -31,8 +33,8 @@ const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
 
 const PLAN_FEATURES: Record<string, Set<string>> = {
   starter: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders']),
-  growth: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal']),
-  pro: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal','advanced_analytics','csv_export','lead_pipeline','ai_hooks','custom_intake_fields']),
+  growth: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal','follow_ups']),
+  pro: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal','follow_ups','advanced_analytics','csv_export','lead_pipeline','ai_hooks','custom_intake_fields']),
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -113,6 +115,11 @@ const FEATURE_DESCRIPTIONS: Record<FeatureKey, { title: string; description: str
     title: 'Lead Pipeline',
     description: 'Capture, track, and convert prospects through a visual sales pipeline — never let a lead slip through the cracks.',
     bullets: ['Kanban pipeline with drag-and-drop stages', 'Auto-capture leads from your booking page', 'One-click convert to customer & estimate'],
+  },
+  follow_ups: {
+    title: 'Follow-Up Campaigns',
+    description: 'Automatically nurture leads and customers with timed email & SMS follow-ups triggered by key events.',
+    bullets: ['Trigger on new leads, sent estimates, completed jobs & invoices', 'Email & SMS with custom delay timing', 'Per-campaign send logs & test sends'],
   },
 };
 

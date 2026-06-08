@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
     "@sendgrid/mail": "^8.1.6",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
@@ -21,6 +22,7 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
+    "google-auth-library": "^10.7.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "pdfkit": "^0.18.0",

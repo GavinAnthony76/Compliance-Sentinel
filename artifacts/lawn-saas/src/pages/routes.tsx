@@ -8,7 +8,7 @@ import {
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, Route as RouteIcon, MapPin, Clock, Bell, X, Pencil, ChevronRight, Navigation, Trash2 } from 'lucide-react';
+import { Plus, Route as RouteIcon, MapPin, Clock, Bell, X, Pencil, ChevronRight, Navigation, Trash2, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -129,6 +129,7 @@ function StopsModal({ routeId, routeName, onClose }: { routeId: number; routeNam
   const [selectedApptId, setSelectedApptId] = useState('');
   const [sendingOnMyWay, setSendingOnMyWay] = useState<number | null>(null);
   const [etaMinutes, setEtaMinutes] = useState('');
+  const [optimizing, setOptimizing] = useState(false);
 
   const existingApptIds = new Set((data as any)?.stops?.map((s: any) => s.appointmentId) ?? []);
 
@@ -180,6 +181,31 @@ function StopsModal({ routeId, routeName, onClose }: { routeId: number; routeNam
     }
   };
 
+  const handleOptimize = async () => {
+    setOptimizing(true);
+    try {
+      const res = await fetch(`/api/routes/${routeId}/optimize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('greensync_token')}` },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'Failed to optimize');
+      if (!d.optimized) {
+        toast({ title: 'Could not optimize', description: d.message, variant: 'destructive' });
+      } else {
+        qc.invalidateQueries({ queryKey: getGetRouteQueryKey(routeId) });
+        toast({
+          title: 'Route optimized!',
+          description: `${d.stopCount} stops · ~${d.totalDistanceMiles} mi total drive${d.ungeocodedCount ? ` (${d.ungeocodedCount} without coordinates placed last)` : ''}.`,
+        });
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
   const stops: any[] = (data as any)?.stops ?? [];
 
   return (
@@ -191,9 +217,22 @@ function StopsModal({ routeId, routeName, onClose }: { routeId: number; routeNam
             <h2 className="text-xl font-bold">{routeName}</h2>
             <p className="text-sm text-muted-foreground mt-0.5">{stops.length} stop{stops.length !== 1 ? 's' : ''}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-accent transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleOptimize}
+              disabled={stops.length < 2}
+              isLoading={optimizing}
+              className="gap-1.5"
+              title={stops.length < 2 ? 'Add at least 2 stops to optimize' : 'Reorder stops to minimize drive time'}
+            >
+              <Sparkles className="w-4 h-4" />Optimize
+            </Button>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-accent transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}

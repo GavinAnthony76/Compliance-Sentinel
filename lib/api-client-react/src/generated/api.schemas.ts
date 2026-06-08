@@ -14,6 +14,32 @@ export interface ErrorResponse {
   message?: string;
 }
 
+export interface UploadUrlRequest {
+  /**
+   * Original file name.
+   * @minLength 1
+   */
+  name: string;
+  /**
+   * File size in bytes.
+   * @minimum 1
+   */
+  size: number;
+  /**
+   * MIME type of the file (e.g. `image/jpeg`).
+   * @minLength 1
+   */
+  contentType: string;
+}
+
+export interface UploadUrlResponse {
+  /** Presigned GCS URL for PUT upload. */
+  uploadURL: string;
+  /** Normalized object path (e.g. `/objects/uploads/uuid`). */
+  objectPath: string;
+  metadata?: UploadUrlRequest;
+}
+
 export interface SuccessResponse {
   success: boolean;
   message?: string;
@@ -421,13 +447,6 @@ export const CreateInvoiceRequestStatus = {
   cancelled: "cancelled",
 } as const;
 
-export interface InvoiceLineItemRequest {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-}
-
 export interface CreateInvoiceRequest {
   customerId: number;
   appointmentId?: number;
@@ -437,7 +456,6 @@ export interface CreateInvoiceRequest {
   status?: CreateInvoiceRequestStatus;
   dueDate?: string;
   notes?: string;
-  lineItems?: InvoiceLineItemRequest[];
 }
 
 export type UpdateInvoiceRequestStatus =
@@ -459,7 +477,16 @@ export interface UpdateInvoiceRequest {
   dueDate?: string;
   notes?: string;
   paidAt?: string;
-  lineItems?: InvoiceLineItemRequest[];
+}
+
+export interface EstimateLineItem {
+  id: number;
+  estimateId: number;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  sortOrder: number;
 }
 
 export type EstimateStatus =
@@ -472,16 +499,6 @@ export const EstimateStatus = {
   rejected: "rejected",
   expired: "expired",
 } as const;
-
-export interface EstimateLineItem {
-  id: number;
-  estimateId: number;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-  sortOrder: number;
-}
 
 export interface Estimate {
   id: number;
@@ -509,6 +526,13 @@ export interface EstimateListResponse {
   limit: number;
 }
 
+export interface CreateEstimateLineItemRequest {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total?: number;
+}
+
 export type CreateEstimateRequestStatus =
   (typeof CreateEstimateRequestStatus)[keyof typeof CreateEstimateRequestStatus];
 
@@ -519,13 +543,6 @@ export const CreateEstimateRequestStatus = {
   rejected: "rejected",
   expired: "expired",
 } as const;
-
-export interface CreateEstimateLineItemRequest {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total?: number;
-}
 
 export interface CreateEstimateRequest {
   customerId: number;
