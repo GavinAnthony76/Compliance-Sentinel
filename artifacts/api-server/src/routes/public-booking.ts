@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, companiesTable, servicesTable, customersTable, propertiesTable, appointmentsTable, leadsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logActivity } from "../lib/activity";
-import { hasFeature } from "../lib/features";
+import { hasFeature, checkPlanLimit } from "../lib/features";
 import { enqueueFollowUps } from "../lib/follow-ups";
 import { z } from "zod";
 
@@ -15,11 +15,16 @@ router.get("/book/:slug", async (req, res) => {
 
   const services = await db.select().from(servicesTable).where(and(eq(servicesTable.companyId, company.id), eq(servicesTable.isActive, true)));
 
+  // Branded booking pages (logo/colors) are Growth+; full white-label (no Goshen branding) is Pro-only.
+  const branded = hasFeature(company.subscriptionPlan, "branded_booking_page");
+  const whiteLabel = hasFeature(company.subscriptionPlan, "white_label_booking");
+
   return res.json({
     companyName: company.name,
-    logoUrl: company.logoUrl,
-    primaryColor: company.primaryColor,
+    logoUrl: branded ? company.logoUrl : null,
+    primaryColor: branded ? company.primaryColor : null,
     phone: company.phone,
+    whiteLabel,
     services: services.map(s => ({ ...s, basePrice: s.basePrice ? Number(s.basePrice) : null })),
   });
 });
@@ -58,6 +63,18 @@ router.post("/book/:slug/submit", async (req, res) => {
   )).limit(1);
 
   if (!customer) {
+    // Public booking creates a brand-new customer record directly (when the company
+    // doesn't have lead-pipeline / Pro-only unlimited customers) — respect the same
+    // company-scoped customer cap that authenticated staff are bound by, so the
+    // public form can't be used to bypass plan limits.
+    const limitCheck = await checkPlanLimit(company.id, "customers");
+    if (!limitCheck.allowed) {
+      return res.status(409).json({
+        error: "BookingUnavailable",
+        message: "We're unable to accept new customer bookings online right now. Please contact us directly to schedule.",
+      });
+    }
+
     [customer] = await db.insert(customersTable).values({
       companyId: company.id,
       firstName: data.firstName,

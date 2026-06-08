@@ -4,35 +4,51 @@ import { Lock, Sparkles, ArrowRight, Zap } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Button } from './ui';
 
+// Feature keys gated by <PlanGate>. These must mirror the backend plan-feature
+// map in artifacts/api-server/src/lib/features.ts — the backend is the source
+// of truth for enforcement; this only controls what the UI shows/hides.
 export type FeatureKey =
   | 'recurring_plans'
-  | 'routes'
-  | 'estimates'
-  | 'multi_staff'
+  | 'route_optimization'
   | 'review_requests'
-  | 'automations'
+  | 'growth_analytics'
   | 'advanced_analytics'
-  | 'reporting'
-  | 'csv_export'
+  | 'advanced_automations'
   | 'lead_pipeline';
 
 const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   recurring_plans: 'growth',
-  routes: 'growth',
-  estimates: 'growth',
-  multi_staff: 'growth',
+  route_optimization: 'growth',
   review_requests: 'growth',
-  reporting: 'growth',
-  automations: 'growth',
+  growth_analytics: 'growth',
   advanced_analytics: 'pro',
-  csv_export: 'pro',
+  advanced_automations: 'pro',
   lead_pipeline: 'pro',
 };
 
+const STARTER_FEATURES = [
+  'customer_crm', 'properties', 'services', 'scheduling', 'basic_job_tracking',
+  'invoicing', 'payment_collection', 'public_booking', 'email_reminders', 'dashboard', 'settings',
+];
+
+const GROWTH_ONLY_FEATURES = [
+  'team_management', 'route_optimization', 'recurring_plans', 'customer_portal',
+  'sms_notifications', 'review_requests', 'before_after_photos', 'gps_tracking',
+  'growth_analytics', 'customer_notes_tags', 'communication_timeline',
+  'follow_up_campaigns', 'branded_booking_page',
+];
+
+const PRO_ONLY_FEATURES = [
+  'ai_estimate_builder', 'ai_lead_qualification', 'ai_upsell_suggestions', 'ai_follow_up_suggestions',
+  'advanced_analytics', 'revenue_forecasting', 'custom_dashboards', 'data_export', 'api_access',
+  'custom_intake_forms', 'advanced_automations', 'lead_pipeline', 'lead_pipeline_ai_scoring',
+  'white_label_booking', 'autopay', 'priority_support',
+];
+
 const PLAN_FEATURES: Record<string, Set<string>> = {
-  starter: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders']),
-  growth: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal']),
-  pro: new Set(['customers','services','appointments','invoices','calendar','dashboard','settings','booking_page','email_reminders','multi_staff','recurring_plans','sms_reminders','estimates','routes','customer_notes_tags','review_requests','reporting','branded_booking','automations','autopay','customer_portal','advanced_analytics','csv_export','lead_pipeline','ai_hooks','custom_intake_fields']),
+  starter: new Set(STARTER_FEATURES),
+  growth: new Set([...STARTER_FEATURES, ...GROWTH_ONLY_FEATURES]),
+  pro: new Set([...STARTER_FEATURES, ...GROWTH_ONLY_FEATURES, ...PRO_ONLY_FEATURES]),
 };
 
 const PLAN_LABELS: Record<string, string> = {
@@ -65,54 +81,39 @@ const PLAN_COLORS: Record<string, { bg: string; border: string; icon: string; ba
 
 const FEATURE_DESCRIPTIONS: Record<FeatureKey, { title: string; description: string; bullets: string[] }> = {
   recurring_plans: {
-    title: 'Recurring Plans',
+    title: 'Recurring Service Plans',
     description: 'Auto-schedule weekly or bi-weekly jobs and generate work orders automatically — no manual rescheduling.',
     bullets: ['Weekly & bi-weekly schedules', 'Auto-generated appointments', 'Per-customer service templates'],
   },
-  routes: {
-    title: 'Smart Route Planning',
+  route_optimization: {
+    title: 'Route Optimization',
     description: 'Optimize your daily routes to cut drive time and fuel costs. Assign stops to crew members.',
     bullets: ['Route optimization', 'Multi-stop route management', 'Crew assignment per route'],
-  },
-  estimates: {
-    title: 'Estimates',
-    description: 'Create and send professional estimates to prospects and customers before converting to invoices.',
-    bullets: ['Branded estimate PDFs', 'One-click convert to invoice', 'Acceptance tracking'],
-  },
-  multi_staff: {
-    title: 'Team Management',
-    description: 'Add crew members, assign roles, and manage your entire team from a single dashboard.',
-    bullets: ['Unlimited team members', 'Role-based permissions', 'Job assignment per crew'],
-  },
-  reporting: {
-    title: 'Advanced Reporting',
-    description: 'Detailed revenue breakdowns, job completion trends, and customer metrics.',
-    bullets: ['Revenue by month & service', 'Completion rate trends', 'Customer lifetime value'],
   },
   review_requests: {
     title: 'Review Requests',
     description: 'Automatically ask happy customers for reviews via email or SMS after completing jobs.',
     bullets: ['Email & SMS delivery', 'Review link tracking', 'Sent history log'],
   },
-  automations: {
-    title: 'Automations',
-    description: 'Set trigger-based rules that run automatically — auto-create invoices, send reminders, and more.',
-    bullets: ['Auto-create invoices on job completion', 'Follow-up SMS/email sequences', 'Review request triggers'],
+  growth_analytics: {
+    title: 'Growth Analytics',
+    description: 'Revenue breakdowns, job completion trends, and customer metrics for growing crews.',
+    bullets: ['Revenue by month & service', 'Completion rate trends', 'Customer lifetime value'],
   },
   advanced_analytics: {
     title: 'Advanced Analytics',
-    description: 'Deep-dive dashboards with revenue forecasting, churn signals, and growth metrics.',
-    bullets: ['Revenue forecasting', 'Churn risk indicators', 'Service profitability breakdown'],
+    description: 'Deep-dive dashboards with revenue forecasting, custom dashboards, and growth metrics.',
+    bullets: ['Revenue forecasting', 'Custom dashboards', 'Service profitability breakdown'],
   },
-  csv_export: {
-    title: 'CSV Export',
-    description: 'Export any data — customers, invoices, appointments — to CSV for reporting or migration.',
-    bullets: ['Export customers, invoices, jobs', 'Custom date range filters', 'Instant download'],
+  advanced_automations: {
+    title: 'Advanced Automation Engine',
+    description: 'Set trigger-based rules that run automatically — auto-create invoices, send reminders, and more.',
+    bullets: ['Auto-create invoices on job completion', 'Follow-up SMS/email sequences', 'Review request triggers'],
   },
   lead_pipeline: {
     title: 'Lead Pipeline',
     description: 'Capture, track, and convert prospects through a visual sales pipeline — never let a lead slip through the cracks.',
-    bullets: ['Kanban pipeline with drag-and-drop stages', 'Auto-capture leads from your booking page', 'One-click convert to customer & estimate'],
+    bullets: ['Kanban pipeline with drag-and-drop stages', 'Auto-capture leads from your booking page', 'AI-scored lead prioritization'],
   },
 };
 

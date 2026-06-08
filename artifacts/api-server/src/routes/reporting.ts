@@ -6,7 +6,8 @@ import { requireFeature, hasFeature } from "../lib/features";
 
 const router = Router();
 router.use(requireAuth);
-router.use(requireFeature("reporting"));
+// Base reporting requires Growth's "growth_analytics"; deeper breakdowns below require Pro's "advanced_analytics"
+router.use(requireFeature("growth_analytics"));
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;

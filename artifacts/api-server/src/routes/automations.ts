@@ -9,7 +9,8 @@ import { executeActionDryRun } from "../lib/automations";
 
 const router = Router();
 router.use(requireAuth);
-router.use(requireFeature("automations"));
+// Generic rule-based automation engine — Pro's "Advanced Automation Engine"
+router.use(requireFeature("advanced_automations"));
 
 const createAutomationSchema = z.object({
   name: z.string().min(1).max(255),

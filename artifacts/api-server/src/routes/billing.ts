@@ -1,8 +1,9 @@
 import { Router, type Request } from "express";
 import { db, companiesTable, invoicesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
-import { getUncachableStripeClient, getStripePublishableKey, STRIPE_PLANS } from "../lib/stripe";
+import { requireAuth, requireRole } from "../lib/auth";
+import { getPlanUsageSummary } from "../lib/features";
+import { getUncachableStripeClient, getStripePublishableKey, getStripePriceId, STRIPE_PLANS } from "../lib/stripe";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 
@@ -21,16 +22,23 @@ router.post("/webhook", async (req: Request, res) => {
   const sig = req.headers["stripe-signature"];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+  // Signature verification is mandatory — an unverified body would let anyone
+  // forge a "checkout.session.completed" event and grant themselves a paid
+  // plan for an arbitrary companyId. Never fall back to trusting req.body.
+  if (!webhookSecret) {
+    logger.error("STRIPE_WEBHOOK_SECRET is not configured; refusing to process webhook");
+    return res.status(503).json({ error: "WebhookMisconfigured", message: "Webhook signature verification is not configured" });
+  }
+  if (!sig) {
+    return res.status(400).json({ error: "MissingSignature", message: "Missing Stripe-Signature header" });
+  }
+
   let event: any;
-  if (sig && webhookSecret) {
-    try {
-      event = stripe.webhooks.constructEvent((req as any).rawBody || req.body, sig, webhookSecret);
-    } catch (err) {
-      logger.error({ err }, "Webhook signature verification failed");
-      return res.status(400).json({ error: "Webhook signature verification failed" });
-    }
-  } else {
-    event = req.body;
+  try {
+    event = stripe.webhooks.constructEvent((req as any).rawBody || req.body, sig, webhookSecret);
+  } catch (err) {
+    logger.error({ err }, "Webhook signature verification failed");
+    return res.status(400).json({ error: "Webhook signature verification failed" });
   }
 
   try {
@@ -147,6 +155,12 @@ router.get("/plans", async (_req, res) => {
   });
 });
 
+router.get("/usage", async (req: any, res) => {
+  const { companyId } = req.user;
+  const summary = await getPlanUsageSummary(companyId);
+  return res.json(summary);
+});
+
 router.get("/status", async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
@@ -161,7 +175,9 @@ router.get("/status", async (req: any, res) => {
   });
 });
 
-router.post("/subscribe", async (req: any, res) => {
+// Plan changes and billing-portal access affect the whole company's subscription —
+// restrict to owner/admin so staff cannot change plans or payment methods.
+router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const { planId } = req.body;
 
@@ -180,13 +196,19 @@ router.post("/subscribe", async (req: any, res) => {
     return res.status(503).json({ error: "BillingUnavailable", message: "Billing service is not configured" });
   }
 
-  try {
-    const PRICE_MAP: Record<string, number> = {
-      starter: 4900,
-      growth: 9900,
-      pro: 19900,
-    };
+  // Price IDs must come from pre-configured Stripe Price objects via environment
+  // variables (STRIPE_STARTER_PRICE_ID / STRIPE_GROWTH_PRICE_ID / STRIPE_PRO_PRICE_ID).
+  // Never hardcode price IDs or fabricate prices at checkout time.
+  const priceId = getStripePriceId(planId as keyof typeof STRIPE_PLANS);
+  if (!priceId) {
+    logger.error({ planId }, "Stripe price ID not configured for plan");
+    return res.status(503).json({
+      error: "BillingMisconfigured",
+      message: "This plan is not yet available for checkout. Please contact support.",
+    });
+  }
 
+  try {
     let customerId = company.stripeCustomerId;
     if (!customerId) {
       const customer = await stripe.customers.create({
@@ -198,19 +220,12 @@ router.post("/subscribe", async (req: any, res) => {
       await db.update(companiesTable).set({ stripeCustomerId: customerId }).where(eq(companiesTable.id, companyId));
     }
 
-    const price = await stripe.prices.create({
-      unit_amount: PRICE_MAP[planId],
-      currency: "usd",
-      recurring: { interval: "month" },
-      product_data: { name: STRIPE_PLANS[planId as keyof typeof STRIPE_PLANS].name + " Plan" },
-    });
-
     const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       payment_method_types: ["card"],
-      line_items: [{ price: price.id, quantity: 1 }],
+      line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/billing?success=true`,
       cancel_url: `${baseUrl}/billing?canceled=true`,
       metadata: { companyId: String(companyId), plan: planId },
@@ -228,7 +243,7 @@ router.post("/subscribe", async (req: any, res) => {
   }
 });
 
-router.post("/portal", async (req: any, res) => {
+router.post("/portal", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   if (!company || !company.stripeCustomerId) {

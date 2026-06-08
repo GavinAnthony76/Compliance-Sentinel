@@ -7,10 +7,12 @@
  */
 import type { ActivityLog } from "./activityLog";
 import type { AdminCompany } from "./adminCompany";
+import type { AdminCompanyUsage } from "./adminCompanyUsage";
 import type { TeamMember } from "./teamMember";
 
 export interface AdminCompanyDetail {
   company: AdminCompany;
+  usage?: AdminCompanyUsage;
   users: TeamMember[];
   recentActivity: ActivityLog[];
 }

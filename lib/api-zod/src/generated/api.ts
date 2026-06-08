@@ -26,6 +26,7 @@ export const RegisterBody = zod.object({
   password: zod.string().min(registerBodyPasswordMin),
   companyName: zod.string(),
   phone: zod.string().optional(),
+  selectedPlan: zod.enum(["starter", "growth", "pro"]).optional(),
 });
 
 /**
@@ -1146,9 +1147,25 @@ export const ListEstimatesResponse = zod.object({
       propertyId: zod.number().nullish(),
       estimateNumber: zod.string(),
       status: zod.enum(["draft", "sent", "accepted", "rejected", "expired"]),
+      subtotal: zod.number(),
+      tax: zod.number(),
       total: zod.number(),
+      validUntil: zod.date().nullish(),
       notes: zod.string().nullish(),
+      signedAt: zod.date().nullish(),
+      signerName: zod.string().nullish(),
       customerName: zod.string().nullish(),
+      lineItems: zod.array(
+        zod.object({
+          id: zod.number(),
+          estimateId: zod.number(),
+          description: zod.string(),
+          quantity: zod.number(),
+          unitPrice: zod.number(),
+          total: zod.number(),
+          sortOrder: zod.number(),
+        }),
+      ),
       createdAt: zod.date(),
     }),
   ),
@@ -1166,8 +1183,21 @@ export const CreateEstimateBody = zod.object({
   status: zod
     .enum(["draft", "sent", "accepted", "rejected", "expired"])
     .optional(),
-  total: zod.number(),
+  subtotal: zod.number().optional(),
+  tax: zod.number().optional(),
+  total: zod.number().optional(),
+  validUntil: zod.date().optional(),
   notes: zod.string().optional(),
+  lineItems: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -1184,9 +1214,25 @@ export const GetEstimateResponse = zod.object({
   propertyId: zod.number().nullish(),
   estimateNumber: zod.string(),
   status: zod.enum(["draft", "sent", "accepted", "rejected", "expired"]),
+  subtotal: zod.number(),
+  tax: zod.number(),
   total: zod.number(),
+  validUntil: zod.date().nullish(),
   notes: zod.string().nullish(),
+  signedAt: zod.date().nullish(),
+  signerName: zod.string().nullish(),
   customerName: zod.string().nullish(),
+  lineItems: zod.array(
+    zod.object({
+      id: zod.number(),
+      estimateId: zod.number(),
+      description: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.number(),
+      total: zod.number(),
+      sortOrder: zod.number(),
+    }),
+  ),
   createdAt: zod.date(),
 });
 
@@ -1203,8 +1249,21 @@ export const UpdateEstimateBody = zod.object({
   status: zod
     .enum(["draft", "sent", "accepted", "rejected", "expired"])
     .optional(),
-  total: zod.number(),
+  subtotal: zod.number().optional(),
+  tax: zod.number().optional(),
+  total: zod.number().optional(),
+  validUntil: zod.date().optional(),
   notes: zod.string().optional(),
+  lineItems: zod
+    .array(
+      zod.object({
+        description: zod.string(),
+        quantity: zod.number(),
+        unitPrice: zod.number(),
+        total: zod.number().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const UpdateEstimateResponse = zod.object({
@@ -1214,9 +1273,25 @@ export const UpdateEstimateResponse = zod.object({
   propertyId: zod.number().nullish(),
   estimateNumber: zod.string(),
   status: zod.enum(["draft", "sent", "accepted", "rejected", "expired"]),
+  subtotal: zod.number(),
+  tax: zod.number(),
   total: zod.number(),
+  validUntil: zod.date().nullish(),
   notes: zod.string().nullish(),
+  signedAt: zod.date().nullish(),
+  signerName: zod.string().nullish(),
   customerName: zod.string().nullish(),
+  lineItems: zod.array(
+    zod.object({
+      id: zod.number(),
+      estimateId: zod.number(),
+      description: zod.string(),
+      quantity: zod.number(),
+      unitPrice: zod.number(),
+      total: zod.number(),
+      sortOrder: zod.number(),
+    }),
+  ),
   createdAt: zod.date(),
 });
 
@@ -1244,6 +1319,7 @@ export const ListRoutesResponse = zod.object({
     zod.object({
       id: zod.number(),
       companyId: zod.number(),
+      name: zod.string().nullish(),
       routeDate: zod.date(),
       assignedUserId: zod.number().nullish(),
       status: zod.string().nullish(),
@@ -1259,6 +1335,7 @@ export const ListRoutesResponse = zod.object({
  * @summary Create a route
  */
 export const CreateRouteBody = zod.object({
+  name: zod.string().optional(),
   routeDate: zod.date(),
   assignedUserId: zod.number().optional(),
   status: zod.string().optional(),
@@ -1276,6 +1353,7 @@ export const GetRouteResponse = zod.object({
   route: zod.object({
     id: zod.number(),
     companyId: zod.number(),
+    name: zod.string().nullish(),
     routeDate: zod.date(),
     assignedUserId: zod.number().nullish(),
     status: zod.string().nullish(),
@@ -1332,6 +1410,7 @@ export const UpdateRouteParams = zod.object({
 });
 
 export const UpdateRouteBody = zod.object({
+  name: zod.string().optional(),
   routeDate: zod.date(),
   assignedUserId: zod.number().optional(),
   status: zod.string().optional(),
@@ -1341,6 +1420,7 @@ export const UpdateRouteBody = zod.object({
 export const UpdateRouteResponse = zod.object({
   id: zod.number(),
   companyId: zod.number(),
+  name: zod.string().nullish(),
   routeDate: zod.date(),
   assignedUserId: zod.number().nullish(),
   status: zod.string().nullish(),
@@ -1697,6 +1777,31 @@ export const GetBillingStatusResponse = zod.object({
 });
 
 /**
+ * @summary Get current plan limits and usage for the authenticated company
+ */
+export const GetBillingUsageResponse = zod.object({
+  plan: zod.string().optional(),
+  limits: zod
+    .object({
+      maxUsers: zod.number().nullish(),
+      maxCustomers: zod.number().nullish(),
+      maxAppointmentsPerMonth: zod.number().nullish(),
+      maxEstimatesPerMonth: zod.number().nullish(),
+      maxInvoicesPerMonth: zod.number().nullish(),
+    })
+    .optional(),
+  usage: zod
+    .object({
+      customers: zod.number().optional(),
+      users: zod.number().optional(),
+      appointments: zod.number().optional(),
+      estimates: zod.number().optional(),
+      invoices: zod.number().optional(),
+    })
+    .optional(),
+});
+
+/**
  * @summary Stripe webhook handler
  */
 export const StripeWebhookResponse = zod.object({
@@ -1924,6 +2029,39 @@ export const AdminGetCompanyResponse = zod.object({
     ownerEmail: zod.string().nullish(),
     createdAt: zod.date(),
   }),
+  usage: zod
+    .object({
+      plan: zod.string().optional(),
+      limits: zod
+        .object({
+          maxUsers: zod.number().nullish(),
+          maxCustomers: zod.number().nullish(),
+          maxAppointmentsPerMonth: zod.number().nullish(),
+          maxEstimatesPerMonth: zod.number().nullish(),
+          maxInvoicesPerMonth: zod.number().nullish(),
+        })
+        .optional(),
+      current: zod
+        .object({
+          customers: zod.number().optional(),
+          users: zod.number().optional(),
+          appointments: zod.number().optional(),
+          estimates: zod.number().optional(),
+          invoices: zod.number().optional(),
+        })
+        .optional(),
+      flags: zod
+        .array(
+          zod.object({
+            metric: zod.string(),
+            current: zod.number(),
+            limit: zod.number().nullable(),
+            status: zod.enum(["ok", "near", "over", "unlimited"]),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
   users: zod.array(
     zod.object({
       id: zod.number(),

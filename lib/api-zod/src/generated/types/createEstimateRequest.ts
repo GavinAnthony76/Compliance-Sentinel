@@ -5,14 +5,8 @@
  * GreenSync Lawn Care SaaS API
  * OpenAPI spec version: 1.0.0
  */
+import type { CreateEstimateLineItemRequest } from "./createEstimateLineItemRequest";
 import type { CreateEstimateRequestStatus } from "./createEstimateRequestStatus";
-
-export interface CreateEstimateLineItemRequest {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total?: number;
-}
 
 export interface CreateEstimateRequest {
   customerId: number;
@@ -21,7 +15,7 @@ export interface CreateEstimateRequest {
   subtotal?: number;
   tax?: number;
   total?: number;
-  validUntil?: string;
+  validUntil?: Date;
   notes?: string;
   lineItems?: CreateEstimateLineItemRequest[];
 }

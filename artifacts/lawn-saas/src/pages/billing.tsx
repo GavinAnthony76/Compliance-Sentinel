@@ -1,18 +1,104 @@
-import { useGetBillingStatus, useGetBillingPlans, useCreateSubscription, useCreateBillingPortal } from '@workspace/api-client-react';
+import { useGetBillingStatus, useGetBillingPlans, useGetBillingUsage, useCreateSubscription, useCreateBillingPortal } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button } from '@/components/ui';
 import { Check, CreditCard, ArrowRight, Shield, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { Link } from 'wouter';
 
 const PLAN_DESCRIPTIONS: Record<string, string> = {
-  starter: 'Perfect for solo operators',
-  growth: 'For growing teams',
-  pro: 'For established businesses',
+  starter: 'For solo operators getting organized',
+  growth: 'For growing crews',
+  pro: 'For established lawn care businesses',
 };
+
+const PLAN_LABELS: Record<string, string> = {
+  starter: 'Starter',
+  growth: 'Growth',
+  pro: 'Pro',
+};
+
+const NEXT_PLAN: Record<string, string> = {
+  starter: 'Growth',
+  growth: 'Pro',
+  pro: 'Pro',
+};
+
+const USAGE_METER_CONFIG: Array<{ key: 'customers' | 'users' | 'appointments' | 'estimates' | 'invoices'; limitKey: 'maxCustomers' | 'maxUsers' | 'maxAppointmentsPerMonth' | 'maxEstimatesPerMonth' | 'maxInvoicesPerMonth'; label: string; noun: string }> = [
+  { key: 'customers', limitKey: 'maxCustomers', label: 'Active Customers', noun: 'customers' },
+  { key: 'users', limitKey: 'maxUsers', label: 'Users', noun: 'users' },
+  { key: 'appointments', limitKey: 'maxAppointmentsPerMonth', label: 'Appointments this month', noun: 'appointments' },
+  { key: 'estimates', limitKey: 'maxEstimatesPerMonth', label: 'Estimates this month', noun: 'estimates' },
+  { key: 'invoices', limitKey: 'maxInvoicesPerMonth', label: 'Invoices this month', noun: 'invoices' },
+];
+
+function UsageMeters({ usage }: { usage: any }) {
+  if (!usage) return null;
+  const planLabel = PLAN_LABELS[usage.plan] || usage.plan;
+  const nextPlanLabel = NEXT_PLAN[usage.plan] || 'Pro';
+
+  return (
+    <Card className="border-border/50 mb-8">
+      <CardContent className="p-6">
+        <h3 className="text-lg font-bold mb-1">Plan Usage</h3>
+        <p className="text-sm text-muted-foreground mb-5">How your account is tracking against your {planLabel} plan limits.</p>
+        <div className="space-y-5">
+          {USAGE_METER_CONFIG.map(({ key, limitKey, label, noun }) => {
+            const current = usage.usage?.[key] ?? 0;
+            const limit = usage.limits?.[limitKey];
+            const unlimited = limit === null || limit === undefined;
+            const pct = unlimited ? 0 : Math.min(100, Math.round((current / Math.max(limit, 1)) * 100));
+            const atLimit = !unlimited && current >= limit;
+            const nearLimit = !unlimited && !atLimit && pct >= 80;
+            const barColor = atLimit ? 'bg-red-500' : nearLimit ? 'bg-amber-500' : 'bg-primary';
+
+            return (
+              <div key={key}>
+                <div className="flex items-center justify-between text-sm mb-1.5">
+                  <span className="font-medium text-foreground">{label}</span>
+                  <span className="text-muted-foreground">
+                    {unlimited ? `${current} / Unlimited` : `${current} / ${limit}`}
+                  </span>
+                </div>
+                {!unlimited && (
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+                {atLimit && (
+                  <p className="text-sm text-red-600 font-medium mt-1.5 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    You have reached your {planLabel} {noun} limit. Upgrade to {nextPlanLabel} to add more {noun}.
+                  </p>
+                )}
+                {nearLimit && (
+                  <p className="text-sm text-amber-600 font-medium mt-1.5 flex items-center gap-1.5">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    You are using {current} of {limit} {noun} on {planLabel}. Upgrade to {nextPlanLabel} before you hit your limit.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {usage.plan !== 'pro' && (
+          <div className="mt-6 pt-5 border-t border-border flex items-center justify-between gap-4 flex-wrap">
+            <p className="text-sm text-muted-foreground">Need more room to grow? Upgrade for higher limits and more features.</p>
+            <Link href="#plans">
+              <Button variant="outline" size="sm" className="gap-2">
+                View plans <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export function BillingPage() {
   const { data: status, isLoading: statusLoading } = useGetBillingStatus();
+  const { data: usage } = useGetBillingUsage();
   const { data: plansData, isLoading: plansLoading } = useGetBillingPlans();
   const subscribeMut = useCreateSubscription();
   const portalMut = useCreateBillingPortal();
@@ -105,11 +191,13 @@ export function BillingPage() {
         </Card>
       )}
 
+      <UsageMeters usage={usage} />
+
       {plansLoading ? (
         <div className="flex justify-center py-10"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
       ) : (
         <>
-          <h2 className="text-2xl font-display font-bold mb-4">Available Plans</h2>
+          <h2 id="plans" className="text-2xl font-display font-bold mb-4 scroll-mt-24">Available Plans</h2>
           <div className="grid sm:grid-cols-3 gap-6">
             {plansData?.plans.map((plan: any) => {
               const isCurrent = status?.plan === plan.id;

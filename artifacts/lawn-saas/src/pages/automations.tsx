@@ -154,7 +154,7 @@ export function AutomationsPage() {
 
   return (
     <AppLayout>
-      <PlanGate feature="automations">
+      <PlanGate feature="advanced_automations">
         {(creating || editing || template) && (
           <AutomationModal automation={editing || template} onClose={() => { setEditing(null); setCreating(false); setTemplate(null); }} />
         )}

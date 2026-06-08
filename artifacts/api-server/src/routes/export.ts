@@ -6,7 +6,7 @@ import { requireFeature } from "../lib/features";
 
 const router = Router();
 router.use(requireAuth);
-router.use(requireFeature("csv_export"));
+router.use(requireFeature("data_export"));
 
 function toCSV(headers: string[], rows: (string | number | null | undefined)[][]): string {
   const escape = (v: string | number | null | undefined): string => {

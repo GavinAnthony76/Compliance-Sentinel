@@ -13,8 +13,8 @@ const TAB_DATA = [
     bullets: [
       'Drag-and-drop calendar for easy job management',
       'Assign crew members to jobs instantly',
-      'Set recurring appointments in seconds',
-      'SMS reminders sent automatically to customers',
+      'Set recurring appointments in seconds (Growth & Pro)',
+      'Automatic email reminders — SMS on Growth & Pro',
     ],
     mockup: (
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -106,8 +106,8 @@ const TAB_DATA = [
     headline: 'Get paid faster, automatically',
     bullets: [
       'Auto-generated invoices after every completed job',
-      'One-click payment via the customer portal',
-      'Autopay and card-on-file support built in',
+      'One-click online payment collection',
+      'Card-on-file autopay for Pro accounts',
       'Track outstanding balances at a glance',
     ],
     mockup: (
@@ -226,10 +226,10 @@ const TAB_DATA = [
     icon: Zap,
     headline: 'Set it once, let it run your business',
     bullets: [
-      'Auto-send review requests after every completed job',
-      'Follow-up automatically on unpaid invoices',
-      'Win-back campaigns for lapsed customers',
-      'Set triggers and conditions — then let it run',
+      'Auto-send review requests after every completed job (Growth & Pro)',
+      'Automated follow-up campaigns for leads & customers (Growth & Pro)',
+      'Win-back campaigns for lapsed customers (Pro)',
+      'Build custom trigger-and-action rules with the automation engine (Pro)',
     ],
     mockup: (
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
@@ -755,13 +755,20 @@ export function LandingPage() {
             {/* Starter */}
             <div className="bg-card rounded-3xl p-8 border border-border shadow-sm">
               <h3 className="text-2xl font-bold mb-2">Starter</h3>
-              <p className="text-muted-foreground mb-6">For solo operators</p>
+              <p className="text-muted-foreground mb-6">For solo operators getting organized</p>
               <div className="mb-8">
                 <span className="text-5xl font-display font-bold">$49</span>
                 <span className="text-muted-foreground">/mo</span>
               </div>
               <ul className="space-y-4 mb-8">
-                {['1 User', 'Unlimited Customers', 'Basic Scheduling', 'Invoicing & Payments'].map((f, i) => (
+                {[
+                  '1 user',
+                  'Up to 50 active customers',
+                  'Customer CRM & property management',
+                  'Scheduling calendar & job tracking',
+                  'Invoicing & online payment collection',
+                  'Public booking page & email reminders',
+                ].map((f, i) => (
                   <li key={i} className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-primary" />
                     <span>{f}</span>
@@ -779,13 +786,20 @@ export function LandingPage() {
                 Most Popular
               </div>
               <h3 className="text-2xl font-bold mb-2">Growth</h3>
-              <p className="text-primary-foreground/80 mb-6">For growing teams</p>
+              <p className="text-primary-foreground/80 mb-6">For growing crews</p>
               <div className="mb-8">
                 <span className="text-5xl font-display font-bold">$99</span>
                 <span className="text-primary-foreground/80">/mo</span>
               </div>
               <ul className="space-y-4 mb-8">
-                {['Up to 5 Users', 'Recurring Plans', 'Route Optimization', 'Estimates', 'SMS Notifications'].map((f, i) => (
+                {[
+                  'Up to 5 users',
+                  'Up to 250 active customers',
+                  'Team management & route optimization',
+                  'Recurring service plans',
+                  'Customer portal & SMS notifications',
+                  'Review requests & GPS job tracking',
+                ].map((f, i) => (
                   <li key={i} className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-accent" />
                     <span>{f}</span>
@@ -800,13 +814,20 @@ export function LandingPage() {
             {/* Pro */}
             <div className="bg-card rounded-3xl p-8 border border-border shadow-sm">
               <h3 className="text-2xl font-bold mb-2">Pro</h3>
-              <p className="text-muted-foreground mb-6">For established operations</p>
+              <p className="text-muted-foreground mb-6">For established lawn care businesses</p>
               <div className="mb-8">
                 <span className="text-5xl font-display font-bold">$199</span>
                 <span className="text-muted-foreground">/mo</span>
               </div>
               <ul className="space-y-4 mb-8">
-                {['Unlimited Users', 'Advanced Automations', 'Review Requests', 'Custom Reporting', 'Priority Support'].map((f, i) => (
+                {[
+                  'Unlimited users & customers',
+                  'Unlimited appointments, estimates & invoices',
+                  'AI Estimate Builder & Lead Scoring',
+                  'Advanced analytics & revenue forecasting',
+                  'Data export, API access & white-label booking',
+                  'Autopay & priority support',
+                ].map((f, i) => (
                   <li key={i} className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-primary" />
                     <span>{f}</span>

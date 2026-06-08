@@ -19,6 +19,15 @@ export interface SuccessResponse {
   message?: string;
 }
 
+export type RegisterRequestSelectedPlan =
+  (typeof RegisterRequestSelectedPlan)[keyof typeof RegisterRequestSelectedPlan];
+
+export const RegisterRequestSelectedPlan = {
+  starter: "starter",
+  growth: "growth",
+  pro: "pro",
+} as const;
+
 export interface RegisterRequest {
   firstName: string;
   lastName: string;
@@ -27,6 +36,7 @@ export interface RegisterRequest {
   password: string;
   companyName: string;
   phone?: string;
+  selectedPlan?: RegisterRequestSelectedPlan;
 }
 
 export interface LoginRequest {
@@ -421,13 +431,6 @@ export const CreateInvoiceRequestStatus = {
   cancelled: "cancelled",
 } as const;
 
-export interface InvoiceLineItemRequest {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  lineTotal: number;
-}
-
 export interface CreateInvoiceRequest {
   customerId: number;
   appointmentId?: number;
@@ -437,7 +440,6 @@ export interface CreateInvoiceRequest {
   status?: CreateInvoiceRequestStatus;
   dueDate?: string;
   notes?: string;
-  lineItems?: InvoiceLineItemRequest[];
 }
 
 export type UpdateInvoiceRequestStatus =
@@ -459,7 +461,16 @@ export interface UpdateInvoiceRequest {
   dueDate?: string;
   notes?: string;
   paidAt?: string;
-  lineItems?: InvoiceLineItemRequest[];
+}
+
+export interface EstimateLineItem {
+  id: number;
+  estimateId: number;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+  sortOrder: number;
 }
 
 export type EstimateStatus =
@@ -472,16 +483,6 @@ export const EstimateStatus = {
   rejected: "rejected",
   expired: "expired",
 } as const;
-
-export interface EstimateLineItem {
-  id: number;
-  estimateId: number;
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-  sortOrder: number;
-}
 
 export interface Estimate {
   id: number;
@@ -509,6 +510,13 @@ export interface EstimateListResponse {
   limit: number;
 }
 
+export interface CreateEstimateLineItemRequest {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total?: number;
+}
+
 export type CreateEstimateRequestStatus =
   (typeof CreateEstimateRequestStatus)[keyof typeof CreateEstimateRequestStatus];
 
@@ -519,13 +527,6 @@ export const CreateEstimateRequestStatus = {
   rejected: "rejected",
   expired: "expired",
 } as const;
-
-export interface CreateEstimateLineItemRequest {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total?: number;
-}
 
 export interface CreateEstimateRequest {
   customerId: number;
@@ -755,6 +756,28 @@ export interface BillingStatus {
   cancelAtPeriodEnd?: boolean | null;
 }
 
+export type BillingUsageLimits = {
+  maxUsers?: number | null;
+  maxCustomers?: number | null;
+  maxAppointmentsPerMonth?: number | null;
+  maxEstimatesPerMonth?: number | null;
+  maxInvoicesPerMonth?: number | null;
+};
+
+export type BillingUsageUsage = {
+  customers?: number;
+  users?: number;
+  appointments?: number;
+  estimates?: number;
+  invoices?: number;
+};
+
+export interface BillingUsage {
+  plan?: string;
+  limits?: BillingUsageLimits;
+  usage?: BillingUsageUsage;
+}
+
 export type ActivityLogMetadataJson = { [key: string]: unknown } | null;
 
 export interface ActivityLog {
@@ -856,8 +879,49 @@ export interface AdminCompanyListResponse {
   limit: number;
 }
 
+export type AdminCompanyUsageFlagsItemStatus =
+  (typeof AdminCompanyUsageFlagsItemStatus)[keyof typeof AdminCompanyUsageFlagsItemStatus];
+
+export const AdminCompanyUsageFlagsItemStatus = {
+  ok: "ok",
+  near: "near",
+  over: "over",
+  unlimited: "unlimited",
+} as const;
+
+export type AdminCompanyUsageLimits = {
+  maxUsers?: number | null;
+  maxCustomers?: number | null;
+  maxAppointmentsPerMonth?: number | null;
+  maxEstimatesPerMonth?: number | null;
+  maxInvoicesPerMonth?: number | null;
+};
+
+export type AdminCompanyUsageCurrent = {
+  customers?: number;
+  users?: number;
+  appointments?: number;
+  estimates?: number;
+  invoices?: number;
+};
+
+export type AdminCompanyUsageFlagsItem = {
+  metric: string;
+  current: number;
+  limit: number | null;
+  status: AdminCompanyUsageFlagsItemStatus;
+};
+
+export interface AdminCompanyUsage {
+  plan?: string;
+  limits?: AdminCompanyUsageLimits;
+  current?: AdminCompanyUsageCurrent;
+  flags?: AdminCompanyUsageFlagsItem[];
+}
+
 export interface AdminCompanyDetail {
   company: AdminCompany;
+  usage?: AdminCompanyUsage;
   users: TeamMember[];
   recentActivity: ActivityLog[];
 }

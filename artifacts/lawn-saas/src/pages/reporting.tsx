@@ -103,7 +103,7 @@ export function ReportingPage() {
 
   return (
     <AppLayout>
-      <PlanGate feature="reporting">
+      <PlanGate feature="growth_analytics">
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold">Reporting</h1>
           <p className="text-muted-foreground mt-1">Business performance metrics and trends</p>

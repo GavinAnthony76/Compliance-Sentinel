@@ -6,12 +6,15 @@ import { Router } from "express";
 import { db, customersTable, invoicesTable, recurringPlansTable } from "@workspace/db";
 import { eq, and, lt, isNull, or, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 import { sendEmail, sendSMS } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
+// Autopay is a Pro-only feature in the official pricing structure
+router.use(requireFeature("autopay"));
 
 // GET /autopay/customers/:customerId/payment-method
 // Returns the Stripe setup intent for saving a card

@@ -8,7 +8,7 @@ import { sendSMS, sendEmail } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
-router.use(requireFeature("routes"));
+router.use(requireFeature("route_optimization"));
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;

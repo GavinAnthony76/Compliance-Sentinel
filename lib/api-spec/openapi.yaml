@@ -1377,6 +1377,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/BillingStatus"
 
+  /billing/usage:
+    get:
+      operationId: getBillingUsage
+      tags: [billing]
+      summary: Get current plan limits and usage for the authenticated company
+      responses:
+        "200":
+          description: Plan usage summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BillingUsage"
+
   /billing/webhook:
     post:
       operationId: stripeWebhook
@@ -1815,6 +1828,9 @@ components:
           type: string
         phone:
           type: string
+        selectedPlan:
+          type: string
+          enum: [starter, growth, pro]
 
     LoginRequest:
       type: object
@@ -3033,6 +3049,46 @@ components:
           nullable: true
       required: []
 
+    BillingUsage:
+      type: object
+      properties:
+        plan:
+          type: string
+        limits:
+          type: object
+          properties:
+            maxUsers:
+              type: integer
+              nullable: true
+            maxCustomers:
+              type: integer
+              nullable: true
+            maxAppointmentsPerMonth:
+              type: integer
+              nullable: true
+            maxEstimatesPerMonth:
+              type: integer
+              nullable: true
+            maxInvoicesPerMonth:
+              type: integer
+              nullable: true
+          required: []
+        usage:
+          type: object
+          properties:
+            customers:
+              type: integer
+            users:
+              type: integer
+            appointments:
+              type: integer
+            estimates:
+              type: integer
+            invoices:
+              type: integer
+          required: []
+      required: []
+
     # ─── ACTIVITY SCHEMAS ──────────────────────────────────────────────────────
     ActivityLog:
       type: object
@@ -3262,6 +3318,8 @@ components:
       properties:
         company:
           $ref: "#/components/schemas/AdminCompany"
+        usage:
+          $ref: "#/components/schemas/AdminCompanyUsage"
         users:
           type: array
           items:
@@ -3271,6 +3329,47 @@ components:
           items:
             $ref: "#/components/schemas/ActivityLog"
       required: [company, users, recentActivity]
+
+    AdminCompanyUsage:
+      type: object
+      properties:
+        plan:
+          type: string
+        limits:
+          type: object
+          properties:
+            maxUsers: { type: integer, nullable: true }
+            maxCustomers: { type: integer, nullable: true }
+            maxAppointmentsPerMonth: { type: integer, nullable: true }
+            maxEstimatesPerMonth: { type: integer, nullable: true }
+            maxInvoicesPerMonth: { type: integer, nullable: true }
+          required: []
+        current:
+          type: object
+          properties:
+            customers: { type: integer }
+            users: { type: integer }
+            appointments: { type: integer }
+            estimates: { type: integer }
+            invoices: { type: integer }
+          required: []
+        flags:
+          type: array
+          items:
+            type: object
+            properties:
+              metric:
+                type: string
+              current:
+                type: integer
+              limit:
+                type: integer
+                nullable: true
+              status:
+                type: string
+                enum: [ok, near, over, unlimited]
+            required: [metric, current, limit, status]
+      required: []
 
     AdminListResponse:
       type: object

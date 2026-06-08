@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, estimatesTable, estimateLineItemsTable, customersTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
-import { requireFeature } from "../lib/features";
+import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { generateEstimateDraft } from "../lib/ai-estimate";
 import { z } from "zod";
@@ -10,7 +10,7 @@ import crypto from "crypto";
 
 const router = Router();
 router.use(requireAuth);
-router.use(requireFeature("estimates"));
+// Estimates are available on every plan (Starter included), gated only by monthly count limits.
 
 const aiDraftSchema = z.object({
   jobDescription: z.string().min(3).max(2000),
@@ -18,8 +18,8 @@ const aiDraftSchema = z.object({
   services: z.array(z.string().max(120)).max(20).optional().nullable(),
 });
 
-// POST /api/estimates/ai-draft — AI-generated draft line items (Pro/ai gated, not persisted)
-router.post("/ai-draft", requireFeature("ai_hooks"), async (req: any, res) => {
+// POST /api/estimates/ai-draft — AI Estimate Builder is a Pro-only feature
+router.post("/ai-draft", requireFeature("ai_estimate_builder"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const parsed = aiDraftSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -108,7 +108,7 @@ router.get("/", async (req: any, res) => {
   });
 });
 
-router.post("/", async (req: any, res) => {
+router.post("/", requireWithinPlanLimit("estimates"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const estimateNumber = await nextEstimateNumber(companyId);
   const publicToken = crypto.randomBytes(32).toString("hex");
@@ -173,7 +173,7 @@ router.post("/:id/send-for-signature", async (req: any, res) => {
       body: `Hi ${customer.firstName},\n\nYour estimate ${est.estimateNumber} for $${Number(est.total).toFixed(2)} is ready for your review and signature.\n\nView and sign: ${signUrl}\n\nThank you!`,
     });
   }
-  if (customer?.phone) {
+  if (customer?.phone && hasFeature(company?.subscriptionPlan, "sms_notifications")) {
     await sendSMS({ to: customer.phone, body: `${company?.name || "Your service provider"} sent estimate ${est.estimateNumber} for $${Number(est.total).toFixed(2)}. Review & sign: ${signUrl}` });
   }
 

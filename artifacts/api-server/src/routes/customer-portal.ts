@@ -3,6 +3,7 @@ import { db, customersTable, invoicesTable, invoiceLineItemsTable, appointmentsT
 import { eq, and, desc } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { hashPassword, verifyPassword } from "../lib/auth";
+import { hasFeature, getRequiredPlanForFeature } from "../lib/features";
 import { z } from "zod";
 import crypto from "crypto";
 
@@ -93,6 +94,18 @@ router.post("/auth/send-invite", async (req: any, res) => {
     businessCompanyId = payload.companyId;
   } catch {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const [businessCompany] = await db.select({ subscriptionPlan: companiesTable.subscriptionPlan }).from(companiesTable).where(eq(companiesTable.id, businessCompanyId)).limit(1);
+  if (!hasFeature(businessCompany?.subscriptionPlan, "customer_portal")) {
+    const requiredPlan = getRequiredPlanForFeature("customer_portal");
+    return res.status(403).json({
+      error: "PlanUpgradeRequired",
+      message: `This feature requires the ${requiredPlan.charAt(0).toUpperCase()}${requiredPlan.slice(1)} plan.`,
+      feature: "customer_portal",
+      requiredPlan,
+      currentPlan: businessCompany?.subscriptionPlan ?? "none",
+    });
   }
 
   const parsed = z.object({ customerId: z.number().int() }).safeParse(req.body);

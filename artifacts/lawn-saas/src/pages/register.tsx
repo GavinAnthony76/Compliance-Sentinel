@@ -12,23 +12,23 @@ const PLANS = [
     id: 'starter',
     name: 'Starter',
     price: '$49/mo',
-    desc: 'Perfect for solo operators',
-    features: ['1 user account', 'Customer management', 'Scheduling & invoicing', 'Public booking page'],
+    desc: 'For solo operators getting organized',
+    features: ['1 user · 50 active customers', '100 appointments/mo · 10 estimates/mo', 'Customer CRM & scheduling', 'Invoicing & online payments', 'Public booking page'],
   },
   {
     id: 'growth',
     name: 'Growth',
     price: '$99/mo',
-    desc: 'For growing teams',
+    desc: 'For growing crews',
     popular: true,
-    features: ['Multiple staff accounts', 'Recurring service plans', 'SMS reminders', 'Route planning', 'Estimates', 'Review automation'],
+    features: ['Up to 5 users · 250 customers', '500 appointments/mo · 100 estimates/mo', 'Team management & route optimization', 'Customer portal & SMS notifications', 'Recurring plans & review requests'],
   },
   {
     id: 'pro',
     name: 'Pro',
     price: '$199/mo',
-    desc: 'For established businesses',
-    features: ['Everything in Growth', 'Advanced automations', 'AI assistant hooks', 'Advanced analytics', 'Priority support'],
+    desc: 'For established lawn care businesses',
+    features: ['Unlimited users, customers & jobs', 'AI Estimate Builder & Lead Scoring', 'Advanced analytics & forecasting', 'Data export, API access & autopay', 'Priority support'],
   },
 ];
 
@@ -51,7 +51,7 @@ export function RegisterPage() {
     e.preventDefault();
     if (step < 3) { setStep(s => s + 1); return; }
     try {
-      const res = await registerMutation.mutateAsync({ data: form });
+      const res = await registerMutation.mutateAsync({ data: { ...form, selectedPlan: selectedPlan as any } });
       login(res.token);
       toast({ title: 'Account created!', description: 'Welcome to Goshen Lawn Care Management. Complete your onboarding to get started.' });
     } catch (err: any) {

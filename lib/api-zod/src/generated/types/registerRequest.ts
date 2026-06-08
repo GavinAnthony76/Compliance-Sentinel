@@ -5,6 +5,7 @@
  * GreenSync Lawn Care SaaS API
  * OpenAPI spec version: 1.0.0
  */
+import type { RegisterRequestSelectedPlan } from "./registerRequestSelectedPlan";
 
 export interface RegisterRequest {
   firstName: string;
@@ -14,4 +15,5 @@ export interface RegisterRequest {
   password: string;
   companyName: string;
   phone?: string;
+  selectedPlan?: RegisterRequestSelectedPlan;
 }

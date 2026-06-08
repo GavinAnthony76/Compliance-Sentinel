@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, appointmentsTable, customersTable, servicesTable, usersTable, companiesTable, jobTrackingEventsTable } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc, asc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
 import { sendReminder, sendSMS, sendEmail } from "../lib/notifications";
@@ -68,23 +69,25 @@ async function sendAppointmentNotification(appt: any, companyId: number, channel
     const timeStr = appt.scheduledStart ? new Date(appt.scheduledStart).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
     const companyName = company?.name || 'Your service provider';
     const serviceName = service?.name || 'lawn care service';
+    const smsAllowed = hasFeature(company?.subscriptionPlan, "sms_notifications");
 
     if (channel === 'confirmation') {
       const msg = `Hi ${customer.firstName}! Your ${serviceName} appointment with ${companyName} is confirmed for ${dateStr} at ${timeStr}. Reply STOP to opt out.`;
-      if (customer.phone) await sendSMS({ to: customer.phone, body: msg });
+      if (customer.phone && smsAllowed) await sendSMS({ to: customer.phone, body: msg });
       if (customer.email) await sendEmail({
         to: customer.email,
         subject: `Appointment Confirmed — ${serviceName} on ${dateStr}`,
         body: `Hi ${customer.firstName},\n\nYour ${serviceName} appointment with ${companyName} has been confirmed!\n\nDate: ${dateStr}\nTime: ${timeStr}\n\nThank you!`,
       });
     } else {
-      await sendReminder({ customerName: `${customer.firstName} ${customer.lastName}`, customerEmail: customer.email || undefined, customerPhone: customer.phone || undefined, scheduledStart: new Date(appt.scheduledStart), serviceName, channel: customer.phone ? 'sms' : 'email' });
+      const useSms = customer.phone && smsAllowed;
+      await sendReminder({ customerName: `${customer.firstName} ${customer.lastName}`, customerEmail: customer.email || undefined, customerPhone: customer.phone || undefined, scheduledStart: new Date(appt.scheduledStart), serviceName, channel: useSms ? 'sms' : 'email' });
     }
     await logCommunicationEvent({
       companyId,
       customerId: appt.customerId,
       appointmentId: appt.id,
-      channel: customer.phone ? "sms" : "email",
+      channel: customer.phone && smsAllowed ? "sms" : "email",
       subject: channel === "confirmation" ? `Appointment confirmed — ${serviceName}` : `Appointment reminder — ${serviceName}`,
       bodyPreview: `${serviceName} on ${dateStr} at ${timeStr}`,
       status: "sent",
@@ -147,7 +150,7 @@ router.get("/", async (req: any, res) => {
   });
 });
 
-router.post("/", async (req: any, res) => {
+router.post("/", requireWithinPlanLimit("appointments"), async (req: any, res) => {
   const parsed = createAppointmentSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
@@ -272,8 +275,8 @@ router.post("/:id/complete", async (req: any, res) => {
 
 // ─── GPS job-tracking lifecycle ──────────────────────────────────────────────
 
-// POST /:id/check-in — technician arrives on site
-router.post("/:id/check-in", async (req: any, res) => {
+// POST /:id/check-in — technician arrives on site (GPS job tracking — Growth+)
+router.post("/:id/check-in", requireFeature("gps_tracking"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   const parsed = geoSchema.safeParse(req.body ?? {});
@@ -292,8 +295,8 @@ router.post("/:id/check-in", async (req: any, res) => {
   return res.status(201).json({ event });
 });
 
-// POST /:id/start — technician begins the job
-router.post("/:id/start", async (req: any, res) => {
+// POST /:id/start — technician begins the job (GPS job tracking — Growth+)
+router.post("/:id/start", requireFeature("gps_tracking"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   const parsed = geoSchema.safeParse(req.body ?? {});
@@ -312,8 +315,8 @@ router.post("/:id/start", async (req: any, res) => {
   return res.status(201).json({ event, appointment: fmtAppt(updated) });
 });
 
-// GET /:id/tracking — full event timeline for one appointment
-router.get("/:id/tracking", async (req: any, res) => {
+// GET /:id/tracking — full event timeline for one appointment (GPS job tracking — Growth+)
+router.get("/:id/tracking", requireFeature("gps_tracking"), async (req: any, res) => {
   const { companyId } = req.user;
   const id = Number(req.params.id);
   const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);

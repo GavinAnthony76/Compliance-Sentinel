@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAdminListCompanies, useAdminGetCompany, useAdminSuspendCompany, useAdminActivateCompany, useAdminUpdateCompanyPlan } from '@workspace/api-client-react';
 import { AdminLayout } from './admin-dashboard';
 import { Button, Input } from '@/components/ui';
-import { Search, ChevronRight, Plus, X, Pencil, UserX, UserCheck, Trash2, UserPlus, KeyRound, FileText } from 'lucide-react';
+import { Search, ChevronRight, Plus, X, Pencil, UserX, UserCheck, Trash2, UserPlus, KeyRound, FileText, AlertTriangle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -278,6 +278,58 @@ const PLAN_COLORS: Record<string, string> = {
   pro: 'bg-purple-400/10 text-purple-400',
 };
 
+const USAGE_LABELS: Record<string, string> = {
+  customers: 'Active Customers',
+  users: 'Users',
+  appointments: 'Appointments / mo',
+  estimates: 'Estimates / mo',
+  invoices: 'Invoices / mo',
+};
+
+const FLAG_STYLES: Record<string, { bar: string; text: string }> = {
+  ok: { bar: 'bg-primary', text: 'text-slate-400' },
+  near: { bar: 'bg-amber-500', text: 'text-amber-400' },
+  over: { bar: 'bg-red-500', text: 'text-red-400' },
+  unlimited: { bar: 'bg-slate-700', text: 'text-slate-400' },
+};
+
+function UsageCard({ usage }: { usage: any }) {
+  if (!usage) return null;
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-bold text-white">Plan Usage & Limits</h2>
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${PLAN_COLORS[usage.plan] ?? 'bg-slate-700 text-slate-400'}`}>{usage.plan}</span>
+      </div>
+      <div className="space-y-4">
+        {(usage.flags ?? []).map((f: any) => {
+          const style = FLAG_STYLES[f.status] ?? FLAG_STYLES.ok;
+          const pct = f.limit ? Math.min(100, Math.round((f.current / f.limit) * 100)) : 0;
+          return (
+            <div key={f.metric}>
+              <div className="flex items-center justify-between text-sm mb-1.5">
+                <span className="text-slate-300">{USAGE_LABELS[f.metric] ?? f.metric}</span>
+                <span className={style.text}>{f.limit === null ? `${f.current} / Unlimited` : `${f.current} / ${f.limit}`}</span>
+              </div>
+              {f.limit !== null && (
+                <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                  <div className={`h-full rounded-full ${style.bar}`} style={{ width: `${pct}%` }} />
+                </div>
+              )}
+              {(f.status === 'near' || f.status === 'over') && (
+                <p className={`text-xs mt-1 flex items-center gap-1 ${style.text}`}>
+                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                  {f.status === 'over' ? 'Over plan limit' : 'Near plan limit'}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-400/10 text-green-400',
   trialing: 'bg-yellow-400/10 text-yellow-400',
@@ -456,7 +508,7 @@ export function AdminCompanyDetailPage() {
   if (isLoading) return <AdminLayout><div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div></AdminLayout>;
   if (!data?.company) return <AdminLayout><div className="text-slate-400 py-20 text-center">Company not found</div></AdminLayout>;
 
-  const { company, users, recentActivity } = data;
+  const { company, users, recentActivity, usage } = data as any;
   const currentNotes = notes !== null ? notes : (company.internalNotes ?? '');
 
   return (
@@ -500,6 +552,8 @@ export function AdminCompanyDetailPage() {
               </div>
             ))}
           </div>
+
+          <UsageCard usage={usage} />
 
           {/* Company info */}
           <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, communicationEventsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
 
@@ -11,6 +12,7 @@ const DIRECTIONS = ["outbound", "inbound"] as const;
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireFeature("communication_timeline"));
 
 // GET /api/communications?customerId= | leadId= — communication timeline
 router.get("/", async (req: any, res) => {

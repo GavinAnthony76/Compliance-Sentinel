@@ -11,7 +11,7 @@ const CHANNELS = ["email", "sms"] as const;
 
 const router = Router();
 router.use(requireAuth);
-router.use(requireFeature("follow_ups"));
+router.use(requireFeature("follow_up_campaigns"));
 
 const campaignSchema = z.object({
   name: z.string().min(1).max(150),

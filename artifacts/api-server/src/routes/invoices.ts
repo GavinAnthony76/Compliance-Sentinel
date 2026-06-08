@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable, companiesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireWithinPlanLimit } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
 import { sendInvoiceEmail, resolveBaseUrl, dispatchPaymentReceiptEmail } from "../lib/notifications";
@@ -175,7 +176,7 @@ async function handleFromAppointment(req: any, res: any) {
 router.get("/from-appointment/:appointmentId", handleFromAppointment);
 router.post("/from-appointment/:appointmentId", handleFromAppointment);
 
-router.post("/", async (req: any, res) => {
+router.post("/", requireWithinPlanLimit("invoices"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const lineItems: any[] = req.body.lineItems ?? [];
 

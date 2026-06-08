@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, customersTable, propertiesTable, appointmentsTable, invoicesTable, companiesTable } from "@workspace/db";
 import { eq, and, ilike, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
 import crypto from "crypto";
@@ -47,7 +48,7 @@ router.get("/", async (req: any, res) => {
   return res.json({ customers, total: Number(totalResult[0].count), page, limit });
 });
 
-router.post("/", async (req: any, res) => {
+router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
   const parsed = customerBodySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
@@ -63,17 +64,21 @@ router.post("/", async (req: any, res) => {
   // Fire customer_created automations (non-blocking)
   fireAutomations(companyId, "customer_created", { customerId: customer.id, userId });
 
-  // Auto-send portal invite via SMS when customer has a phone number
+  // Auto-send portal invite (Growth+ feature — customer portal is not part of Starter)
   let portalUrl: string | undefined;
   try {
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
-    const inviteToken = crypto.randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
-    const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-    portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
-    const { sendSMS } = await import("../lib/notifications");
-    await sendSMS({ to: customer.phone!, body: `${company.name} has invited you to your customer portal. Set up your account here: ${portalUrl}` });
+    if (company && hasFeature(company.subscriptionPlan, "customer_portal") && customer.phone) {
+      const inviteToken = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+      const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+      portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
+      if (hasFeature(company.subscriptionPlan, "sms_notifications")) {
+        const { sendSMS } = await import("../lib/notifications");
+        await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Set up your account here: ${portalUrl}` });
+      }
+    }
   } catch { /* non-fatal — invite can be re-sent from customer detail */ }
 
   return res.status(201).json({ ...customer, portalUrl });

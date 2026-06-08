@@ -16,6 +16,11 @@ const registerSchema = z.object({
   password: z.string().min(8),
   companyName: z.string().min(1),
   phone: z.string().optional(),
+  // The plan the user picked during onboarding. This only determines which
+  // plan their free trial is attached to — it does NOT grant a paid
+  // subscription. Converting to a paid plan still requires a confirmed
+  // Stripe checkout/webhook (see routes/billing.ts).
+  selectedPlan: z.enum(["starter", "growth", "pro"]).optional(),
 });
 
 const loginSchema = z.object({
@@ -29,7 +34,7 @@ router.post("/register", async (req, res) => {
     return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
   }
 
-  const { firstName, lastName, email, password, companyName, phone } = parsed.data;
+  const { firstName, lastName, email, password, companyName, phone, selectedPlan } = parsed.data;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
   if (existing.length > 0) {
@@ -42,7 +47,10 @@ router.post("/register", async (req, res) => {
   const [company] = await db.insert(companiesTable).values({
     name: companyName,
     slug,
-    subscriptionPlan: null,
+    // Trial is attached to the plan the user selected during onboarding so
+    // they can evaluate that tier's features. This is a time-boxed trial,
+    // not a paid subscription — converting to paid still requires Stripe.
+    subscriptionPlan: selectedPlan ?? "growth",
     subscriptionStatus: "trial",
     trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
     isActive: true,
@@ -65,6 +73,7 @@ router.post("/register", async (req, res) => {
     action: "company.registered",
     entityType: "company",
     entityId: company.id,
+    metadata: { selectedPlan: company.subscriptionPlan },
   });
 
   const token = signUserToken({ userId: user.id, companyId: company.id, role: user.role });

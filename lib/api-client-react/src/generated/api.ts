@@ -37,6 +37,7 @@ import type {
   AutomationListResponse,
   BillingPlansResponse,
   BillingStatus,
+  BillingUsage,
   BookingConfirmation,
   BookingPageInfo,
   BookingRequest,
@@ -5696,6 +5697,81 @@ export function useGetBillingStatus<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetBillingStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get current plan limits and usage for the authenticated company
+ */
+export const getGetBillingUsageUrl = () => {
+  return `/api/billing/usage`;
+};
+
+export const getBillingUsage = async (
+  options?: RequestInit,
+): Promise<BillingUsage> => {
+  return customFetch<BillingUsage>(getGetBillingUsageUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetBillingUsageQueryKey = () => {
+  return [`/api/billing/usage`] as const;
+};
+
+export const getGetBillingUsageQueryOptions = <
+  TData = Awaited<ReturnType<typeof getBillingUsage>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingUsage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetBillingUsageQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getBillingUsage>>> = ({
+    signal,
+  }) => getBillingUsage({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingUsage>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetBillingUsageQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getBillingUsage>>
+>;
+export type GetBillingUsageQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get current plan limits and usage for the authenticated company
+ */
+
+export function useGetBillingUsage<
+  TData = Awaited<ReturnType<typeof getBillingUsage>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getBillingUsage>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetBillingUsageQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

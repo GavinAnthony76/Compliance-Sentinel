@@ -4,10 +4,18 @@ import { eq, sql, desc, ilike, and, inArray, or } from "drizzle-orm";
 import { requireAdminAuth, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
+import { getPlanUsageSummary, type Plan } from "../lib/features";
+import { STRIPE_PLANS } from "../lib/stripe";
 import { z } from "zod";
 
-const PLAN_MRR: Record<string, number> = { starter: 4900, growth: 9900, pro: 19900 };
-const PLAN_LABEL: Record<string, string> = { starter: "Starter ($49)", growth: "Growth ($99)", pro: "Pro ($199)" };
+// MRR-per-plan and labels are derived from STRIPE_PLANS (the single source of
+// truth for plan pricing) rather than duplicated here.
+const PLAN_MRR: Record<string, number> = Object.fromEntries(
+  Object.values(STRIPE_PLANS).map(p => [p.id, p.price * 100]),
+);
+const PLAN_LABEL: Record<string, string> = Object.fromEntries(
+  Object.values(STRIPE_PLANS).map(p => [p.id, `${p.name} ($${p.price})`]),
+);
 
 const router = Router();
 router.use(requireAdminAuth);
@@ -185,7 +193,7 @@ router.get("/companies/:id", async (req, res) => {
     db.select().from(activityLogsTable).where(eq(activityLogsTable.companyId, id)).orderBy(desc(activityLogsTable.createdAt)).limit(10),
   ]);
 
-  const [custCount, apptCount, owner, invoiceSummary] = await Promise.all([
+  const [custCount, apptCount, owner, invoiceSummary, usage] = await Promise.all([
     db.select({ count: sql<number>`count(*)` }).from(customersTable).where(eq(customersTable.companyId, id)),
     db.select({ count: sql<number>`count(*)` }).from(appointmentsTable).where(eq(appointmentsTable.companyId, id)),
     db.select().from(usersTable).where(and(eq(usersTable.companyId, id), eq(usersTable.role, "owner"))).limit(1),
@@ -194,7 +202,21 @@ router.get("/companies/:id", async (req, res) => {
       paid: sql<number>`sum(case when status='paid' then 1 else 0 end)`,
       revenue: sql<number>`coalesce(sum(case when status='paid' then total::numeric else 0 end), 0)`,
     }).from(invoicesTable).where(eq(invoicesTable.companyId, id)),
+    getPlanUsageSummary(id),
   ]);
+
+  // Flag usage at/near plan limits so admins can spot accounts that need attention.
+  const limitFlags = (Object.entries(usage.usage) as [keyof typeof usage.usage, number][]).map(([metric, current]) => {
+    const limitKey = ({
+      customers: "maxCustomers", users: "maxUsers", appointments: "maxAppointmentsPerMonth",
+      estimates: "maxEstimatesPerMonth", invoices: "maxInvoicesPerMonth",
+    } as const)[metric];
+    const limit = usage.limits[limitKey];
+    if (limit === null) return { metric, current, limit: null, status: "unlimited" as const };
+    const pct = limit > 0 ? current / limit : 0;
+    const status = current >= limit ? "over" : pct >= 0.8 ? "near" : "ok";
+    return { metric, current, limit, status };
+  });
 
   return res.json({
     company: {
@@ -207,6 +229,7 @@ router.get("/companies/:id", async (req, res) => {
       invoicesPaid: Number(invoiceSummary[0]?.paid ?? 0),
       revenue: Number(invoiceSummary[0]?.revenue ?? 0),
     },
+    usage: { plan: usage.plan, limits: usage.limits, current: usage.usage, flags: limitFlags },
     users,
     recentActivity,
   });
@@ -252,8 +275,18 @@ router.put("/companies/:id/plan", async (req: any, res) => {
   const id = Number(req.params.id);
   const plan = req.body?.plan;
   if (!plan || !["starter", "growth", "pro"].includes(plan)) return res.status(400).json({ error: "InvalidPlan", message: "Valid plan required: starter, growth, or pro" });
+  const [existing] = await db.select({ subscriptionPlan: companiesTable.subscriptionPlan }).from(companiesTable).where(eq(companiesTable.id, id)).limit(1);
+  if (!existing) return res.status(404).json({ error: "NotFound" });
   await db.update(companiesTable).set({ subscriptionPlan: plan, updatedAt: new Date() }).where(eq(companiesTable.id, id));
-  await logActivity({ adminId: req.admin.adminId, action: "admin.company_plan_changed", entityType: "company", entityId: id, metadata: { plan } });
+  // Manual platform-admin plan changes are audited with both the prior and new plan
+  // so support/billing can reconstruct who changed what and when.
+  await logActivity({
+    adminId: req.admin.adminId,
+    action: "admin.company_plan_changed",
+    entityType: "company",
+    entityId: id,
+    metadata: { fromPlan: existing.subscriptionPlan ?? "none", toPlan: plan },
+  });
   return res.json({ success: true });
 });
 

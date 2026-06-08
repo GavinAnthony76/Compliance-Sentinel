@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, usersTable, companiesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth, requireRole, hashPassword } from "../lib/auth";
-import { requireFeature } from "../lib/features";
+import { requireFeature, requireWithinPlanLimit } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { sendTeamInviteEmail, resolveBaseUrl } from "../lib/notifications";
 
@@ -26,7 +26,7 @@ router.get("/", async (req: any, res) => {
   return res.json({ members });
 });
 
-router.post("/", requireRole("owner", "admin"), requireFeature("multi_staff"), async (req: any, res) => {
+router.post("/", requireRole("owner", "admin"), requireFeature("team_management"), requireWithinPlanLimit("users"), async (req: any, res) => {
   const { companyId, userId } = req.user;
 
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, req.body.email)).limit(1);
@@ -77,7 +77,7 @@ router.post("/", requireRole("owner", "admin"), requireFeature("multi_staff"), a
   });
 });
 
-router.put("/:id", requireRole("owner", "admin"), requireFeature("multi_staff"), async (req: any, res) => {
+router.put("/:id", requireRole("owner", "admin"), requireFeature("team_management"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   const [existing] = await db.select().from(usersTable).where(and(eq(usersTable.id, id), eq(usersTable.companyId, companyId))).limit(1);
@@ -106,7 +106,7 @@ router.put("/:id", requireRole("owner", "admin"), requireFeature("multi_staff"),
   });
 });
 
-router.delete("/:id", requireRole("owner"), requireFeature("multi_staff"), async (req: any, res) => {
+router.delete("/:id", requireRole("owner"), requireFeature("team_management"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   if (id === req.user.userId) return res.status(400).json({ error: "Cannot remove yourself" });

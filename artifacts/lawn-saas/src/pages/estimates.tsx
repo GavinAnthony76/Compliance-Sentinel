@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useListCustomers, useGetEstimate } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
-import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, FileText, PenLine, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -175,7 +174,6 @@ export function EstimatesPage() {
 
   return (
     <AppLayout>
-      <PlanGate feature="estimates">
       {showNew && <EstimateModal onClose={() => setShowNew(false)} />}
       {editing && <EstimateModal estimate={editing} onClose={() => setEditing(null)} />}
       <div className="flex items-center justify-between mb-8">
@@ -252,7 +250,6 @@ export function EstimatesPage() {
           )}
         </Card>
       )}
-      </PlanGate>
     </AppLayout>
   );
 }

@@ -335,7 +335,7 @@ export function RoutesPage() {
 
   return (
     <AppLayout>
-      <PlanGate feature="routes">
+      <PlanGate feature="route_optimization">
         {(showForm || editing) && (
           <RouteFormModal
             route={editing ?? undefined}
