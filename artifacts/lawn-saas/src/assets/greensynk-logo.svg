@@ -1,0 +1,8 @@
+<svg width="168" height="40" viewBox="0 0 168 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="40" height="40" rx="9" fill="#059669"/>
+  <path d="M20 7C20 7 10 15 10 25C10 30.5 14.5 35 20 35C25.5 35 30 30.5 30 25C30 15 20 7 20 7Z" fill="white"/>
+  <line x1="20" y1="17" x2="20" y2="35" stroke="#059669" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M20 23C20 23 14 20 11 16" stroke="#059669" stroke-width="2" stroke-linecap="round"/>
+  <path d="M20 28C20 28 26 25 29 21" stroke="#059669" stroke-width="2" stroke-linecap="round"/>
+  <text x="52" y="27" font-family="Inter, system-ui, sans-serif" font-weight="700" font-size="20" fill="#111827" letter-spacing="-0.3">GreenSynk</text>
+</svg>

@@ -53,7 +53,7 @@ export function RegisterPage() {
     try {
       const res = await registerMutation.mutateAsync({ data: { ...form, selectedPlan: selectedPlan as any } });
       login(res.token);
-      toast({ title: 'Account created!', description: 'Welcome to Goshen Lawn Care Management. Complete your onboarding to get started.' });
+      toast({ title: 'Account created!', description: 'Welcome to GreenSynk. Complete your onboarding to get started.' });
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err.message || 'Please try again', variant: 'destructive' });
     }

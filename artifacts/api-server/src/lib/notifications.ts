@@ -42,7 +42,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   const creds = await resolveEmailCredentials();
   if (!creds) {
     const msg =
-      "No SendGrid credentials available (managed connector not connected and SENDGRID_API_KEY unset) — email delivery is disabled";
+      "No Resend credentials available (RESEND_API_KEY unset) — email delivery is disabled";
     if (isDev) {
       logger.warn(`[Email] ${msg}`);
     } else {
@@ -393,11 +393,11 @@ export async function sendWelcomeEmail(opts: {
 }): Promise<void> {
   await sendEmail({
     to: opts.to,
-    subject: `Welcome to GreenSync, ${opts.firstName}!`,
+    subject: `Welcome to GreenSynk, ${opts.firstName}!`,
     body: [
       `Hi ${opts.firstName},`,
       ``,
-      `Welcome to GreenSync! Your company "${opts.companyName}" is all set up and your 14-day free trial has started.`,
+      `Welcome to GreenSynk! Your company "${opts.companyName}" is all set up and your 14-day free trial has started.`,
       ``,
       `Here are a few things you can do right away:`,
       `  • Add your customers and properties`,
@@ -410,7 +410,7 @@ export async function sendWelcomeEmail(opts: {
       `If you have any questions, just reply to this email — we're happy to help.`,
       ``,
       `Welcome aboard,`,
-      `The GreenSync Team`,
+      `The GreenSynk Team`,
     ].join("\n"),
   });
 }
@@ -495,7 +495,7 @@ export async function sendTeamInviteEmail(opts: {
 }): Promise<void> {
   await sendEmail({
     to: opts.to,
-    subject: `You've been invited to join ${opts.companyName} on GreenSync`,
-    body: `Hi ${opts.firstName},\n\nYou have been added as a team member at ${opts.companyName} on GreenSync.\n\nHere are your login credentials:\n\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword}\n\nLogin here: ${opts.loginUrl}\n\nPlease change your password after your first login.\n\nThank you,\nThe GreenSync Team`,
+    subject: `You've been invited to join ${opts.companyName} on GreenSynk`,
+    body: `Hi ${opts.firstName},\n\nYou have been added as a team member at ${opts.companyName} on GreenSynk.\n\nHere are your login credentials:\n\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword}\n\nLogin here: ${opts.loginUrl}\n\nPlease change your password after your first login.\n\nThank you,\nThe GreenSynk Team`,
   });
 }

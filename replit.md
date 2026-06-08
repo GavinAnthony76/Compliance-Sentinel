@@ -1,4 +1,4 @@
-# GreenSync - Lawn Care SaaS Platform
+# GreenSynk - Lawn Care SaaS Platform
 
 ## Overview
 
@@ -132,7 +132,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Demo Credentials
 - Company: `alex@greenscapes.com` / `Demo1234!` (Growth plan)
-- Admin: `admin@greensync.com` / `Admin1234!`
+- Admin: `admin@greensynk.com` / `Admin1234!`
 - Public booking: `/book/greenscapes-demo`
 
 ## Demo Data (seeded)

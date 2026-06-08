@@ -80,7 +80,7 @@ export function ForgotUsernamePage() {
                   <Mail className="w-7 h-7 text-green-600" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  If <span className="font-semibold text-foreground">{email}</span> is registered with Goshen Lawn Care Management, your login details have been sent to that address. Please check your inbox.
+                  If <span className="font-semibold text-foreground">{email}</span> is registered with GreenSynk, your login details have been sent to that address. Please check your inbox.
                 </p>
                 <p className="text-xs text-muted-foreground">
                   Didn't receive it? Check your spam folder, or{' '}

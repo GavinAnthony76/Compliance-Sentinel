@@ -418,7 +418,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Everything you need to grow</h2>
-            <p className="text-lg text-muted-foreground">Ditch the spreadsheets and disconnected apps. Goshen Lawn Care Management brings your entire operation into one place.</p>
+            <p className="text-lg text-muted-foreground">Ditch the spreadsheets and disconnected apps. GreenSynk brings your entire operation into one place.</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -653,7 +653,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center max-w-3xl mx-auto mb-12">
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Everything your business needs, in one place</h2>
-            <p className="text-lg text-muted-foreground">Go deep on any feature. Goshen Lawn Care Management is built from the ground up for lawn care professionals.</p>
+            <p className="text-lg text-muted-foreground">Go deep on any feature. GreenSynk is built from the ground up for lawn care professionals.</p>
           </div>
 
           {/* Tab Strip */}
@@ -725,7 +725,7 @@ export function LandingPage() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,255,255,0.08)_0%,_transparent_60%)]" />
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h2 className="text-3xl md:text-4xl font-display font-extrabold text-white tracking-tight mb-4">
-            See Goshen in action
+            See GreenSynk in action
           </h2>
           <p className="text-lg text-white/80 mb-10 leading-relaxed">
             Join hundreds of lawn care businesses already saving time and growing revenue.
@@ -847,14 +847,14 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Trusted by lawn care pros</h2>
-            <p className="text-lg text-muted-foreground">See what business owners are saying about Goshen.</p>
+            <p className="text-lg text-muted-foreground">See what business owners are saying about GreenSynk.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="bg-background rounded-3xl p-8 border border-border shadow-sm flex flex-col">
               <div className="flex gap-1 mb-4">
                 {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
               </div>
-              <p className="text-muted-foreground leading-relaxed flex-1">"Goshen cut my admin time in half. I used to spend Sunday evenings doing invoices — now they go out automatically the moment I mark a job complete. My customers love how professional it looks."</p>
+              <p className="text-muted-foreground leading-relaxed flex-1">"GreenSynk cut my admin time in half. I used to spend Sunday evenings doing invoices — now they go out automatically the moment I mark a job complete. My customers love how professional it looks."</p>
               <div className="flex items-center gap-3 mt-6 pt-6 border-t border-border">
                 <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">TH</div>
                 <div>
@@ -867,7 +867,7 @@ export function LandingPage() {
               <div className="flex gap-1 mb-4">
                 {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-white text-white" />)}
               </div>
-              <p className="text-primary-foreground/90 leading-relaxed flex-1">"We grew from 40 to 110 customers in one season and Goshen scaled right with us. The route planning alone saves my crew 45 minutes a day. Worth every penny of the Pro plan."</p>
+              <p className="text-primary-foreground/90 leading-relaxed flex-1">"We grew from 40 to 110 customers in one season and GreenSynk scaled right with us. The route planning alone saves my crew 45 minutes a day. Worth every penny of the Pro plan."</p>
               <div className="flex items-center gap-3 mt-6 pt-6 border-t border-primary-foreground/20">
                 <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shrink-0">MR</div>
                 <div>
@@ -943,7 +943,7 @@ export function LandingPage() {
           </div>
 
           <div className="border-t border-background/10 pt-8 text-center">
-            <p className="text-background/40 text-sm">© 2026 Goshen Lawn Care Management. All rights reserved.</p>
+            <p className="text-background/40 text-sm">© 2026 GreenSynk. All rights reserved.</p>
           </div>
         </div>
       </footer>

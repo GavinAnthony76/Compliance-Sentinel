@@ -61,7 +61,7 @@ export function AdminResetPasswordPage() {
               <ShieldCheck className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <div className="font-display font-bold text-2xl">Goshen</div>
+              <div className="font-display font-bold text-2xl">GreenSynk</div>
               <div className="text-xs text-slate-400 font-medium tracking-wider uppercase">Platform Admin</div>
             </div>
           </div>

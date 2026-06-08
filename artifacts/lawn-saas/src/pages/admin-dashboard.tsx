@@ -25,7 +25,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <Shield className="w-6 h-6 text-primary" />
             <div>
-              <div className="font-bold text-white">Goshen</div>
+              <div className="font-bold text-white">GreenSynk</div>
               <div className="text-xs text-slate-400">Admin Panel</div>
             </div>
           </div>

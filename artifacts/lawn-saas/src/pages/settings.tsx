@@ -255,7 +255,7 @@ export function SettingsPage() {
                 <label className="text-sm font-semibold block mb-3">Accepted Payment Methods</label>
                 <p className="text-xs text-muted-foreground mb-3">Choose which payment options your customers can use. These are displayed on their invoices and in the customer portal.</p>
                 <div className="mb-3 p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-800">
-                  <strong>Note:</strong> Card (Online) enables a Stripe-hosted payment link in the customer portal for Growth and Pro plans. All other methods (Cash, Check, Zelle, Venmo, Cash App) are collected and reconciled outside this app — Goshen Lawn Care Management does not process or hold funds directly.
+                  <strong>Note:</strong> Card (Online) enables a Stripe-hosted payment link in the customer portal for Growth and Pro plans. All other methods (Cash, Check, Zelle, Venmo, Cash App) are collected and reconciled outside this app — GreenSynk does not process or hold funds directly.
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {PAYMENT_METHODS.map(m => (
