@@ -12,6 +12,29 @@ const PLAN_LABEL: Record<string, string> = { starter: "Starter ($49)", growth: "
 const router = Router();
 router.use(requireAdminAuth);
 
+// Block all admin functionality until a forced password change is completed.
+// The change happens via /admin/auth/change-password (mounted separately), so
+// this gate cannot lock an admin out of resolving it.
+router.use(async (req: any, res, next) => {
+  try {
+    const { adminId } = req.admin;
+    const [admin] = await db
+      .select({ mustChangePassword: platformAdminsTable.mustChangePassword })
+      .from(platformAdminsTable)
+      .where(eq(platformAdminsTable.id, adminId))
+      .limit(1);
+    if (admin?.mustChangePassword) {
+      return res.status(403).json({
+        error: "PasswordChangeRequired",
+        message: "You must change your password before continuing.",
+      });
+    }
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 router.get("/dashboard", async (_req, res) => {
   const [

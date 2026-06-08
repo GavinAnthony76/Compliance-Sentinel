@@ -15,6 +15,7 @@ import { ForgotUsernamePage } from "@/pages/forgot-username";
 import { ResetPasswordPage } from "@/pages/reset-password";
 import { AdminForgotPasswordPage } from "@/pages/admin-forgot-password";
 import { AdminResetPasswordPage } from "@/pages/admin-reset-password";
+import { AdminChangePasswordPage } from "@/pages/admin-change-password";
 import { PortalForgotPasswordPage } from "@/pages/portal-forgot-password";
 import { PublicBookingPage } from "@/pages/public-booking";
 import { PortalLoginPage } from "@/pages/portal-login";
@@ -122,18 +123,21 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ component: Component, adminOnly = false }: { component: any, adminOnly?: boolean }) {
-  const { isAuthenticated, isAdminAuthenticated, isLoading } = useAuthState();
+  const { isAuthenticated, isAdminAuthenticated, isLoading, adminUser } = useAuthState();
   const [, setLocation] = useLocation();
+  const adminMustChangePassword = adminOnly && !!(adminUser as any)?.mustChangePassword;
 
   useEffect(() => {
     if (!isLoading) {
       if (adminOnly && !isAdminAuthenticated) {
         setLocation('/admin/login');
+      } else if (adminMustChangePassword) {
+        setLocation('/admin/change-password');
       } else if (!adminOnly && !isAuthenticated) {
         setLocation('/login');
       }
     }
-  }, [isAuthenticated, isAdminAuthenticated, isLoading, adminOnly, setLocation]);
+  }, [isAuthenticated, isAdminAuthenticated, isLoading, adminOnly, adminMustChangePassword, setLocation]);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
@@ -155,6 +159,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPasswordPage} />
       <Route path="/admin/forgot-password" component={AdminForgotPasswordPage} />
       <Route path="/admin/reset-password" component={AdminResetPasswordPage} />
+      <Route path="/admin/change-password" component={AdminChangePasswordPage} />
       <Route path="/book/:slug" component={PublicBookingPage} />
 
       {/* Customer portal routes */}
