@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useGetSettings, useUpdateSettings } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button, Input } from '@/components/ui';
-import { Settings, Globe, Palette, CreditCard } from 'lucide-react';
+import { Settings, Globe, Palette, CreditCard, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetSettingsQueryKey } from '@workspace/api-client-react';
+import { useLocation } from 'wouter';
 
 const PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash' },
@@ -18,12 +19,32 @@ const PAYMENT_METHODS = [
   { value: 'other',         label: 'Other' },
 ];
 
+function useConnectStatus() {
+  const [status, setStatus] = useState<{ connected: boolean; chargesEnabled?: boolean; payoutsEnabled?: boolean; detailsSubmitted?: boolean } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = () => {
+    setLoading(true);
+    fetch('/api/billing/connect/status')
+      .then(r => r.json())
+      .then(setStatus)
+      .catch(() => setStatus({ connected: false }))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { refresh(); }, []);
+  return { status, loading, refresh };
+}
+
 export function SettingsPage() {
   const { data: company, isLoading } = useGetSettings();
   const { toast } = useToast();
   const qc = useQueryClient();
   const updateMut = useUpdateSettings();
+  const [, setLocation] = useLocation();
   const [tab, setTab] = useState<'business' | 'branding' | 'payments'>('business');
+  const { status: connectStatus, loading: connectLoading, refresh: refreshConnect } = useConnectStatus();
+  const [connectWorking, setConnectWorking] = useState(false);
 
   const [businessForm, setBusinessForm] = useState({
     name: '',
@@ -73,6 +94,50 @@ export function SettingsPage() {
       });
     }
   }, [company]);
+
+  // Handle connect return/refresh from Stripe
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connect = params.get('connect');
+    if (connect === 'success') {
+      setTab('payments');
+      refreshConnect();
+      toast({ title: 'Stripe account connected!', description: 'Your customers can now pay invoices online.' });
+      setLocation('/settings', { replace: true });
+    } else if (connect === 'refresh') {
+      setTab('payments');
+      toast({ title: 'Stripe setup incomplete', description: 'Please finish connecting your Stripe account.', variant: 'destructive' });
+      setLocation('/settings', { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConnectOnboard = async () => {
+    setConnectWorking(true);
+    try {
+      const res = await fetch('/api/billing/connect/onboard', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error');
+      window.location.href = data.url;
+    } catch (err: any) {
+      toast({ title: 'Could not start Stripe setup', description: err.message, variant: 'destructive' });
+      setConnectWorking(false);
+    }
+  };
+
+  const handleConnectDashboard = async () => {
+    setConnectWorking(true);
+    try {
+      const res = await fetch('/api/billing/connect/dashboard', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error');
+      window.open(data.url, '_blank');
+    } catch (err: any) {
+      toast({ title: 'Could not open Stripe dashboard', description: err.message, variant: 'destructive' });
+    } finally {
+      setConnectWorking(false);
+    }
+  };
 
   // Load payment config separately
   useEffect(() => {
@@ -249,8 +314,56 @@ export function SettingsPage() {
         </Card>
       ) : (
         <Card className="border-border/50">
-          <CardContent className="p-6">
-            <form onSubmit={handleSavePayments} className="space-y-6 max-w-2xl">
+          <CardContent className="p-6 space-y-8 max-w-2xl">
+
+            {/* ── Stripe Connect Section ─────────────────────────── */}
+            <div>
+              <h3 className="text-base font-semibold mb-1 flex items-center gap-2"><CreditCard className="w-4 h-4" /> Stripe Payments (Online Card Processing)</h3>
+              <p className="text-xs text-muted-foreground mb-4">Connect your Stripe account so customers can pay invoices online by card. Payments go directly to your Stripe account — GreenSynk never holds your funds.</p>
+
+              {connectLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" /> Checking connection…</div>
+              ) : connectStatus?.connected ? (
+                <div className="rounded-xl border p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    {connectStatus.chargesEnabled
+                      ? <CheckCircle className="w-5 h-5 text-green-500" />
+                      : <AlertCircle className="w-5 h-5 text-amber-500" />}
+                    <span className="text-sm font-medium">
+                      {connectStatus.chargesEnabled ? 'Stripe account connected and active' : 'Stripe account connected — setup incomplete'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                    <span>Charges enabled: <strong className={connectStatus.chargesEnabled ? 'text-green-600' : 'text-amber-600'}>{connectStatus.chargesEnabled ? 'Yes' : 'No'}</strong></span>
+                    <span>Payouts enabled: <strong className={connectStatus.payoutsEnabled ? 'text-green-600' : 'text-amber-600'}>{connectStatus.payoutsEnabled ? 'Yes' : 'No'}</strong></span>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    {!connectStatus.detailsSubmitted && (
+                      <Button type="button" size="sm" onClick={handleConnectOnboard} isLoading={connectWorking}>
+                        Complete Setup
+                      </Button>
+                    )}
+                    <Button type="button" size="sm" variant="outline" onClick={handleConnectDashboard} isLoading={connectWorking} className="flex items-center gap-1">
+                      <ExternalLink className="w-3 h-3" /> Open Stripe Dashboard
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={refreshConnect} disabled={connectLoading} className="text-muted-foreground">
+                      Refresh Status
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed p-4 space-y-3">
+                  <p className="text-sm text-muted-foreground">No Stripe account connected. Connect Stripe to enable the "Pay Online" button on customer invoices.</p>
+                  <Button type="button" onClick={handleConnectOnboard} isLoading={connectWorking}>
+                    Connect Stripe Account
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-border" />
+
+            <form onSubmit={handleSavePayments} className="space-y-6">
               <div>
                 <label className="text-sm font-semibold block mb-3">Accepted Payment Methods</label>
                 <p className="text-xs text-muted-foreground mb-3">Choose which payment options your customers can use. These are displayed on their invoices and in the customer portal.</p>

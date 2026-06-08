@@ -463,25 +463,58 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
     return res.status(503).json({ error: "BillingUnavailable", message: "Payment processing not configured" });
   }
 
-  const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+  // --- CONNECT ENFORCEMENT: company must have a connected Stripe account ---
+  if (!company.stripeConnectAccountId) {
+    return res.status(403).json({
+      error: "ConnectRequired",
+      message: "This company has not connected their Stripe account yet. Online payments are not available.",
+    });
+  }
 
-  // Create a Stripe Checkout session for the customer to pay
-  const session = await stripe.checkout.sessions.create({
+  // Verify the Connect account can actually accept charges
+  try {
+    const account = await stripe.accounts.retrieve(company.stripeConnectAccountId);
+    if (!account.charges_enabled) {
+      return res.status(403).json({
+        error: "ConnectIncomplete",
+        message: "The company's Stripe account setup is not complete. Online payments are temporarily unavailable.",
+      });
+    }
+  } catch {
+    return res.status(503).json({ error: "ConnectError", message: "Could not verify payment account." });
+  }
+
+  const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+  const amountCents = Math.round(Number(invoice.total) * 100);
+
+  // Optional platform fee (e.g. 0.5%) — set STRIPE_PLATFORM_FEE_PERCENT env var to enable
+  const platformFeePercent = parseFloat(process.env.STRIPE_PLATFORM_FEE_PERCENT || "0");
+  const applicationFeeAmount = platformFeePercent > 0
+    ? Math.round(amountCents * (platformFeePercent / 100))
+    : 0;
+
+  // Create a Stripe Checkout session routed to the company's Connect account
+  const sessionParams: any = {
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: customer.email || undefined,
     line_items: [{
       price_data: {
         currency: "usd",
-        unit_amount: Math.round(Number(invoice.total) * 100),
-        product_data: { name: `Invoice ${invoice.invoiceNumber} - ${company.name}` },
+        unit_amount: amountCents,
+        product_data: { name: `Invoice ${invoice.invoiceNumber} — ${company.name}` },
       },
       quantity: 1,
     }],
     success_url: `${baseUrl}/portal/${company.slug}?payment=success&invoice=${invoice.id}`,
     cancel_url: `${baseUrl}/portal/${company.slug}/invoices`,
     metadata: { invoiceId: String(invoice.id), companyId: String(companyId), customerId: String(customerId), source: "customer_portal" },
-  });
+    payment_intent_data: {
+      application_fee_amount: applicationFeeAmount > 0 ? applicationFeeAmount : undefined,
+      transfer_data: { destination: company.stripeConnectAccountId },
+    },
+  };
+  const session = await stripe.checkout.sessions.create(sessionParams);
 
   // Store checkout session ID so confirm-payment can retrieve and verify it
   await db.update(invoicesTable).set({ stripePaymentIntentId: session.id, updatedAt: new Date() }).where(eq(invoicesTable.id, id));

@@ -145,6 +145,10 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      stripe:
+        specifier: ^20.4.1
+        version: 20.4.1(@types/node@25.3.5)
     devDependencies:
       prettier:
         specifier: ^3.8.1
@@ -695,6 +699,9 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.1(@types/pg@8.18.0)(pg@8.20.0)
+      stripe:
+        specifier: ^20.4.1
+        version: 20.4.1(@types/node@25.3.5)
     devDependencies:
       '@types/bcryptjs':
         specifier: ^3.0.0

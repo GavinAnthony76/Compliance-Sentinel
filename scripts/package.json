@@ -6,12 +6,14 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "seed:pricing-demo": "tsx ./src/seed-pricing-demo.ts",
+    "seed:stripe-products": "tsx ./src/seed-stripe-products.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "stripe": "^20.4.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

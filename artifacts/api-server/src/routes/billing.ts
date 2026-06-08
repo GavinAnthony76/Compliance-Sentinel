@@ -243,6 +243,112 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
   }
 });
 
+// ── Stripe Connect ────────────────────────────────────────────────────────────
+
+// GET /billing/connect/status — is this company's Connect account linked?
+router.get("/connect/status", async (req: any, res) => {
+  const { companyId } = req.user;
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  if (!company) return res.status(404).json({ error: "NotFound" });
+
+  if (!company.stripeConnectAccountId) {
+    return res.json({ connected: false, accountId: null, chargesEnabled: false, payoutsEnabled: false });
+  }
+
+  let stripe: any;
+  try {
+    stripe = await getUncachableStripeClient();
+  } catch (err) {
+    return res.status(503).json({ error: "BillingUnavailable", message: "Billing service is not configured" });
+  }
+
+  try {
+    const account = await stripe.accounts.retrieve(company.stripeConnectAccountId);
+    return res.json({
+      connected: true,
+      accountId: company.stripeConnectAccountId,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
+    });
+  } catch (err: any) {
+    if (err?.code === "account_invalid") {
+      await db.update(companiesTable).set({ stripeConnectAccountId: null }).where(eq(companiesTable.id, companyId));
+      return res.json({ connected: false, accountId: null, chargesEnabled: false, payoutsEnabled: false });
+    }
+    logger.error({ err }, "Error retrieving Connect account");
+    return res.status(500).json({ error: "ConnectError", message: "Could not retrieve account status" });
+  }
+});
+
+// POST /billing/connect/onboard — create/resume Express onboarding link
+router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, res) => {
+  const { companyId } = req.user;
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  if (!company) return res.status(404).json({ error: "NotFound" });
+
+  let stripe: any;
+  try {
+    stripe = await getUncachableStripeClient();
+  } catch (err) {
+    return res.status(503).json({ error: "BillingUnavailable", message: "Billing service is not configured" });
+  }
+
+  const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+
+  try {
+    let accountId = company.stripeConnectAccountId;
+
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: "express",
+        email: company.email || undefined,
+        business_profile: { name: company.name },
+        metadata: { companyId: String(companyId) },
+        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+      });
+      accountId = account.id;
+      await db.update(companiesTable).set({ stripeConnectAccountId: accountId, updatedAt: new Date() }).where(eq(companiesTable.id, companyId));
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${baseUrl}/settings?connect=refresh`,
+      return_url: `${baseUrl}/settings?connect=success`,
+      type: "account_onboarding",
+    });
+
+    return res.json({ url: accountLink.url });
+  } catch (err) {
+    logger.error({ err }, "Error creating Connect onboarding link");
+    return res.status(500).json({ error: "ConnectError", message: "Could not create onboarding link" });
+  }
+});
+
+// POST /billing/connect/dashboard — redirect to Express dashboard
+router.post("/connect/dashboard", requireRole("owner", "admin"), async (req: any, res) => {
+  const { companyId } = req.user;
+  const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  if (!company?.stripeConnectAccountId) return res.status(400).json({ error: "NotConnected" });
+
+  let stripe: any;
+  try {
+    stripe = await getUncachableStripeClient();
+  } catch {
+    return res.status(503).json({ error: "BillingUnavailable" });
+  }
+
+  try {
+    const loginLink = await stripe.accounts.createLoginLink(company.stripeConnectAccountId);
+    return res.json({ url: loginLink.url });
+  } catch (err) {
+    logger.error({ err }, "Error creating Connect dashboard link");
+    return res.status(500).json({ error: "ConnectError", message: "Could not open Stripe dashboard" });
+  }
+});
+
+// ── Billing portal ─────────────────────────────────────────────────────────────
+
 router.post("/portal", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);

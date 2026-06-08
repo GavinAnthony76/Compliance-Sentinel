@@ -34,6 +34,7 @@ export const companiesTable = pgTable("companies", {
   venmoHandle: text("venmo_handle"),
   cashAppTag: text("cash_app_tag"),
   checkPayableTo: text("check_payable_to"),
+  stripeConnectAccountId: text("stripe_connect_account_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
