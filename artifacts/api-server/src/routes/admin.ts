@@ -153,7 +153,7 @@ router.get("/beta-readiness", async (_req, res) => {
   const emailConfigured = await isEmailConfigured();
   const integrations = {
     stripe: { configured: !!(process.env.STRIPE_SECRET_KEY || process.env.REPLIT_CONNECTORS_HOSTNAME), label: "Stripe" },
-    sendgrid: { configured: emailConfigured, label: "SendGrid (Email)" },
+    sendgrid: { configured: emailConfigured, label: "Resend (Email)" },
     twilio: { configured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER), label: "Twilio (SMS)" },
     openai: { configured: !!(process.env.AI_INTEGRATIONS_OPENAI_BASE_URL && process.env.AI_INTEGRATIONS_OPENAI_API_KEY), label: "OpenAI (AI Estimates)" },
     database: { configured: dbConnected, label: "Database" },
