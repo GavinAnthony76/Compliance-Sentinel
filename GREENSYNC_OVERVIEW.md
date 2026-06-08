@@ -1,0 +1,403 @@
+# GreenSync — Comprehensive Application Document
+
+> A complete reference covering what GreenSync is, every feature and function, the full technology stack, the data model, and how the system fits together.
+
+---
+
+## 1. What Is GreenSync?
+
+**GreenSync** is a production-ready, **multi-tenant SaaS platform for lawn care and landscaping businesses**. It gives an owner-operator or a multi-person crew a single place to run their entire operation: managing customers, scheduling jobs, planning daily routes, sending estimates, invoicing, collecting payments, automating customer communication, and analyzing performance.
+
+It is sold as a subscription product across **three pricing tiers** (Starter, Growth, Pro), and it includes a **platform admin console** for the SaaS operator (the business that runs GreenSync itself) to manage all the lawn care companies on the platform.
+
+### Three distinct audiences use the system
+
+| Audience | Who they are | What they get |
+|----------|-------------|---------------|
+| **Lawn care business** (tenant) | Owners, admins, and field staff at a landscaping company | The full operational dashboard — customers, scheduling, routes, invoicing, automations, billing |
+| **End customers** (homeowners) | The clients of a lawn care business | A self-service portal + public booking page to request service, view appointments, sign estimates, and pay invoices |
+| **Platform admin** | The operator of GreenSync itself | A super-admin console to manage every tenant company, monitor revenue, suspend accounts, and audit activity |
+
+### Multi-tenancy
+
+Every piece of data is scoped to a **company** (the tenant). A user belongs to exactly one company, and all queries are filtered by `companyId` so that no tenant can ever see another tenant's data. Customer-facing surfaces (booking pages, portals) are addressed by a per-company **slug** (e.g. `/book/greenscapes-demo`).
+
+---
+
+## 2. Technology & Build Stack
+
+GreenSync is a **TypeScript monorepo** managed with **pnpm workspaces**. Each package owns its own dependencies, and shared code (database, API spec, generated client) lives in reusable libraries.
+
+### Core stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Monorepo** | pnpm workspaces |
+| **Language** | TypeScript 5.9 on Node.js v24 |
+| **API server** | Express 5 |
+| **Frontend** | React 18 + Vite |
+| **Routing (frontend)** | Wouter |
+| **Data fetching / cache** | TanStack React Query |
+| **Styling** | Tailwind CSS + shadcn/ui (Radix UI primitives) |
+| **Database** | PostgreSQL |
+| **ORM** | Drizzle ORM |
+| **Auth** | bcryptjs (password hashing) + JWT (jsonwebtoken) |
+| **Billing** | Stripe (via Replit Stripe integration) |
+| **Email** | SendGrid (`@sendgrid/mail`) |
+| **SMS** | Twilio |
+| **API typing** | OpenAPI spec → code generation → typed React Query hooks + Zod schemas |
+| **Logging** | pino / pino-http (structured logs) |
+| **Security middleware** | helmet, cors, cookie-parser |
+| **Build (server)** | esbuild |
+
+### Monorepo layout
+
+```
+workspace/
+├── artifacts/
+│   ├── api-server/      → Express backend (all /api routes)
+│   ├── lawn-saas/       → React + Vite frontend (the web app)
+│   └── mockup-sandbox/  → Component preview/prototyping server
+├── lib/
+│   ├── db/              → Drizzle schema + DB client (shared)
+│   ├── api-spec/        → OpenAPI spec + codegen config
+│   └── api-client-react/→ Generated typed hooks + Zod schemas
+└── replit.md            → Project overview / developer notes
+```
+
+### How the layers connect
+
+1. **The database schema** is defined once in `lib/db` with Drizzle.
+2. **The API contract** is defined as an OpenAPI spec in `lib/api-spec`.
+3. **Codegen** turns that spec into fully typed React Query hooks and Zod validation schemas in `lib/api-client-react`.
+4. **The frontend** imports those generated hooks, so every API call is type-safe end to end. The auth token is automatically attached to every request.
+5. **The Express server** implements the endpoints, enforces auth + plan gating, and talks to PostgreSQL through Drizzle.
+
+### Key developer commands
+
+```bash
+pnpm --filter @workspace/api-server run dev     # Run the API server
+pnpm --filter @workspace/lawn-saas  run dev     # Run the frontend
+pnpm --filter @workspace/db         run push    # Apply DB schema changes
+pnpm --filter @workspace/api-spec   run codegen # Regenerate the typed API client
+pnpm run typecheck                              # Full TypeScript check
+```
+
+---
+
+## 3. Authentication & Authorization
+
+GreenSync runs **four separate authentication contexts**, each with its own credentials, tokens, and middleware.
+
+| Context | Who | Token (localStorage) | Middleware |
+|---------|-----|----------------------|------------|
+| **Company users** | Owners / admins / staff | `greensync_token` | `authenticate` |
+| **Platform admins** | SaaS operators | `greensync_admin_token` | `authenticateAdmin` |
+| **Customer portal** | End customers (homeowners) | portal session token | `requirePortalAuth` |
+| **Public links** | Anyone with a secure token | short-lived signed token | per-route token check |
+
+### Company user authentication
+
+- **Registration** — `POST /api/auth/register` creates a company **and** its first owner user in one step (a 3-step onboarding form on the frontend).
+- **Login** — `POST /api/auth/login` returns a signed JWT.
+- **Current user** — `GET /api/auth/me` returns the logged-in user plus their company.
+- **Roles** — `owner`, `admin`, `staff` (controls what staff can access).
+- **Password hashing** — bcryptjs.
+
+### Account recovery (recently enhanced)
+
+- **Forgot password** — `POST /api/auth/forgot-password` sends a reset link by email. Anti-enumeration: always returns success regardless of whether the email exists.
+- **Reset password** — `POST /api/auth/reset-password` enforces a strong-password policy **server-side** (minimum 8 characters, with uppercase, lowercase, a number, and a special character). After a successful reset it sends a **security confirmation email** with a timestamp and a warning in case the user did not initiate it, and logs the event to the activity audit trail.
+- **Forgot username** — `POST /api/auth/forgot-username` emails the user their account details (full name, login email, role, and direct sign-in / reset links). Also anti-enumeration.
+- **Frontend support** — dedicated `/forgot-password`, `/reset-password`, and `/forgot-username` pages. The reset page has a **live password-strength checklist** with per-rule pass/fail indicators and keeps the submit button disabled until every rule passes and both password fields match.
+
+### Platform admin authentication
+
+- Separate login at `/admin/login`, separate token (`greensync_admin_token`), separate JWT secret (`ADMIN_JWT_SECRET`).
+- Has its own forgot/reset password flow (`/admin/forgot-password`, `/admin/reset-password`).
+
+### Customer portal authentication
+
+- Customers log in with email + password to a dedicated portal.
+- Includes a "set password" first-time flow and a portal-specific forgot-password flow.
+
+---
+
+## 4. Subscription Tiers & Feature Gating
+
+GreenSync sells three plans. Feature access is enforced **both** in the backend (the `requireFeature()` middleware returns a `403 PlanUpgradeRequired` when a tenant's plan lacks a feature) **and** in the frontend (sidebar plan badges + a `PlanGate` upgrade wall on restricted pages).
+
+### Starter — $49/month
+For solo operators who need the core essentials.
+
+- Customer management
+- Service catalog
+- Appointments / job scheduling
+- Invoicing
+- Calendar
+- Dashboard
+- Company settings
+- Public booking page
+- Email reminders
+
+### Growth — $99/month
+For growing teams. **Everything in Starter, plus:**
+
+- Multiple staff members (multi-user)
+- Recurring service plans
+- SMS reminders
+- Estimates / quotes
+- Daily route planning
+- Customer notes & tags
+- Review requests
+- Reporting & analytics
+- Branded booking page
+- Workflow automations
+- Autopay (automatic invoice charging)
+- Customer self-service portal
+
+### Pro — $199/month
+For high-scale operations. **Everything in Growth, plus:**
+
+- Advanced analytics
+- CSV data export (customers, appointments, invoices)
+- Lead pipeline
+- AI hooks
+- Custom intake fields
+
+> **Gating logic:** The plan-to-feature map lives in `artifacts/api-server/src/lib/features.ts`. `hasFeature(plan, feature)` checks membership; `requireFeature(feature)` is the Express middleware that blocks access and tells the client which plan is required.
+
+---
+
+## 5. Feature Reference (Company App)
+
+The main web application is the operational hub for a lawn care business. Below is every feature area.
+
+### Dashboard (`/dashboard`)
+At-a-glance overview of the business: revenue figures, upcoming jobs, and a feed of recent activity.
+
+### Customers (`/customers`, `/customers/:id`)
+Full CRUD customer management. Each customer has a detail page showing their history and preferences. Supports **internal notes and tags** (Growth+). A customer can have multiple properties.
+
+### Properties (`/properties`)
+Manage the physical service locations tied to each customer. Appointments and routes are anchored to properties.
+
+### Services (`/services`)
+The master catalog of service offerings (e.g. Lawn Mowing, Fertilization, Hedge Trimming, Aeration, Leaf Removal), each with a base price and duration.
+
+### Appointments (`/appointments`) & Calendar (`/calendar`)
+Schedule one-off jobs, assign (dispatch) them to staff, and mark them complete. The calendar gives a monthly visual view of all scheduled work. Appointment statuses: `pending`, `completed`, `cancelled`.
+
+### Recurring Plans (`/recurring`) — Growth+
+Templates that automatically generate future appointments on a weekly / bi-weekly / custom cadence, so repeat service contracts run themselves.
+
+### Estimates (`/estimates`, public `/estimate-sign`) — Growth+
+Create and send quotes with itemized line items. Customers can view and **e-sign** estimates through a secure public link — the signature and signed-at timestamp are stored on the estimate.
+
+### Invoices (`/invoices`)
+Generate invoices (with itemized line items), send them, and track status (Draft → Sent → Paid). Invoices can be created directly or generated from a completed appointment. When an invoice is created or sent, a **professional invoice email** is automatically dispatched to the customer (when they have an email), including the invoice number, due date, itemized line items, total due, and a direct link to pay in the customer portal. Customer lookups are scoped by company to prevent any cross-tenant disclosure.
+
+### Routes (`/routes`) — Growth+ ("SmartRoute")
+Plan and optimize the day's service stops. Provides a day-view list (and map) for technicians to follow an ordered route, linking each stop to an appointment.
+
+### Reviews (`/reviews`) — Growth+
+Send review/feedback requests to customers after work is completed, and track which requests have been sent.
+
+### Automations (`/automations`) — Growth+
+A trigger → action workflow engine (see Section 8). Build rules like "send a review request after an appointment is completed." Supports a **dry-run preview** so the user can see what an automation would do before turning it on.
+
+### Team (`/team`) — Growth+
+Invite, update, and remove staff users, and manage their roles.
+
+### Reporting (`/reporting`) — Growth+
+Business performance analytics aggregated from operational data (revenue, jobs, customers, etc.). Pro unlocks advanced analytics.
+
+### Settings (`/settings`)
+Company profile and **branding** (used on the public booking page and customer communications).
+
+### Billing (`/billing`)
+Self-service subscription management powered by Stripe — view current plan/status, see available plans, subscribe/upgrade, and open the Stripe customer portal.
+
+### Data Export — Pro only
+CSV export of customers, appointments, and invoices.
+
+---
+
+## 6. Customer-Facing Surfaces
+
+### Public booking page (`/book/:slug`)
+A branded, public lead-intake page addressed by the company's slug. Prospective customers can request service without an account. Submissions flow into the company's pipeline.
+
+### Customer portal (Growth+)
+A self-service area for the business's end customers:
+
+- `portal-login` / `portal-set-password` / `portal-forgot-password` — portal authentication
+- `portal-dashboard` — overview
+- `portal-appointments` — view upcoming and past appointments
+- `portal-invoices` — view invoices and **pay online via Stripe**
+- `portal-estimates` — view and sign estimates
+
+### Public estimate signing (`/estimate-sign`)
+Customers open a secure tokenized link to review and e-sign an estimate without logging in.
+
+---
+
+## 7. Platform Admin Console
+
+A separate, secured console (dark-themed login) for the operator of GreenSync to manage the whole platform.
+
+- **`/admin/dashboard`** — Platform metrics: MRR, active subscriptions, total customers, appointments, plan distribution, recent signups, and a recent-activity feed.
+- **`/admin/billing`** — Revenue & billing: MRR broken down by plan, subscription-status distribution, a monthly signup chart, and tools to manage past-due companies.
+- **`/admin/companies`** & **`/admin/companies/:id`** — Browse all tenant companies (filter by plan + status). The detail page shows a stats row, lets the admin edit company info, keep internal notes, add staff users, reset the owner's password, toggle/delete users, change the plan or account status (suspend/activate), and view recent activity.
+- **`/admin/activity`** — Platform-wide audit log with action search and entity-type filtering (company / user / customer / etc.), enriched with company names.
+- **`/admin/admins`** — Manage platform admin users (create, edit, delete).
+- **`/admin/settings`** — Admin's own profile (name, email, password).
+
+---
+
+## 8. The Automations Engine
+
+GreenSync includes a background **trigger → action** automation engine.
+
+**Triggers**
+- `appointment_completed`
+- `appointment_upcoming_24h`
+- `invoice_created`
+
+**Actions**
+- `send_review_request`
+- `send_follow_up_email`
+- `send_sms_reminder`
+- `create_invoice`
+
+**How it runs**
+- A background scheduler runs on an interval (every ~5 minutes), scanning for upcoming appointments to fire 24-hour reminders and processing other triggers.
+- Each automation rule stores its `trigger_type` and `action_type`.
+- A **dry-run mode** lets users preview what a rule would do (which customers it would contact, what messages it would send) before activating it.
+
+---
+
+## 9. Integrations
+
+### Stripe (payments & billing)
+- **SaaS subscription billing** — tenants subscribe to Starter/Growth/Pro; managed through Stripe Checkout/Portal with webhook handling (`POST /api/stripe/webhook`).
+- **Customer payments** — end customers pay invoices online through the portal.
+- **Autopay** — stored payment methods auto-charge invoices (Growth+).
+- Uses the Replit Stripe integration (`getUncachableStripeClient()`).
+
+### SendGrid (email)
+The transactional email engine (`@sendgrid/mail`) powering invoice emails, reminders, account-recovery emails, security confirmations, review requests, and invites. Falls back to **mock mode** (logs instead of sends) when no API key is configured.
+
+### Twilio (SMS)
+Powers SMS reminders and notifications (Growth+). Also falls back to mock mode when credentials are absent.
+
+---
+
+## 10. Database Schema
+
+The data layer (`lib/db/src/schema/`) defines the full relational model in Drizzle. Every business table is scoped to a `company` for multi-tenant isolation.
+
+| Table | Purpose |
+|-------|---------|
+| `companies` | The tenant root — branding, contact info, slug, `subscription_plan` |
+| `users` | Company staff/owners (roles: owner, admin, staff) |
+| `platform_admins` | Super-admins for the whole SaaS platform |
+| `customers` | Client profiles (includes portal password hash for portal access) |
+| `properties` | Physical service locations, linked to customers |
+| `services` | Master list of offered services + base prices/duration |
+| `appointments` | Individual work orders (status: pending / completed / cancelled) |
+| `recurring_plans` | Templates that generate future appointments |
+| `invoices` + `invoice_line_items` | Billing records and their itemized lines |
+| `estimates` + `estimate_line_items` | Quotes, with signature data and signed-at timestamp |
+| `routes` + `route_stops` | Daily technician routes and their ordered stops |
+| `automations` | Automation rules (trigger type + action type) |
+| `review_requests` | Log of feedback requests sent to customers |
+| `activity_logs` | System-wide audit trail of all company actions |
+
+---
+
+## 11. Complete API Surface
+
+All endpoints are mounted under `/api`.
+
+### Company (JWT: `greensync_token`)
+- `POST /api/auth/register` — create company + owner
+- `POST /api/auth/login` — returns JWT
+- `GET /api/auth/me` — current user + company
+- `POST /api/auth/forgot-password` / `reset-password` / `forgot-username`
+- `GET /api/dashboard` — today's stats
+- `CRUD /api/customers`
+- `CRUD /api/properties`
+- `CRUD /api/services`
+- `CRUD /api/appointments` + `POST /api/appointments/:id/complete`
+- `CRUD /api/invoices` + send + mark-paid
+- `CRUD /api/estimates`
+- `CRUD /api/recurring-plans`
+- `CRUD /api/routes` + add/remove stops
+- `POST /api/review-requests` + list
+- `CRUD /api/automations` + toggle
+- `GET/PUT /api/settings`
+- `GET /api/team` + invite + update + remove
+- `GET /api/billing/status` / `plans` + `POST /api/billing/subscribe` / `portal`
+- Autopay endpoints (manage payment methods, auto-charge)
+- CSV export endpoints (Pro)
+- `GET /api/activity`
+
+### Public
+- `GET /api/public/booking/:slug` — booking page data
+- `POST /api/public/booking/:slug` — submit a booking request
+- Public estimate view/sign endpoints (tokenized)
+- `POST /api/stripe/webhook` — Stripe events
+
+### Customer Portal (portal auth)
+- Portal login / set-password / forgot-password
+- View appointments, invoices (pay via Stripe), estimates (sign)
+
+### Platform Admin (JWT: `greensync_admin_token`)
+- `POST /api/admin/auth/login` + `GET /api/admin/auth/me`
+- Admin forgot/reset password
+- `GET /api/admin/dashboard`
+- `GET /api/admin/companies` + `GET /api/admin/companies/:id`
+- `POST /api/admin/companies/:id/suspend` / activate / plan / notes
+- `GET /api/admin/admins` + `POST /api/admin/admins`
+- `GET /api/admin/activity`
+- `POST /api/admin/seed` — seed demo data
+
+---
+
+## 12. Environment Configuration
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | PostgreSQL connection |
+| `JWT_SECRET` | Company token signing (auto-generated if absent) |
+| `ADMIN_JWT_SECRET` | Admin token signing |
+| `SESSION_SECRET` | Session key |
+| `STRIPE_SECRET_KEY` | Stripe (via Replit integration) |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification |
+| `SENDGRID_API_KEY` | Email (optional — mock mode if absent) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS (optional) |
+| `FRONTEND_URL` | CORS / redirect base |
+
+---
+
+## 13. Demo Access
+
+- **Company:** `alex@greenscapes.com` / `Demo1234!` (Growth plan)
+- **Platform admin:** `admin@greensync.com` / `Admin1234!`
+- **Public booking page:** `/book/greenscapes-demo`
+
+**Seeded demo data:** 6 customers, 5 services, 10 appointments (mix of completed / today / upcoming), 6 invoices (paid/sent/draft), 3 estimates, 3 recurring plans, 3 review requests, and 3 automation rules.
+
+---
+
+## 14. Summary
+
+GreenSync is a complete, multi-tenant vertical SaaS for the lawn care industry. It combines:
+
+- **Operations** — customers, properties, services, scheduling, calendar, recurring plans, and optimized routing.
+- **Sales & revenue** — estimates with e-signature, invoicing with online payment, autopay, and Stripe-powered subscription billing across three tiers.
+- **Growth & retention** — a customer self-service portal, public booking pages, review requests, SMS/email reminders, and a trigger-based automation engine.
+- **Platform operations** — a full super-admin console for managing tenants, monitoring MRR, and auditing activity.
+
+All of it is built on a strongly-typed pnpm/TypeScript monorepo with an end-to-end type-safe API layer, enforced multi-tenant data isolation, and plan-based feature gating on both the server and the client.

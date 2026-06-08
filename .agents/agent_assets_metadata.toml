@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "kwQAih80dLN-XN_vSIpxJ"
+uri = "file://GREENSYNC_OVERVIEW.md"
+type = "text"
+title = "GreenSync — Comprehensive Application Document"
