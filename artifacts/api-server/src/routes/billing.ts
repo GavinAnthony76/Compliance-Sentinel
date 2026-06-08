@@ -1,5 +1,5 @@
 import { Router, type Request } from "express";
-import { db, companiesTable } from "@workspace/db";
+import { db, companiesTable, invoicesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { getUncachableStripeClient, getStripePublishableKey, STRIPE_PLANS } from "../lib/stripe";
@@ -39,6 +39,26 @@ router.post("/webhook", async (req: Request, res) => {
         const session = event.data.object;
         const companyId = Number(session.metadata?.companyId);
         const plan = session.metadata?.plan;
+
+        // Customer portal invoice payment
+        if (session.metadata?.source === "customer_portal" && session.metadata?.invoiceId) {
+          const invoiceId = Number(session.metadata.invoiceId);
+          if (session.payment_status === "paid" && invoiceId) {
+            const paymentIntentId = typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.id;
+            await db.update(invoicesTable).set({
+              status: "paid",
+              paidAt: new Date(),
+              stripePaymentIntentId: paymentIntentId,
+              updatedAt: new Date(),
+            }).where(eq(invoicesTable.id, invoiceId));
+            logger.info({ invoiceId, sessionId: session.id }, "Invoice marked paid via portal checkout");
+          }
+          break;
+        }
+
+        // Company subscription checkout
         if (companyId && plan) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription);
           await db.update(companiesTable).set({
