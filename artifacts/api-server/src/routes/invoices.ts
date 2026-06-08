@@ -50,6 +50,7 @@ async function dispatchInvoiceEmail(invoiceId: number, companyId: number): Promi
       customerEmail: customer.email,
       customerName,
       companyName,
+      companyEmail: company?.email ?? undefined,
       invoiceNumber: inv.invoiceNumber,
       dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
       lineItems: lineItems.map(li => ({

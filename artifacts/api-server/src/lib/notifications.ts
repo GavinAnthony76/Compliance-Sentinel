@@ -8,6 +8,7 @@ interface EmailPayload {
   subject: string;
   body: string;
   html?: string;
+  replyTo?: string;
 }
 
 interface SMSPayload {
@@ -63,6 +64,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
       subject: payload.subject,
       text: payload.body,
       ...(payload.html ? { html: payload.html } : {}),
+      ...(payload.replyTo ? { replyTo: payload.replyTo } : {}),
     });
 
     logger.info({ to: payload.to, subject: payload.subject, via: creds.source }, "Email sent via SendGrid");
@@ -98,6 +100,7 @@ export async function sendReminder(opts: {
   scheduledStart: Date;
   serviceName?: string;
   channel: "sms" | "email";
+  companyEmail?: string;
 }): Promise<void> {
   const dateStr = opts.scheduledStart.toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -111,6 +114,7 @@ export async function sendReminder(opts: {
       to: opts.customerEmail,
       subject: `Appointment Reminder: ${opts.serviceName || "Lawn Care"} on ${dateStr}`,
       body: `Hi ${opts.customerName},\n\nThis is a reminder for your upcoming appointment on ${dateStr} at ${timeStr}.\n\nService: ${opts.serviceName || "Lawn Care"}\n\nThank you!`,
+      replyTo: opts.companyEmail,
     });
   } else if (opts.channel === "sms" && opts.customerPhone) {
     await sendSMS({
@@ -127,12 +131,14 @@ export async function sendReviewRequestNotification(opts: {
   reviewUrl: string;
   companyName: string;
   channel: "sms" | "email";
+  companyEmail?: string;
 }): Promise<void> {
   if (opts.channel === "email" && opts.customerEmail) {
     await sendEmail({
       to: opts.customerEmail,
       subject: `How was your experience with ${opts.companyName}?`,
       body: `Hi ${opts.customerName},\n\nThank you for choosing ${opts.companyName}! We'd love to hear your feedback.\n\nLeave a review: ${opts.reviewUrl}\n\nThank you!`,
+      replyTo: opts.companyEmail,
     });
   } else if (opts.channel === "sms" && opts.customerPhone) {
     await sendSMS({
@@ -255,6 +261,7 @@ export async function sendInvoiceEmail(opts: {
   customerEmail: string;
   customerName: string;
   companyName: string;
+  companyEmail?: string;
   invoiceNumber: string;
   dueDate?: Date | null;
   lineItems: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
@@ -307,6 +314,7 @@ export async function sendInvoiceEmail(opts: {
     subject: `Invoice ${opts.invoiceNumber} from ${opts.companyName} — $${opts.total.toFixed(2)} due`,
     body,
     html,
+    replyTo: opts.companyEmail,
   });
 }
 
@@ -314,6 +322,7 @@ export async function sendPaymentReceiptEmail(opts: {
   customerEmail: string;
   customerName: string;
   companyName: string;
+  companyEmail?: string;
   invoiceNumber: string;
   amountPaid: number;
   paymentDate: Date;
@@ -342,6 +351,7 @@ export async function sendPaymentReceiptEmail(opts: {
     to: opts.customerEmail,
     subject: `Payment Received for Invoice ${opts.invoiceNumber} — Thank You!`,
     body,
+    replyTo: opts.companyEmail,
   });
 }
 
@@ -361,6 +371,7 @@ export async function dispatchPaymentReceiptEmail(invoiceId: number, companyId: 
       customerEmail: customer.email,
       customerName,
       companyName,
+      companyEmail: company?.email ?? undefined,
       invoiceNumber: inv.invoiceNumber,
       amountPaid: Number(inv.total),
       paymentDate: inv.paidAt ? new Date(inv.paidAt) : new Date(),
@@ -408,6 +419,7 @@ export async function sendPortalAccessEmail(opts: {
   to: string;
   customerName: string;
   companyName: string;
+  companyEmail?: string;
   loginUrl: string;
   intent: "invite" | "login";
   expiresLabel: string;
@@ -436,6 +448,7 @@ export async function sendPortalAccessEmail(opts: {
       `Thank you,`,
       opts.companyName,
     ].join("\n"),
+    replyTo: opts.companyEmail,
   });
 }
 
@@ -444,6 +457,7 @@ export async function sendAppointmentStatusEmail(opts: {
   to: string;
   customerName: string;
   companyName: string;
+  companyEmail?: string;
   serviceName: string;
   dateStr: string;
   timeStr: string;
@@ -464,6 +478,7 @@ export async function sendAppointmentStatusEmail(opts: {
       `Thank you,`,
       opts.companyName,
     ].join("\n"),
+    replyTo: opts.companyEmail,
   });
 }
 

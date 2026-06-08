@@ -77,7 +77,7 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
       portalUrl = `${baseUrl}/portal/${company.slug}/login?token=${inviteToken}`;
       const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
       if (customer.email) {
-        await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
+        await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
       }
       if (customer.phone && hasFeature(company.subscriptionPlan, "sms_notifications")) {
         await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Sign in here (no password needed): ${portalUrl}` });

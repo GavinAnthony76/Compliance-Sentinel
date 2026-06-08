@@ -78,10 +78,11 @@ async function sendAppointmentNotification(appt: any, companyId: number, channel
         to: customer.email,
         subject: `Appointment Confirmed — ${serviceName} on ${dateStr}`,
         body: `Hi ${customer.firstName},\n\nYour ${serviceName} appointment with ${companyName} has been confirmed!\n\nDate: ${dateStr}\nTime: ${timeStr}\n\nThank you!`,
+        replyTo: company?.email || undefined,
       });
     } else {
       const useSms = customer.phone && smsAllowed;
-      await sendReminder({ customerName: `${customer.firstName} ${customer.lastName}`, customerEmail: customer.email || undefined, customerPhone: customer.phone || undefined, scheduledStart: new Date(appt.scheduledStart), serviceName, channel: useSms ? 'sms' : 'email' });
+      await sendReminder({ customerName: `${customer.firstName} ${customer.lastName}`, customerEmail: customer.email || undefined, customerPhone: customer.phone || undefined, scheduledStart: new Date(appt.scheduledStart), serviceName, channel: useSms ? 'sms' : 'email', companyEmail: company?.email || undefined });
     }
     await logCommunicationEvent({
       companyId,
@@ -136,6 +137,7 @@ async function sendAppointmentStatusNotification(appt: any, companyId: number, s
       to: customer.email,
       customerName: customer.firstName,
       companyName,
+      companyEmail: company?.email || undefined,
       serviceName,
       dateStr,
       timeStr,

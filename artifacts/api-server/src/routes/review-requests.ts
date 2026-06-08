@@ -55,6 +55,7 @@ router.post("/", async (req: any, res) => {
     customerPhone: customer.phone ?? undefined,
     reviewUrl,
     companyName: company?.name ?? "Lawn Care",
+    companyEmail: company?.email ?? undefined,
     channel,
   });
 
