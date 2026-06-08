@@ -1,6 +1,7 @@
 import { db, invoicesTable, customersTable, companiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { resolveEmailCredentials } from "./sendgrid";
 
 interface EmailPayload {
   to: string;
@@ -29,19 +30,6 @@ function isSMSMockMode(): boolean {
   return false;
 }
 
-function isEmailMockMode(): boolean {
-  if (!process.env.SENDGRID_API_KEY) {
-    const msg = "SENDGRID_API_KEY is not set — email delivery is disabled";
-    if (isDev) {
-      logger.warn(`[Email] ${msg}`);
-    } else {
-      logger.error(`[Email] ${msg}`);
-    }
-    return true;
-  }
-  return false;
-}
-
 export function resolveBaseUrl(): string {
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL;
   const replitDomain = process.env.REPLIT_DOMAINS?.split(",")[0];
@@ -50,16 +38,24 @@ export function resolveBaseUrl(): string {
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<void> {
-  if (isEmailMockMode()) {
+  const creds = await resolveEmailCredentials();
+  if (!creds) {
+    const msg =
+      "No SendGrid credentials available (managed connector not connected and SENDGRID_API_KEY unset) — email delivery is disabled";
+    if (isDev) {
+      logger.warn(`[Email] ${msg}`);
+    } else {
+      logger.error(`[Email] ${msg}`);
+    }
     logger.info({ mock: true, to: payload.to, subject: payload.subject }, "[MOCK EMAIL] Would send email");
     return;
   }
 
   try {
     const sgMail = (await import("@sendgrid/mail")).default;
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+    sgMail.setApiKey(creds.apiKey);
 
-    const fromAddress = process.env.SENDGRID_FROM_EMAIL || "noreply@greensync.app";
+    const fromAddress = creds.fromEmail || process.env.SENDGRID_FROM_EMAIL || "noreply@greensync.app";
 
     await sgMail.send({
       from: fromAddress,
@@ -69,7 +65,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
       ...(payload.html ? { html: payload.html } : {}),
     });
 
-    logger.info({ to: payload.to, subject: payload.subject }, "Email sent via SendGrid");
+    logger.info({ to: payload.to, subject: payload.subject, via: creds.source }, "Email sent via SendGrid");
   } catch (err) {
     logger.error({ err, to: payload.to, subject: payload.subject }, "Failed to send email via SendGrid");
   }

@@ -1,4 +1,5 @@
 - [pdfkit esbuild externalize](pdfkit-esbuild.md) — pdfkit can't be bundled by esbuild (fontkit/brotli/@swc/helpers); add to `external` in api-server build.mjs or server won't start.
+- [SendGrid managed connector](sendgrid-connector.md) — connector ships NO code snippet; hand-write the proxy fetch (api_key+from_email); 401 "Maximum credits exceeded" = account billing, not wiring.
 - [API codegen pipeline](api-codegen-pipeline.md) — after spec edits: codegen → rebuild api-client-react dist → frontend typecheck; api-zod index needs explicit re-export to fix TS2308; twilio/pdfkit must be installed+externalized.
 - [NEON vs sandbox DB](neon-vs-sandbox-db.md) — app + drizzle push use NEON_DATABASE_URL; sandbox executeSql/psql $DATABASE_URL hit a DIFFERENT db. Seed/verify via psql "$NEON_DATABASE_URL".
 - [Private object storage read auth](storage-object-auth.md) — `/api/storage/objects/*` ships auth commented OUT; lock it with requireAuth + DB tenant-ownership check, and render authed images via fetch→blob (not `<img src>`).

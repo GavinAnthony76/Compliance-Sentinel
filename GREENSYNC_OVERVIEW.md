@@ -289,7 +289,7 @@ GreenSync includes a background **trigger → action** automation engine.
 - Uses the Replit Stripe integration (`getUncachableStripeClient()`).
 
 ### SendGrid (email)
-The transactional email engine (`@sendgrid/client`) powering **welcome emails on company signup**, invoice emails, reminders, account-recovery emails, security confirmations, review requests, invites, **appointment status-change notifications**, and **customer magic-link logins**. When `SENDGRID_API_KEY` is set, real email delivery is active; with no key it falls back to **mock mode** (logs instead of sends). All sends are wrapped in non-blocking try/catch, so a provider error (e.g. an out-of-credits account returning `401 Maximum credits exceeded`) is logged but never breaks the request that triggered it.
+The transactional email engine (`@sendgrid/client`) powering **welcome emails on company signup**, invoice emails, reminders, account-recovery emails, security confirmations, review requests, invites, **appointment status-change notifications**, and **customer magic-link logins**. Credentials are resolved by `lib/sendgrid.ts → resolveEmailCredentials()`, which prefers the **Replit-managed SendGrid connector** (API key + verified sender fetched fresh from the connector proxy on every send — never cached, since tokens rotate) and falls back to a raw `SENDGRID_API_KEY` env var if the connector is not connected. With neither available it runs in **mock mode** (logs instead of sends). All sends are wrapped in non-blocking try/catch, so a provider error (e.g. an out-of-credits account returning `401 Maximum credits exceeded`) is logged but never breaks the request that triggered it.
 
 ### Twilio (SMS)
 Powers SMS reminders and customer notifications (Growth+). SMS sending is best-effort and gated behind the SMS feature; it requires the `twilio` package and Twilio credentials to be present, and falls back gracefully (logged, non-fatal) when they are absent. Email delivery is unaffected by SMS availability.
@@ -379,7 +379,8 @@ All endpoints are mounted under `/api`.
 | `SESSION_SECRET` | Session key |
 | `STRIPE_SECRET_KEY` | Stripe (via Replit integration) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook verification |
-| `SENDGRID_API_KEY` | Email — real delivery when set & funded; mock mode (logs only) if absent |
+| Replit-managed SendGrid connector | Primary email path — supplies API key + verified sender via the connector proxy (preferred over `SENDGRID_API_KEY`) |
+| `SENDGRID_API_KEY` | Email fallback — used only if the managed connector is not connected; mock mode (logs only) if both absent |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS (optional) |
 | `FRONTEND_URL` | CORS / redirect base |
 
