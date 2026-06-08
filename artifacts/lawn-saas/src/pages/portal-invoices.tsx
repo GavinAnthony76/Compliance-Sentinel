@@ -119,7 +119,7 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
 
               {invoice.dueDate && (
                 <p className="text-xs text-muted-foreground mt-3">
-                  Due {new Date(invoice.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  Due {new Date(invoice.dueDate.split('T')[0] + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                 </p>
               )}
               {invoice.notes && <p className="text-sm text-muted-foreground mt-2 italic">{invoice.notes}</p>}
@@ -169,10 +169,16 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
                   )}
                 </div>
 
-                {(methods.includes('card') && detail?.companyPlan !== 'starter') && (
+                {(methods.includes('card') && detail?.companyPlan !== 'starter') ? (
                   <Button className="w-full" onClick={handlePay} isLoading={paying}>
                     <CreditCard className="w-4 h-4 mr-2" />Pay Online Now
                   </Button>
+                ) : (
+                  !pc?.paymentInstructions && !methods.includes('card') && (
+                    <p className="text-sm text-muted-foreground">
+                      Please contact your service provider to arrange payment.
+                    </p>
+                  )
                 )}
               </CardContent>
             </Card>

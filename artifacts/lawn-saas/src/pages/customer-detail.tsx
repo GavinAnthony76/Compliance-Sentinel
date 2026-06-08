@@ -388,20 +388,20 @@ function LineItemsEditor({ items, onChange }: { items: InvoiceLineItemInput[]; o
   };
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-12 gap-1 text-xs font-semibold text-muted-foreground px-1">
-        <span className="col-span-5">Description</span>
-        <span className="col-span-2 text-center">Qty</span>
-        <span className="col-span-2 text-right">Unit $</span>
-        <span className="col-span-2 text-right">Total</span>
-        <span className="col-span-1" />
+      <div className="flex gap-2 text-xs font-semibold text-muted-foreground px-1">
+        <span className="flex-1 min-w-0">Description</span>
+        <span className="w-12 text-center shrink-0">Qty</span>
+        <span className="w-20 text-right shrink-0">Unit $</span>
+        <span className="w-16 text-right shrink-0">Total</span>
+        <span className="w-6 shrink-0" />
       </div>
       {items.map((li, i) => (
-        <div key={i} className="grid grid-cols-12 gap-1 items-center">
-          <Input className="col-span-5 h-8 text-sm" value={li.description} onChange={e => update(i, 'description', e.target.value)} placeholder="Service" required />
-          <Input className="col-span-2 h-8 text-sm text-center" type="number" min="0.01" step="0.01" value={li.quantity} onChange={e => update(i, 'quantity', e.target.value)} />
-          <Input className="col-span-2 h-8 text-sm text-right" type="number" min="0" step="0.01" value={li.unitPrice} onChange={e => update(i, 'unitPrice', e.target.value)} />
-          <div className="col-span-2 text-right text-xs font-medium pr-1">${li.lineTotal.toFixed(2)}</div>
-          <button type="button" onClick={() => removeRow(i)} className="col-span-1 flex justify-center text-muted-foreground hover:text-destructive text-xs">✕</button>
+        <div key={i} className="flex gap-2 items-center">
+          <Input className="flex-1 min-w-0 h-8 text-sm" value={li.description} onChange={e => update(i, 'description', e.target.value)} placeholder="Service" required />
+          <Input className="w-12 shrink-0 h-8 text-sm text-center px-1" type="number" min="0.01" step="0.01" value={li.quantity} onChange={e => update(i, 'quantity', e.target.value)} />
+          <Input className="w-20 shrink-0 h-8 text-sm text-right px-1" type="number" min="0" step="0.01" value={li.unitPrice} onChange={e => update(i, 'unitPrice', e.target.value)} />
+          <div className="w-16 shrink-0 text-right text-xs font-medium">${li.lineTotal.toFixed(2)}</div>
+          <button type="button" onClick={() => removeRow(i)} className="w-6 shrink-0 flex justify-center text-muted-foreground hover:text-destructive text-xs">✕</button>
         </div>
       ))}
       <button type="button" onClick={addRow} className="text-xs text-primary underline underline-offset-2 hover:opacity-80">+ Add Line Item</button>
@@ -435,7 +435,7 @@ function NewInvoiceModal({ customerId, onClose }: { customerId: number; onClose:
         total,
         lineItems,
         notes: notes || undefined,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+        dueDate: dueDate ? new Date(dueDate + 'T12:00:00').toISOString() : undefined,
       };
       await createMut.mutateAsync({ data: payload });
       qc.invalidateQueries({ queryKey: [`/api/customers/${customerId}`] });
