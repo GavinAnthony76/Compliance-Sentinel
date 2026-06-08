@@ -57,6 +57,8 @@ async function dispatchInvoiceEmail(invoiceId: number, companyId: number): Promi
       })),
       total: Number(inv.total),
       portalUrl,
+      logoUrl: company?.logoUrl ?? null,
+      primaryColor: company?.primaryColor ?? null,
     });
   } catch (err) {
     logger.error({ err, invoiceId, companyId }, "Failed to dispatch invoice email");

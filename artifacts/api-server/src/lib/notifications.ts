@@ -4,6 +4,7 @@ interface EmailPayload {
   to: string;
   subject: string;
   body: string;
+  html?: string;
 }
 
 interface SMSPayload {
@@ -63,6 +64,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
       to: payload.to,
       subject: payload.subject,
       text: payload.body,
+      ...(payload.html ? { html: payload.html } : {}),
     });
 
     logger.info({ to: payload.to, subject: payload.subject }, "Email sent via SendGrid");
@@ -142,6 +144,115 @@ export async function sendReviewRequestNotification(opts: {
   }
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildInvoiceEmailHtml(opts: {
+  customerName: string;
+  companyName: string;
+  invoiceNumber: string;
+  dueDateStr: string;
+  lineItems: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
+  total: number;
+  portalUrl: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): string {
+  const accent = opts.primaryColor && /^#[0-9a-fA-F]{3,8}$/.test(opts.primaryColor) ? opts.primaryColor : "#16a34a";
+  const companyName = escapeHtml(opts.companyName);
+  const invoiceNumber = escapeHtml(opts.invoiceNumber);
+  const customerName = escapeHtml(opts.customerName);
+  const portalUrl = escapeHtml(opts.portalUrl);
+
+  const header = opts.logoUrl
+    ? `<img src="${escapeHtml(opts.logoUrl)}" alt="${companyName}" style="max-height:56px;max-width:200px;display:block;" />`
+    : `<span style="font-size:22px;font-weight:700;color:#ffffff;">${companyName}</span>`;
+
+  const rows = opts.lineItems.length
+    ? opts.lineItems
+        .map(
+          (li, i) => `
+          <tr style="background-color:${i % 2 === 0 ? "#ffffff" : "#f9fafb"};">
+            <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111827;">${escapeHtml(li.description)}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111827;text-align:center;">${li.quantity}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111827;text-align:right;">$${li.unitPrice.toFixed(2)}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#111827;text-align:right;">$${li.lineTotal.toFixed(2)}</td>
+          </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="4" style="padding:12px;font-size:14px;color:#6b7280;text-align:center;">No line items</td></tr>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Invoice ${invoiceNumber}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr>
+          <td style="background-color:${accent};padding:24px 32px;">${header}</td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${customerName},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">${companyName} has sent you invoice <strong>${invoiceNumber}</strong>.</p>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+              <tr>
+                <td style="font-size:14px;color:#6b7280;padding-right:8px;">Due Date:</td>
+                <td style="font-size:14px;color:#111827;font-weight:600;">${escapeHtml(opts.dueDateStr)}</td>
+              </tr>
+            </table>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
+              <thead>
+                <tr style="background-color:#f3f4f6;">
+                  <th style="padding:10px 12px;font-size:12px;color:#6b7280;text-align:left;text-transform:uppercase;letter-spacing:0.04em;">Description</th>
+                  <th style="padding:10px 12px;font-size:12px;color:#6b7280;text-align:center;text-transform:uppercase;letter-spacing:0.04em;">Qty</th>
+                  <th style="padding:10px 12px;font-size:12px;color:#6b7280;text-align:right;text-transform:uppercase;letter-spacing:0.04em;">Unit</th>
+                  <th style="padding:10px 12px;font-size:12px;color:#6b7280;text-align:right;text-transform:uppercase;letter-spacing:0.04em;">Total</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" style="padding:12px;font-size:15px;color:#111827;font-weight:700;text-align:right;border-top:2px solid #e5e7eb;">Total Due</td>
+                  <td style="padding:12px;font-size:15px;color:#111827;font-weight:700;text-align:right;border-top:2px solid #e5e7eb;">$${opts.total.toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+              <tr>
+                <td style="border-radius:6px;background-color:${accent};">
+                  <a href="${portalUrl}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">Pay Now</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">If the button doesn't work, copy and paste this link into your browser:<br /><a href="${portalUrl}" style="color:${accent};word-break:break-all;">${portalUrl}</a></p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 32px;border-top:1px solid #e5e7eb;">
+            <p style="margin:0;font-size:14px;color:#374151;">Thank you for your business,<br /><strong>${companyName}</strong></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+}
+
 export async function sendInvoiceEmail(opts: {
   customerEmail: string;
   customerName: string;
@@ -151,6 +262,8 @@ export async function sendInvoiceEmail(opts: {
   lineItems: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
   total: number;
   portalUrl: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }): Promise<void> {
   const dueDateStr = opts.dueDate
     ? new Date(opts.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
@@ -179,10 +292,23 @@ export async function sendInvoiceEmail(opts: {
     `${opts.companyName}`,
   ].join("\n");
 
+  const html = buildInvoiceEmailHtml({
+    customerName: opts.customerName,
+    companyName: opts.companyName,
+    invoiceNumber: opts.invoiceNumber,
+    dueDateStr,
+    lineItems: opts.lineItems,
+    total: opts.total,
+    portalUrl: opts.portalUrl,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+
   await sendEmail({
     to: opts.customerEmail,
     subject: `Invoice ${opts.invoiceNumber} from ${opts.companyName} — $${opts.total.toFixed(2)} due`,
     body,
+    html,
   });
 }
 
