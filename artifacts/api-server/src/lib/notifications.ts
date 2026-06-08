@@ -142,6 +142,50 @@ export async function sendReviewRequestNotification(opts: {
   }
 }
 
+export async function sendInvoiceEmail(opts: {
+  customerEmail: string;
+  customerName: string;
+  companyName: string;
+  invoiceNumber: string;
+  dueDate?: Date | null;
+  lineItems: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
+  total: number;
+  portalUrl: string;
+}): Promise<void> {
+  const dueDateStr = opts.dueDate
+    ? new Date(opts.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+    : "Upon receipt";
+
+  const lineItemsText = opts.lineItems
+    .map(li => `  - ${li.description} (x${li.quantity}) @ $${li.unitPrice.toFixed(2)} = $${li.lineTotal.toFixed(2)}`)
+    .join("\n");
+
+  const body = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `${opts.companyName} has sent you invoice ${opts.invoiceNumber}.`,
+    ``,
+    `Due Date: ${dueDateStr}`,
+    ``,
+    `Items:`,
+    lineItemsText || `  (No line items)`,
+    ``,
+    `Total Due: $${opts.total.toFixed(2)}`,
+    ``,
+    `View and pay your invoice online:`,
+    opts.portalUrl,
+    ``,
+    `Thank you for your business,`,
+    `${opts.companyName}`,
+  ].join("\n");
+
+  await sendEmail({
+    to: opts.customerEmail,
+    subject: `Invoice ${opts.invoiceNumber} from ${opts.companyName} — $${opts.total.toFixed(2)} due`,
+    body,
+  });
+}
+
 export async function sendTeamInviteEmail(opts: {
   to: string;
   firstName: string;

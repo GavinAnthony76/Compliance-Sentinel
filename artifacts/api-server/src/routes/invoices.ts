@@ -1,9 +1,11 @@
 import { Router } from "express";
-import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable } from "@workspace/db";
+import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable, companiesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
+import { sendInvoiceEmail, resolveBaseUrl } from "../lib/notifications";
+import { logger } from "../lib/logger";
 
 const router = Router();
 router.use(requireAuth);
@@ -26,6 +28,39 @@ function fmtLineItem(li: any) {
     unitPrice: Number(li.unitPrice),
     lineTotal: Number(li.lineTotal),
   };
+}
+
+async function dispatchInvoiceEmail(invoiceId: number, companyId: number): Promise<void> {
+  try {
+    const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.companyId, companyId))).limit(1);
+    if (!inv) return;
+    const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, inv.customerId), eq(customersTable.companyId, companyId))).limit(1);
+    if (!customer?.email) return;
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, invoiceId)).orderBy(invoiceLineItemsTable.sortOrder);
+    const companyName = company?.name || "Your Service Provider";
+    const companySlug = company?.slug || "";
+    const baseUrl = resolveBaseUrl();
+    const portalUrl = companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : baseUrl;
+    const customerName = `${customer.firstName} ${customer.lastName}`.trim() || customer.email;
+    await sendInvoiceEmail({
+      customerEmail: customer.email,
+      customerName,
+      companyName,
+      invoiceNumber: inv.invoiceNumber,
+      dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+      lineItems: lineItems.map(li => ({
+        description: li.description,
+        quantity: Number(li.quantity),
+        unitPrice: Number(li.unitPrice),
+        lineTotal: Number(li.lineTotal),
+      })),
+      total: Number(inv.total),
+      portalUrl,
+    });
+  } catch (err) {
+    logger.error({ err, invoiceId, companyId }, "Failed to dispatch invoice email");
+  }
 }
 
 async function nextInvoiceNumber(companyId: number): Promise<string> {
@@ -161,6 +196,9 @@ router.post("/", async (req: any, res) => {
   }
 
   await logActivity({ companyId, userId, action: "invoice.created", entityType: "invoice", entityId: inv.id });
+  if (inv.status === "sent") {
+    dispatchInvoiceEmail(inv.id, companyId);
+  }
   const savedLineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, inv.id)).orderBy(invoiceLineItemsTable.sortOrder);
   return res.status(201).json(fmt(inv, undefined, savedLineItems.map(fmtLineItem)));
 });
@@ -232,6 +270,7 @@ router.post("/:id/send", async (req: any, res) => {
   const [updated] = await db.update(invoicesTable).set({ status: "sent", updatedAt: new Date() }).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "invoice.sent", entityType: "invoice", entityId: id });
   fireAutomations(companyId, "invoice_sent", { customerId: existing.customerId, userId, invoiceId: id });
+  dispatchInvoiceEmail(id, companyId);
   const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
   return res.json(fmt(updated, undefined, lineItems.map(fmtLineItem)));
 });
