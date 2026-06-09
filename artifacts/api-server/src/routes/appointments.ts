@@ -162,6 +162,7 @@ async function sendAppointmentStatusNotification(appt: any, companyId: number, s
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 
 function fmtAppt(a: any, customerName?: string, serviceName?: string, assignedUserName?: string) {
   return {

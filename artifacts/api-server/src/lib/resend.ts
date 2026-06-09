@@ -8,7 +8,7 @@ export interface ResendCredentials {
 // Resolves Resend credentials from environment variables.
 // RESEND_FROM_EMAIL defaults to onboarding@resend.dev so emails work
 // immediately in development/testing without domain verification.
-// Point it at a verified domain (e.g. noreply@goshen.app) for production.
+// Point it at a verified domain (e.g. noreply@greensynk.com) for production.
 export async function resolveEmailCredentials(): Promise<
   (ResendCredentials & { source: "env" }) | null
 > {

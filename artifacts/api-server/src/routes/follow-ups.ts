@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, followUpCampaignsTable, followUpLogsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { FOLLOW_UP_TRIGGERS, sendTestFollowUp } from "../lib/follow-ups";
@@ -11,6 +12,7 @@ const CHANNELS = ["email", "sms"] as const;
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 router.use(requireFeature("follow_up_campaigns"));
 
 const campaignSchema = z.object({

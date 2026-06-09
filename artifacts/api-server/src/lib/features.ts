@@ -14,7 +14,7 @@ export type Plan = "starter" | "growth" | "pro";
 const PLAN_ORDER: Plan[] = ["starter", "growth", "pro"];
 
 // ---------------------------------------------------------------------------
-// Plan -> feature map (mirrors the official Goshen pricing structure)
+// Plan -> feature map (mirrors the official GreenSynk pricing structure)
 // ---------------------------------------------------------------------------
 
 const STARTER_FEATURES = [

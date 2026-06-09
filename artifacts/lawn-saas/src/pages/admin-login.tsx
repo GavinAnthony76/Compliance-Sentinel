@@ -66,7 +66,7 @@ export function AdminLoginPage() {
                 <label className="text-sm font-medium pl-1 text-slate-300">Email</label>
                 <Input
                   type="email"
-                  placeholder="admin@goshen.com"
+                  placeholder="admin@greensynk.com"
                   icon={<Mail className="w-5 h-5" />}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}

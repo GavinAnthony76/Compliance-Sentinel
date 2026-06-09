@@ -232,11 +232,11 @@ router.post("/forgot-password", async (req, res) => {
     const resetUrl = `${resolveBaseUrl()}/reset-password?token=${token}`;
     await sendEmail({
       to: user.email,
-      subject: "Reset your GreenSync password",
+      subject: "Reset your GreenSynk password",
       body: [
         `Hi ${user.firstName},`,
         "",
-        "We received a request to reset the password for your GreenSync account.",
+        "We received a request to reset the password for your GreenSynk account.",
         "",
         "Click the link below to set a new password. This link is valid for 1 hour:",
         "",
@@ -246,7 +246,7 @@ router.post("/forgot-password", async (req, res) => {
         "",
         "If you did not request a password reset, you can safely ignore this email. Your password will not change.",
         "",
-        "— The GreenSync Team",
+        "— The GreenSynk Team",
       ].join("\n"),
     });
   }
@@ -283,11 +283,11 @@ router.post("/reset-password", async (req, res) => {
   // Send security confirmation email
   await sendEmail({
     to: user.email,
-    subject: "Your GreenSync password was changed",
+    subject: "Your GreenSynk password was changed",
     body: [
       `Hi ${user.firstName},`,
       "",
-      "This is a confirmation that the password for your GreenSync account (${user.email}) was successfully changed.",
+      "This is a confirmation that the password for your GreenSynk account (${user.email}) was successfully changed.",
       "",
       `Password changed at: ${new Date().toUTCString()}`,
       "",
@@ -297,7 +297,7 @@ router.post("/reset-password", async (req, res) => {
       "",
       `${resolveBaseUrl()}/forgot-password`,
       "",
-      "— The GreenSync Team",
+      "— The GreenSynk Team",
     ].join("\n").replace("${user.email}", user.email),
   });
 
@@ -315,11 +315,11 @@ router.post("/forgot-username", async (req, res) => {
     const loginUrl = `${resolveBaseUrl()}/login`;
     await sendEmail({
       to: user.email,
-      subject: "Your GreenSync login (username) details",
+      subject: "Your GreenSynk login (username) details",
       body: [
         `Hi ${user.firstName},`,
         "",
-        "We received a request to look up the login details for your GreenSync account.",
+        "We received a request to look up the login details for your GreenSynk account.",
         "",
         "Your username (login email) is:",
         "",
@@ -338,7 +338,7 @@ router.post("/forgot-username", async (req, res) => {
         "",
         "If you did not request this email, you can safely ignore it.",
         "",
-        "— The GreenSync Team",
+        "— The GreenSynk Team",
       ].join("\n"),
     });
   }

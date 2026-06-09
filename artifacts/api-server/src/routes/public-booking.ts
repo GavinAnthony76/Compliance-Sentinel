@@ -15,7 +15,7 @@ router.get("/book/:slug", async (req, res) => {
 
   const services = await db.select().from(servicesTable).where(and(eq(servicesTable.companyId, company.id), eq(servicesTable.isActive, true)));
 
-  // Branded booking pages (logo/colors) are Growth+; full white-label (no Goshen branding) is Pro-only.
+  // Branded booking pages (logo/colors) are Growth+; full white-label (no GreenSynk branding) is Pro-only.
   const branded = hasFeature(company.subscriptionPlan, "branded_booking_page");
   const whiteLabel = hasFeature(company.subscriptionPlan, "white_label_booking");
 

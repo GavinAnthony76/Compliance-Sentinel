@@ -96,7 +96,7 @@ router.post("/forgot-password", async (req, res) => {
     const resetUrl = `${baseUrl}/admin/reset-password?token=${token}`;
     await sendEmail({
       to: admin.email,
-      subject: "Reset your GreenSync admin password",
+      subject: "Reset your GreenSynk admin password",
       body: `Hi ${admin.firstName},\n\nClick the link below to reset your admin password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you didn't request this, please contact the platform team immediately.`,
     });
   }
