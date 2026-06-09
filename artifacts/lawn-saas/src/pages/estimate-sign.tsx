@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/components/ui';
-import { PenLine, CheckCircle, Leaf, X } from 'lucide-react';
+import { PenLine, CheckCircle, Leaf, X, Download } from 'lucide-react';
 import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function EstimateSignPage() {
@@ -237,6 +237,16 @@ export function EstimateSignPage() {
               {estimate.signedAt && (
                 <p className="text-sm text-green-600">{new Date(estimate.signedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
               )}
+              {estimate.customer?.email && (
+                <p className="text-sm text-green-700 pt-1">A signed copy has been emailed to you for your records.</p>
+              )}
+              <div className="pt-2">
+                <a href={`/api/public/estimates/${token}/pdf`} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" className="border-green-300 text-green-800 hover:bg-green-100">
+                    <Download className="w-4 h-4 mr-2" /> Download signed copy (PDF)
+                  </Button>
+                </a>
+              </div>
             </CardContent>
           </Card>
         ) : (

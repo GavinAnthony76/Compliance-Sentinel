@@ -9,6 +9,7 @@ interface EmailPayload {
   body: string;
   html?: string;
   replyTo?: string;
+  attachments?: { filename: string; content: Buffer }[];
 }
 
 interface SMSPayload {
@@ -63,6 +64,9 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
       text: payload.body,
       ...(payload.html ? { html: payload.html } : {}),
       ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
+      ...(payload.attachments && payload.attachments.length > 0
+        ? { attachments: payload.attachments.map(a => ({ filename: a.filename, content: a.content })) }
+        : {}),
     });
 
     if (error) {

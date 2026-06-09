@@ -9,6 +9,7 @@ import { fireAutomations } from "../lib/automations";
 import { sendInvoiceEmail, resolveBaseUrl, dispatchPaymentReceiptEmail } from "../lib/notifications";
 import { logCommunicationEvent } from "../lib/communications";
 import { logger } from "../lib/logger";
+import { fetchImageBufferSafe } from "../lib/safe-fetch";
 import PDFDocument from "pdfkit";
 
 const router = Router();
@@ -318,21 +319,8 @@ router.get("/:id/pdf", async (req: any, res) => {
   const primaryHex = isValidHex(rawColor) ? rawColor : "#16a34a";
   const [pr, pg, pb] = hexToRgb(primaryHex);
 
-  // Fetch company logo if available
-  let logoBuffer: Buffer | null = null;
-  if (company?.logoUrl) {
-    try {
-      const logoRes = await fetch(company.logoUrl, { signal: AbortSignal.timeout(5000) });
-      if (logoRes.ok) {
-        const contentType = logoRes.headers.get("content-type") ?? "";
-        if (contentType.includes("image/")) {
-          logoBuffer = Buffer.from(await logoRes.arrayBuffer());
-        }
-      }
-    } catch {
-      // Logo fetch failed; proceed without logo
-    }
-  }
+  // Fetch company logo if available (SSRF-guarded against tenant-supplied URLs)
+  const logoBuffer: Buffer | null = company?.logoUrl ? await fetchImageBufferSafe(company.logoUrl) : null;
 
   const doc = new PDFDocument({ margin: 50, size: "LETTER" });
   res.setHeader("Content-Type", "application/pdf");
