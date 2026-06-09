@@ -325,14 +325,21 @@ router.post("/:id/complete", async (req: any, res) => {
   });
   await logActivity({ companyId, userId, action: "appointment.completed", entityType: "appointment", entityId: id });
 
-  // Fire all active appointment_completed automations (non-blocking)
-  fireAutomations(companyId, "appointment_completed", {
-    customerId: existing.customerId,
-    userId,
-    appointmentId: id,
-    appointmentPrice: existing.price ? Number(existing.price) : null,
-    appointmentServiceId: existing.serviceId,
-  });
+  // Only run completion side-effects when the appointment wasn't already
+  // completed, to avoid duplicate customer notifications / automation runs.
+  if (existing.status !== "completed") {
+    // Notify the customer the job is complete (email + SMS where enabled).
+    void sendAppointmentStatusNotification(updated, companyId, "completed");
+
+    // Fire all active appointment_completed automations (non-blocking).
+    fireAutomations(companyId, "appointment_completed", {
+      customerId: existing.customerId,
+      userId,
+      appointmentId: id,
+      appointmentPrice: existing.price ? Number(existing.price) : null,
+      appointmentServiceId: existing.serviceId,
+    });
+  }
 
   return res.json(fmtAppt(updated));
 });
