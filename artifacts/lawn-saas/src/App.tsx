@@ -161,10 +161,13 @@ const queryCache = new QueryCache({
       const url: string = error?.url ?? '';
       if (url.includes('/api/admin')) {
         localStorage.removeItem(ADMIN_TOKEN_KEY);
-        queryClient.resetQueries({ queryKey: ['/api/admin/auth/me'] });
+        // Clear cached admin (do NOT resetQueries — that force-refetches the
+        // disabled query, looping 401 -> onError -> refetch -> 401 forever).
+        queryClient.setQueryData(['/api/admin/auth/me'], null);
       } else if (url.includes('/api/')) {
         localStorage.removeItem(TOKEN_KEY);
-        queryClient.resetQueries({ queryKey: ['/api/auth/me'] });
+        // Clear cached user without triggering a refetch (see note above).
+        queryClient.setQueryData(['/api/auth/me'], null);
       }
     }
     if (error?.status === 402) {
