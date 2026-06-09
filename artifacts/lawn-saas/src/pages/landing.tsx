@@ -992,9 +992,13 @@ export function LandingPage() {
             <div>
               <h4 className="font-semibold text-sm uppercase tracking-widest text-background/40 mb-4">Product</h4>
               <ul className="space-y-2.5">
-                {['Features', 'Pricing', 'Testimonials', 'Security'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-background/70 hover:text-background text-sm transition-colors">{item}</a>
+                {[
+                  { label: 'Features', href: '/#features' },
+                  { label: 'Pricing', href: '/#pricing' },
+                  { label: 'Testimonials', href: '/#testimonials' },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <a href={item.href} className="text-background/70 hover:text-background text-sm transition-colors">{item.label}</a>
                   </li>
                 ))}
               </ul>
@@ -1004,9 +1008,12 @@ export function LandingPage() {
             <div>
               <h4 className="font-semibold text-sm uppercase tracking-widest text-background/40 mb-4">Company</h4>
               <ul className="space-y-2.5">
-                {['About', 'Blog', 'Careers', 'Contact'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-background/70 hover:text-background text-sm transition-colors">{item}</a>
+                {[
+                  { label: 'About', href: '/about' },
+                  { label: 'Contact', href: '/contact' },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <Link href={item.href} className="text-background/70 hover:text-background text-sm transition-colors">{item.label}</Link>
                   </li>
                 ))}
               </ul>
@@ -1016,9 +1023,13 @@ export function LandingPage() {
             <div>
               <h4 className="font-semibold text-sm uppercase tracking-widest text-background/40 mb-4">Legal</h4>
               <ul className="space-y-2.5">
-                {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="text-background/70 hover:text-background text-sm transition-colors">{item}</a>
+                {[
+                  { label: 'Privacy Policy', href: '/privacy' },
+                  { label: 'Terms of Service', href: '/terms' },
+                  { label: 'Cookie Policy', href: '/cookies' },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <Link href={item.href} className="text-background/70 hover:text-background text-sm transition-colors">{item.label}</Link>
                   </li>
                 ))}
               </ul>

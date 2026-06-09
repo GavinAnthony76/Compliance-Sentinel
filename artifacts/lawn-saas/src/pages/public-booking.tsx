@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useGetBookingPage, useSubmitBookingRequest } from '@workspace/api-client-react';
 import { useParams } from 'wouter';
 import { Button, Input, Card, CardContent } from '@/components/ui';
-import { Leaf, Check, MapPin, Phone } from 'lucide-react';
+import { Leaf, Check, MapPin, Phone, Star, ShieldCheck, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export function PublicBookingPage() {
@@ -78,6 +78,64 @@ export function PublicBookingPage() {
 
   const primaryColor = data.primaryColor || '#22c55e';
 
+  const locationParts = [data.city, data.state].filter(Boolean).join(', ');
+
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = `Book a Service — ${data.companyName}`;
+
+    const serviceNames = data.services?.map((s: any) => s.name).filter(Boolean) ?? [];
+    const ldJson = {
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      name: data.companyName,
+      ...(data.phone && { telephone: data.phone }),
+      ...(data.email && { email: data.email }),
+      ...(data.website && { url: data.website }),
+      ...(data.address || data.city || data.state || data.zip
+        ? {
+            address: {
+              '@type': 'PostalAddress',
+              ...(data.address && { streetAddress: data.address }),
+              ...(data.city && { addressLocality: data.city }),
+              ...(data.state && { addressRegion: data.state }),
+              ...(data.zip && { postalCode: data.zip }),
+              addressCountry: 'US',
+            },
+          }
+        : {}),
+      ...(serviceNames.length > 0 && {
+        hasOfferCatalog: {
+          '@type': 'OfferCatalog',
+          name: 'Lawn Care Services',
+          itemListElement: data.services?.map((s: any) => ({
+            '@type': 'Offer',
+            itemOffered: {
+              '@type': 'Service',
+              name: s.name,
+              ...(s.description && { description: s.description }),
+            },
+            ...(s.basePrice != null && {
+              price: String(s.basePrice),
+              priceCurrency: 'USD',
+            }),
+          })) ?? [],
+        },
+      }),
+    };
+
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'booking-page-ld';
+    script.textContent = JSON.stringify(ldJson);
+    document.head.appendChild(script);
+
+    return () => {
+      document.title = prevTitle;
+      document.getElementById('booking-page-ld')?.remove();
+    };
+  }, [data]);
+
   return (
     <div className="min-h-screen bg-background" style={{ '--primary': primaryColor } as any}>
       {/* Header */}
@@ -92,12 +150,44 @@ export function PublicBookingPage() {
           </div>
         )}
         <h1 className="text-3xl font-display font-bold">{data.companyName}</h1>
-        <p className="text-muted-foreground mt-2">Book a Service</p>
+        {locationParts && (
+          <p className="text-muted-foreground mt-1 text-sm flex items-center justify-center gap-1">
+            <MapPin className="w-3.5 h-3.5" />{locationParts}
+          </p>
+        )}
+        <p className="text-muted-foreground mt-2">Professional Lawn Care Services</p>
         {data.phone && (
           <a href={`tel:${data.phone}`} className="inline-flex items-center gap-2 text-sm mt-3 hover:underline" style={{ color: primaryColor }}>
             <Phone className="w-4 h-4" />{data.phone}
           </a>
         )}
+      </div>
+
+      {/* Business intro + trust signals */}
+      <div className="max-w-2xl mx-auto px-4 pt-8">
+        <div className="rounded-2xl border border-border bg-card p-6 mb-2">
+          <h2 className="font-semibold text-base mb-3">
+            Schedule your lawn care service with {data.companyName}
+          </h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+            Fill out the form below to request an appointment.
+            {locationParts ? ` We serve customers in ${locationParts} and surrounding areas.` : ' We\'ll contact you to confirm your appointment details.'}
+          </p>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-background border border-border">
+              <Star className="w-4 h-4" style={{ color: primaryColor }} />
+              <span className="text-xs font-medium">Quality Service</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-background border border-border">
+              <ShieldCheck className="w-4 h-4" style={{ color: primaryColor }} />
+              <span className="text-xs font-medium">Licensed & Insured</span>
+            </div>
+            <div className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-background border border-border">
+              <Clock className="w-4 h-4" style={{ color: primaryColor }} />
+              <span className="text-xs font-medium">Fast Response</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-10">

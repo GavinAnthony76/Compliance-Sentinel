@@ -24,6 +24,12 @@ router.get("/book/:slug", async (req, res) => {
     logoUrl: branded ? company.logoUrl : null,
     primaryColor: branded ? company.primaryColor : null,
     phone: company.phone,
+    email: company.email,
+    address: company.address,
+    city: company.city,
+    state: company.state,
+    zip: company.zip,
+    website: company.website,
     whiteLabel,
     services: services.map(s => ({ ...s, basePrice: s.basePrice ? Number(s.basePrice) : null })),
   });

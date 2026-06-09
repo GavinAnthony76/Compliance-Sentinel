@@ -4,10 +4,106 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>GreenSynk — Lawn Care Management Software</title>
+    <meta name="description" content="GreenSynk is an all-in-one lawn care business management platform. Schedule jobs, optimize routes, invoice customers, and grow your lawn care business smarter." />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://greensynk.com/#software",
+          "name": "GreenSynk",
+          "description": "All-in-one lawn care business management software for scheduling, routing, invoicing, customer management, and team coordination.",
+          "url": "https://greensynk.com",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "browserRequirements": "Requires JavaScript. Requires HTML5.",
+          "offers": [
+            {
+              "@type": "Offer",
+              "name": "Starter",
+              "description": "For solo operators getting organized. Includes 1 user, up to 50 active customers, scheduling, invoicing, and a public booking page.",
+              "price": "49.00",
+              "priceCurrency": "USD",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "49.00",
+                "priceCurrency": "USD",
+                "unitText": "MONTH"
+              }
+            },
+            {
+              "@type": "Offer",
+              "name": "Growth",
+              "description": "For growing crews. Includes up to 5 users, up to 250 customers, route optimization, recurring plans, SMS notifications, and customer portal.",
+              "price": "99.00",
+              "priceCurrency": "USD",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "99.00",
+                "priceCurrency": "USD",
+                "unitText": "MONTH"
+              }
+            },
+            {
+              "@type": "Offer",
+              "name": "Pro",
+              "description": "For established lawn care businesses. Includes unlimited users and customers, AI estimate builder, advanced analytics, API access, and white-label booking.",
+              "price": "199.00",
+              "priceCurrency": "USD",
+              "priceSpecification": {
+                "@type": "UnitPriceSpecification",
+                "price": "199.00",
+                "priceCurrency": "USD",
+                "unitText": "MONTH"
+              }
+            }
+          ],
+          "publisher": { "@id": "https://greensynk.com/#organization" },
+          "featureList": [
+            "Smart job scheduling with drag-and-drop calendar",
+            "Route optimization to reduce drive time and fuel costs",
+            "Online invoicing and payment collection",
+            "Customer CRM and property management",
+            "Branded online booking pages",
+            "Team management and GPS job tracking",
+            "Recurring service plans",
+            "Automated customer reminders via email and SMS",
+            "Customer self-service portal",
+            "AI estimate builder",
+            "Revenue reporting and analytics"
+          ]
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://greensynk.com/#organization",
+          "name": "GreenSynk",
+          "url": "https://greensynk.com",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://greensynk.com/favicon.svg"
+          },
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "hello@greensynk.com",
+            "contactType": "customer support"
+          },
+          "sameAs": []
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://greensynk.com/#website",
+          "url": "https://greensynk.com",
+          "name": "GreenSynk",
+          "publisher": { "@id": "https://greensynk.com/#organization" }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

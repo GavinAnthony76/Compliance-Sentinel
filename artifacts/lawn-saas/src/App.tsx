@@ -55,6 +55,13 @@ function RobotsManager() {
 import { LandingPage } from "@/pages/landing";
 import { PublicBookingPage } from "@/pages/public-booking";
 
+// SEO public pages — lazy loaded (crawlable but not hot-path)
+const AboutPage = lazy(() => import("@/pages/about").then(m => ({ default: m.AboutPage })));
+const ContactPage = lazy(() => import("@/pages/contact").then(m => ({ default: m.ContactPage })));
+const PrivacyPage = lazy(() => import("@/pages/privacy").then(m => ({ default: m.PrivacyPage })));
+const TermsPage = lazy(() => import("@/pages/terms").then(m => ({ default: m.TermsPage })));
+const CookiesPage = lazy(() => import("@/pages/cookies").then(m => ({ default: m.CookiesPage })));
+
 // Auth / misc public pages — lazy loaded
 const LoginPage = lazy(() => import("@/pages/login").then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/pages/register").then(m => ({ default: m.RegisterPage })));
@@ -222,6 +229,13 @@ function Router() {
           {/* Public routes — landing and booking are eagerly loaded for SEO */}
           <Route path="/" component={LandingPage} />
           <Route path="/book/:slug" component={PublicBookingPage} />
+
+          {/* SEO public pages — lazy loaded */}
+          <Route path="/about" component={AboutPage} />
+          <Route path="/contact" component={ContactPage} />
+          <Route path="/privacy" component={PrivacyPage} />
+          <Route path="/terms" component={TermsPage} />
+          <Route path="/cookies" component={CookiesPage} />
 
           {/* Auth routes — lazy loaded */}
           <Route path="/login" component={LoginPage} />
