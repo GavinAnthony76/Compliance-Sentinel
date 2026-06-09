@@ -396,50 +396,79 @@ router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, 
   try {
     let accountId = company.stripeConnectAccountId;
 
-    if (!accountId) {
-      // V2 account creation — do NOT pass top-level `type`.
-      // `fees_collector: stripe` / `losses_collector: stripe` means Stripe covers
-      // disputes and collects its own fees rather than passing them to us.
-      const account = await (stripe as any).v2.core.accounts.create({
-        display_name: company.name,
-        contact_email: company.email || undefined,
-        identity: { country: "us" },
-        dashboard: "full",
-        defaults: {
-          responsibilities: {
-            fees_collector: "stripe",
-            losses_collector: "stripe",
-          },
-        },
-        configuration: {
-          customer: {},
-          merchant: {
-            capabilities: {
-              card_payments: { requested: true },
+    // Helper: check if an error is a V2 permission/access error so we can fall back to V1
+    const isV2PermissionError = (e: any) =>
+      e?.code === "forbidden" || e?.statusCode === 403 ||
+      (typeof e?.message === "string" && e.message.toLowerCase().includes("permission denied"));
+
+    try {
+      if (!accountId) {
+        const account = await (stripe as any).v2.core.accounts.create({
+          display_name: company.name,
+          contact_email: company.email || undefined,
+          identity: { country: "us" },
+          dashboard: "full",
+          defaults: {
+            responsibilities: {
+              fees_collector: "stripe",
+              losses_collector: "stripe",
             },
+          },
+          configuration: {
+            customer: {},
+            merchant: {
+              capabilities: {
+                card_payments: { requested: true },
+              },
+            },
+          },
+        });
+        accountId = account.id;
+        await db.update(companiesTable)
+          .set({ stripeConnectAccountId: accountId, updatedAt: new Date() })
+          .where(eq(companiesTable.id, companyId));
+      }
+
+      const accountLink = await (stripe as any).v2.core.accountLinks.create({
+        account: accountId,
+        use_case: {
+          type: "account_onboarding",
+          account_onboarding: {
+            configurations: ["merchant", "customer"],
+            refresh_url: `${baseUrl}/settings?connect=refresh`,
+            return_url: `${baseUrl}/settings?connect=success&accountId=${accountId}`,
           },
         },
       });
-      accountId = account.id;
-      await db.update(companiesTable)
-        .set({ stripeConnectAccountId: accountId, updatedAt: new Date() })
-        .where(eq(companiesTable.id, companyId));
-    }
 
-    // V2 account links — use_case replaces the old `type: "account_onboarding"`
-    const accountLink = await (stripe as any).v2.core.accountLinks.create({
-      account: accountId,
-      use_case: {
+      return res.json({ url: accountLink.url });
+    } catch (v2Err: any) {
+      if (!isV2PermissionError(v2Err)) throw v2Err;
+
+      // V2 not available on this account — fall back to V1 Express
+      logger.warn("Stripe V2 Connect not available, falling back to V1 Express");
+
+      if (!accountId) {
+        const account = await stripe.accounts.create({
+          type: "express",
+          email: company.email || undefined,
+          display_name: company.name,
+        });
+        accountId = account.id;
+        await db.update(companiesTable)
+          .set({ stripeConnectAccountId: accountId, updatedAt: new Date() })
+          .where(eq(companiesTable.id, companyId));
+      }
+
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${baseUrl}/settings?connect=refresh`,
+        return_url: `${baseUrl}/settings?connect=success&accountId=${accountId}`,
         type: "account_onboarding",
-        account_onboarding: {
-          configurations: ["merchant", "customer"],
-          refresh_url: `${baseUrl}/settings?connect=refresh`,
-          return_url: `${baseUrl}/settings?connect=success&accountId=${accountId}`,
-        },
-      },
-    });
+      });
 
-    return res.json({ url: accountLink.url });
+      return res.json({ url: accountLink.url });
+    }
   } catch (err) {
     logger.error({ err }, "Error creating Connect onboarding link");
     return res.status(500).json({ error: "ConnectError", message: "Could not create onboarding link" });
