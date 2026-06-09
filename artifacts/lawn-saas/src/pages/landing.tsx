@@ -851,11 +851,15 @@ export function LandingPage() {
               <ul className="space-y-4 mb-8">
                 {[
                   '1 user',
-                  'Up to 50 active customers',
-                  'Customer CRM & property management',
-                  'Scheduling calendar & job tracking',
-                  'Invoicing & online payment collection',
-                  'Public booking page & email reminders',
+                  '50 active customers',
+                  '100 appointments/month',
+                  '10 estimates/month',
+                  '25 invoices/month',
+                  'Customer CRM',
+                  'Scheduling calendar',
+                  'Invoicing & payments',
+                  'Public booking page',
+                  'Email reminders',
                 ].map((f, i) => (
                   <li key={i} className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-primary" />
@@ -882,11 +886,18 @@ export function LandingPage() {
               <ul className="space-y-4 mb-8">
                 {[
                   'Up to 5 users',
-                  'Up to 250 active customers',
-                  'Team management & route optimization',
-                  'Recurring service plans',
-                  'Customer portal & SMS notifications',
-                  'Review requests & GPS job tracking',
+                  '250 active customers',
+                  '500 appointments/month',
+                  '100 estimates/month',
+                  '250 invoices/month',
+                  'Route optimization',
+                  'Recurring plans',
+                  'Customer portal',
+                  'SMS notifications',
+                  'Review requests',
+                  'GPS tracking',
+                  'Before/after photos',
+                  'Follow-up campaigns',
                 ].map((f, i) => (
                   <li key={i} className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-accent" />
@@ -909,12 +920,19 @@ export function LandingPage() {
               </div>
               <ul className="space-y-4 mb-8">
                 {[
-                  'Unlimited users & customers',
-                  'Unlimited appointments, estimates & invoices',
-                  'AI Estimate Builder & Lead Scoring',
-                  'Advanced analytics & revenue forecasting',
-                  'Data export, API access & white-label booking',
-                  'Autopay & priority support',
+                  'Unlimited users',
+                  'Unlimited customers',
+                  'Unlimited appointments',
+                  'Unlimited estimates',
+                  'Unlimited invoices',
+                  'AI Estimate Builder',
+                  'Lead Pipeline',
+                  'Advanced Analytics',
+                  'Data Export',
+                  'API Access',
+                  'Advanced Automations',
+                  'Autopay',
+                  'Priority Support',
                 ].map((f, i) => (
                   <li key={i} className="flex items-center gap-3">
                     <CheckCircle2 className="w-5 h-5 text-primary" />
