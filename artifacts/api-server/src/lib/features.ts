@@ -8,6 +8,7 @@ import {
   invoicesTable,
 } from "@workspace/db";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
+import { getCatalogLimits } from "./plan-catalog";
 
 export type Plan = "starter" | "growth" | "pro";
 
@@ -114,7 +115,10 @@ const PLAN_LIMITS: Record<Plan, PlanLimits> = {
 };
 
 export function getPlanLimits(plan: string | null | undefined): PlanLimits {
-  return PLAN_LIMITS[normalizePlan(plan)];
+  const normalized = normalizePlan(plan);
+  // Catalog (DB-backed, cached) is the source of truth; fall back to the
+  // built-in constants if the catalog hasn't loaded or lacks this plan.
+  return getCatalogLimits(normalized) ?? PLAN_LIMITS[normalized];
 }
 
 /** Companies without a confirmed plan (e.g. mid-signup) get the most restrictive limits. */

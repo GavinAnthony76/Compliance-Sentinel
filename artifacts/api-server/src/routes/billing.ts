@@ -3,7 +3,8 @@ import { db, companiesTable, invoicesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { getPlanUsageSummary } from "../lib/features";
-import { getUncachableStripeClient, getStripePublishableKey, getStripePriceId, STRIPE_PLANS } from "../lib/stripe";
+import { getUncachableStripeClient, getStripePublishableKey, getStripePriceId } from "../lib/stripe";
+import { getCatalog } from "../lib/plan-catalog";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 
@@ -233,7 +234,16 @@ router.get("/plans", async (_req, res) => {
   }
 
   return res.json({
-    plans: Object.values(STRIPE_PLANS),
+    plans: getCatalog().map((p) => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      interval: p.interval,
+      tagline: p.tagline,
+      features: p.features,
+      isPopular: p.isPopular,
+      sortOrder: p.sortOrder,
+    })),
     publishableKey,
   });
 });
@@ -288,7 +298,7 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
   // Price IDs must come from pre-configured Stripe Price objects via environment
   // variables (STRIPE_STARTER_PRICE_ID / STRIPE_GROWTH_PRICE_ID / STRIPE_PRO_PRICE_ID).
   // Never hardcode price IDs or fabricate prices at checkout time.
-  const priceId = getStripePriceId(planId as keyof typeof STRIPE_PLANS);
+  const priceId = getStripePriceId(planId);
   if (!priceId) {
     logger.error({ planId }, "Stripe price ID not configured for plan");
     return res.status(503).json({

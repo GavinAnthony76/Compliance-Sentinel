@@ -3,6 +3,7 @@ import { Link } from 'wouter';
 import { Button } from '@/components/ui';
 import { Logo } from '@/components/logo';
 import { usePageMeta } from '@/hooks/use-page-meta';
+import { useGetPublicPlans } from '@workspace/api-client-react';
 import { CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield, Calendar, Navigation, FileText, Contact, ClipboardList, Zap, Clock, Fuel, Bell, Eye, PenLine, BadgeCheck, RefreshCw, Mail, Repeat, MessageSquare, ChevronRight } from 'lucide-react';
 
 const TAB_DATA = [
@@ -264,11 +265,93 @@ const TAB_DATA = [
   },
 ];
 
+interface PricingPlan {
+  id: string;
+  name: string;
+  price: number;
+  tagline?: string;
+  features: string[];
+  isPopular?: boolean;
+}
+
+// Fallback shown if the plan catalog API is unavailable. The DB-backed catalog
+// (served via GET /api/plans) is the source of truth; keep this in sync only as
+// a last-resort default.
+const PRICING_FALLBACK: PricingPlan[] = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    price: 49,
+    tagline: 'For solo operators getting organized',
+    isPopular: false,
+    features: [
+      '1 user',
+      '50 active customers',
+      '100 appointments/month',
+      '10 estimates/month',
+      '25 invoices/month',
+      'Customer CRM',
+      'Scheduling calendar',
+      'Invoicing & payments',
+      'Public booking page',
+      'Email reminders',
+    ],
+  },
+  {
+    id: 'growth',
+    name: 'Growth',
+    price: 99,
+    tagline: 'For growing crews',
+    isPopular: true,
+    features: [
+      'Up to 5 users',
+      '250 active customers',
+      '500 appointments/month',
+      '100 estimates/month',
+      '250 invoices/month',
+      'Route optimization',
+      'Recurring plans',
+      'Customer portal',
+      'SMS notifications',
+      'Review requests',
+      'GPS tracking',
+      'Before/after photos',
+      'Follow-up campaigns',
+    ],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 199,
+    tagline: 'For established lawn care businesses',
+    isPopular: false,
+    features: [
+      'Unlimited users',
+      'Unlimited customers',
+      'Unlimited appointments',
+      'Unlimited estimates',
+      'Unlimited invoices',
+      'AI Estimate Builder',
+      'Lead Pipeline',
+      'Advanced Analytics',
+      'Data Export',
+      'API Access',
+      'Advanced Automations',
+      'Autopay',
+      'Priority Support',
+    ],
+  },
+];
+
 export function LandingPage() {
   usePageMeta({
     title: 'GreenSynk — Lawn Care Management Software',
     description: 'GreenSynk helps lawn care businesses manage scheduling, routing, invoicing, estimates, and customer communication from one platform.',
   });
+  const { data: plansData } = useGetPublicPlans();
+  const pricingPlans: PricingPlan[] = plansData?.plans?.length
+    ? (plansData.plans as PricingPlan[])
+    : PRICING_FALLBACK;
   const [activeTab, setActiveTab] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
@@ -840,110 +923,45 @@ export function LandingPage() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Starter */}
-            <div className="bg-card rounded-3xl p-8 border border-border shadow-sm">
-              <h3 className="text-2xl font-bold mb-2">Starter</h3>
-              <p className="text-muted-foreground mb-6">For solo operators getting organized</p>
-              <div className="mb-8">
-                <span className="text-5xl font-display font-bold">$49</span>
-                <span className="text-muted-foreground">/mo</span>
-              </div>
-              <ul className="space-y-4 mb-8">
-                {[
-                  '1 user',
-                  '50 active customers',
-                  '100 appointments/month',
-                  '10 estimates/month',
-                  '25 invoices/month',
-                  'Customer CRM',
-                  'Scheduling calendar',
-                  'Invoicing & payments',
-                  'Public booking page',
-                  'Email reminders',
-                ].map((f, i) => (
-                  <li key={i} className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <Link href="/register">
-                <Button className="w-full rounded-xl" variant="outline">Start Free Trial</Button>
-              </Link>
-            </div>
-
-            {/* Growth */}
-            <div className="bg-primary text-primary-foreground rounded-3xl p-8 border border-primary shadow-xl shadow-primary/25 relative transform md:-translate-y-4">
-              <div className="absolute top-0 right-8 -translate-y-1/2 bg-accent text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
-                Most Popular
-              </div>
-              <h3 className="text-2xl font-bold mb-2">Growth</h3>
-              <p className="text-primary-foreground/80 mb-6">For growing crews</p>
-              <div className="mb-8">
-                <span className="text-5xl font-display font-bold">$99</span>
-                <span className="text-primary-foreground/80">/mo</span>
-              </div>
-              <ul className="space-y-4 mb-8">
-                {[
-                  'Up to 5 users',
-                  '250 active customers',
-                  '500 appointments/month',
-                  '100 estimates/month',
-                  '250 invoices/month',
-                  'Route optimization',
-                  'Recurring plans',
-                  'Customer portal',
-                  'SMS notifications',
-                  'Review requests',
-                  'GPS tracking',
-                  'Before/after photos',
-                  'Follow-up campaigns',
-                ].map((f, i) => (
-                  <li key={i} className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-accent" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <Link href="/register">
-                <Button className="w-full rounded-xl bg-white text-primary hover:bg-white/90">Start Free Trial</Button>
-              </Link>
-            </div>
-
-            {/* Pro */}
-            <div className="bg-card rounded-3xl p-8 border border-border shadow-sm">
-              <h3 className="text-2xl font-bold mb-2">Pro</h3>
-              <p className="text-muted-foreground mb-6">For established lawn care businesses</p>
-              <div className="mb-8">
-                <span className="text-5xl font-display font-bold">$199</span>
-                <span className="text-muted-foreground">/mo</span>
-              </div>
-              <ul className="space-y-4 mb-8">
-                {[
-                  'Unlimited users',
-                  'Unlimited customers',
-                  'Unlimited appointments',
-                  'Unlimited estimates',
-                  'Unlimited invoices',
-                  'AI Estimate Builder',
-                  'Lead Pipeline',
-                  'Advanced Analytics',
-                  'Data Export',
-                  'API Access',
-                  'Advanced Automations',
-                  'Autopay',
-                  'Priority Support',
-                ].map((f, i) => (
-                  <li key={i} className="flex items-center gap-3">
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <Link href="/register">
-                <Button className="w-full rounded-xl" variant="outline">Start Free Trial</Button>
-              </Link>
-            </div>
+            {pricingPlans.map((plan) => {
+              const popular = plan.isPopular === true;
+              return (
+                <div
+                  key={plan.id}
+                  className={popular
+                    ? 'bg-primary text-primary-foreground rounded-3xl p-8 border border-primary shadow-xl shadow-primary/25 relative transform md:-translate-y-4'
+                    : 'bg-card rounded-3xl p-8 border border-border shadow-sm'}
+                >
+                  {popular && (
+                    <div className="absolute top-0 right-8 -translate-y-1/2 bg-accent text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                      Most Popular
+                    </div>
+                  )}
+                  <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
+                  <p className={popular ? 'text-primary-foreground/80 mb-6' : 'text-muted-foreground mb-6'}>{plan.tagline}</p>
+                  <div className="mb-8">
+                    <span className="text-5xl font-display font-bold">${plan.price}</span>
+                    <span className={popular ? 'text-primary-foreground/80' : 'text-muted-foreground'}>/mo</span>
+                  </div>
+                  <ul className="space-y-4 mb-8">
+                    {plan.features.map((f, i) => (
+                      <li key={i} className="flex items-center gap-3">
+                        <CheckCircle2 className={popular ? 'w-5 h-5 text-accent' : 'w-5 h-5 text-primary'} />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Link href="/register">
+                    <Button
+                      className={popular ? 'w-full rounded-xl bg-white text-primary hover:bg-white/90' : 'w-full rounded-xl'}
+                      variant={popular ? 'default' : 'outline'}
+                    >
+                      Start Free Trial
+                    </Button>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

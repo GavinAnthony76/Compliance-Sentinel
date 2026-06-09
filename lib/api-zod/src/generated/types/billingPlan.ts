@@ -11,6 +11,9 @@ export interface BillingPlan {
   name: string;
   price: number;
   interval: string;
+  tagline?: string;
   features: string[];
+  isPopular?: boolean;
+  sortOrder?: number;
   stripePriceId?: string | null;
 }

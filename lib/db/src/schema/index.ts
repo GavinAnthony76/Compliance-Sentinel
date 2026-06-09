@@ -17,3 +17,4 @@ export * from "./job-tracking";
 export * from "./appointment-photos";
 export * from "./follow-ups";
 export * from "./communications";
+export * from "./plans";

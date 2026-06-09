@@ -1,4 +1,5 @@
 - [pdfkit esbuild externalize](pdfkit-esbuild.md) — pdfkit can't be bundled by esbuild (fontkit/brotli/@swc/helpers); add to `external` in api-server build.mjs or server won't start.
+- [composite dist staleness](composite-dist-staleness.md) — after editing a @workspace/* lib's exports (db schema, orval codegen), rebuild its dist `tsc -b` or consumer tsc fails TS2724/TS2305 though app runs.
 - [SendGrid managed connector](sendgrid-connector.md) — connector ships NO code snippet; hand-write the proxy fetch (api_key+from_email); 401 "Maximum credits exceeded" = account billing, not wiring.
 - [API codegen pipeline](api-codegen-pipeline.md) — after spec edits: codegen → rebuild api-client-react dist → frontend typecheck; api-zod index needs explicit re-export to fix TS2308; twilio/pdfkit must be installed+externalized.
 - [NEON vs sandbox DB](neon-vs-sandbox-db.md) — app + drizzle push use NEON_DATABASE_URL; sandbox executeSql/psql $DATABASE_URL hit a DIFFERENT db. Seed/verify via psql "$NEON_DATABASE_URL".

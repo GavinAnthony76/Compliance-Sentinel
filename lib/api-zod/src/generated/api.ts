@@ -1762,6 +1762,25 @@ export const UpdateSettingsResponse = zod.object({
 });
 
 /**
+ * @summary Get the public plan catalog (no auth)
+ */
+export const GetPublicPlansResponse = zod.object({
+  plans: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      price: zod.number(),
+      interval: zod.string(),
+      tagline: zod.string().optional(),
+      features: zod.array(zod.string()),
+      isPopular: zod.boolean().optional(),
+      sortOrder: zod.number().optional(),
+      stripePriceId: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary Get available billing plans
  */
 export const GetBillingPlansResponse = zod.object({
@@ -1771,7 +1790,10 @@ export const GetBillingPlansResponse = zod.object({
       name: zod.string(),
       price: zod.number(),
       interval: zod.string(),
+      tagline: zod.string().optional(),
       features: zod.array(zod.string()),
+      isPopular: zod.boolean().optional(),
+      sortOrder: zod.number().optional(),
       stripePriceId: zod.string().nullish(),
     }),
   ),

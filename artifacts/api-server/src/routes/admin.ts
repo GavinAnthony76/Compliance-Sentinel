@@ -6,17 +6,19 @@ import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 import { getPlanUsageSummary, type Plan } from "../lib/features";
 import { isEmailConfigured } from "../lib/resend";
-import { STRIPE_PLANS } from "../lib/stripe";
+import { getCatalog } from "../lib/plan-catalog";
 import { z } from "zod";
 
-// MRR-per-plan and labels are derived from STRIPE_PLANS (the single source of
-// truth for plan pricing) rather than duplicated here.
-const PLAN_MRR: Record<string, number> = Object.fromEntries(
-  Object.values(STRIPE_PLANS).map(p => [p.id, p.price * 100]),
-);
-const PLAN_LABEL: Record<string, string> = Object.fromEntries(
-  Object.values(STRIPE_PLANS).map(p => [p.id, `${p.name} ($${p.price})`]),
-);
+// MRR-per-plan (in cents) and labels are derived from the DB-backed plan
+// catalog (the single source of truth for plan pricing) at request time.
+function planMrrCents(planId: string | null): number {
+  const plan = getCatalog().find(p => p.id === planId);
+  return plan ? plan.price * 100 : 0;
+}
+function planLabel(planId: string | null): string {
+  const plan = getCatalog().find(p => p.id === planId);
+  return plan ? `${plan.name} ($${plan.price})` : (planId ?? "");
+}
 
 const router = Router();
 router.use(requireAdminAuth);
@@ -86,7 +88,7 @@ router.get("/dashboard", async (_req, res) => {
     db.select({ total: sql<number>`coalesce(sum(total::numeric), 0)` }).from(invoicesTable).where(eq(invoicesTable.status, "paid")),
   ]);
 
-  const mrr = planBreakdown.reduce((sum, row) => sum + (PLAN_MRR[row.plan ?? ""] ?? 0) * Number(row.count), 0);
+  const mrr = planBreakdown.reduce((sum, row) => sum + (planMrrCents(row.plan)) * Number(row.count), 0);
 
   // Enrich activity with company names
   const companyIds = [...new Set(recentActivity.map(l => l.companyId).filter(Boolean))] as number[];
@@ -231,14 +233,14 @@ router.get("/revenue", async (_req, res) => {
     db.select().from(companiesTable).where(eq(companiesTable.subscriptionStatus, "past_due")).limit(20),
   ]);
 
-  const mrr = planBreakdown.reduce((sum, row) => sum + (PLAN_MRR[row.plan ?? ""] ?? 0) * Number(row.count), 0);
+  const mrr = planBreakdown.reduce((sum, row) => sum + (planMrrCents(row.plan)) * Number(row.count), 0);
   const statusMap = Object.fromEntries(statusBreakdown.map(s => [s.status, Number(s.count)]));
 
   const planData = Object.fromEntries(
     planBreakdown.map(p => [p.plan, {
       count: Number(p.count),
-      mrr: (PLAN_MRR[p.plan ?? ""] ?? 0) * Number(p.count),
-      label: PLAN_LABEL[p.plan ?? ""] ?? p.plan,
+      mrr: (planMrrCents(p.plan)) * Number(p.count),
+      label: planLabel(p.plan),
     }])
   );
 

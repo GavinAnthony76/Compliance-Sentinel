@@ -5391,6 +5391,81 @@ export const useUpdateSettings = <
 };
 
 /**
+ * @summary Get the public plan catalog (no auth)
+ */
+export const getGetPublicPlansUrl = () => {
+  return `/api/plans`;
+};
+
+export const getPublicPlans = async (
+  options?: RequestInit,
+): Promise<BillingPlansResponse> => {
+  return customFetch<BillingPlansResponse>(getGetPublicPlansUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPublicPlansQueryKey = () => {
+  return [`/api/plans`] as const;
+};
+
+export const getGetPublicPlansQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicPlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicPlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetPublicPlansQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicPlans>>> = ({
+    signal,
+  }) => getPublicPlans({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicPlans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPublicPlansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPublicPlans>>
+>;
+export type GetPublicPlansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the public plan catalog (no auth)
+ */
+
+export function useGetPublicPlans<
+  TData = Awaited<ReturnType<typeof getPublicPlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicPlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPublicPlansQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get available billing plans
  */
 export const getGetBillingPlansUrl = () => {

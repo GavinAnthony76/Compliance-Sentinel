@@ -67,81 +67,19 @@ export async function getStripeSecretKey() {
   return secretKey;
 }
 
-export const STRIPE_PLANS = {
-  starter: {
-    id: 'starter',
-    name: 'Starter',
-    price: 49,
-    interval: 'month',
-    limits: { maxUsers: 1, maxCustomers: 50, maxAppointmentsPerMonth: 100, maxEstimatesPerMonth: 10, maxInvoicesPerMonth: 25 },
-    features: [
-      '1 user',
-      '50 active customers',
-      '100 appointments/month',
-      '10 estimates/month',
-      '25 invoices/month',
-      'Customer CRM',
-      'Scheduling calendar',
-      'Invoicing & payments',
-      'Public booking page',
-      'Email reminders',
-    ],
-  },
-  growth: {
-    id: 'growth',
-    name: 'Growth',
-    price: 99,
-    interval: 'month',
-    limits: { maxUsers: 5, maxCustomers: 250, maxAppointmentsPerMonth: 500, maxEstimatesPerMonth: 100, maxInvoicesPerMonth: 250 },
-    features: [
-      'Up to 5 users',
-      '250 active customers',
-      '500 appointments/month',
-      '100 estimates/month',
-      '250 invoices/month',
-      'Route optimization',
-      'Recurring plans',
-      'Customer portal',
-      'SMS notifications',
-      'Review requests',
-      'GPS tracking',
-      'Before/after photos',
-      'Follow-up campaigns',
-    ],
-  },
-  pro: {
-    id: 'pro',
-    name: 'Pro',
-    price: 199,
-    interval: 'month',
-    limits: { maxUsers: null, maxCustomers: null, maxAppointmentsPerMonth: null, maxEstimatesPerMonth: null, maxInvoicesPerMonth: null },
-    features: [
-      'Unlimited users',
-      'Unlimited customers',
-      'Unlimited appointments',
-      'Unlimited estimates',
-      'Unlimited invoices',
-      'AI Estimate Builder',
-      'Lead Pipeline',
-      'Advanced Analytics',
-      'Data Export',
-      'API Access',
-      'Advanced Automations',
-      'Autopay',
-      'Priority Support',
-    ],
-  },
-};
-
-/** Maps a plan id to the env var name holding its Stripe price ID. Never hardcode price IDs. */
-const STRIPE_PRICE_ID_ENV: Record<keyof typeof STRIPE_PLANS, string> = {
+/**
+ * Maps a plan id to the env var name holding its Stripe price ID. Never hardcode
+ * price IDs. Plan display data and limits live in the DB-backed plan catalog
+ * (lib/plan-catalog.ts) — the single source of truth.
+ */
+const STRIPE_PRICE_ID_ENV: Record<string, string> = {
   starter: 'STRIPE_STARTER_PRICE_ID',
   growth: 'STRIPE_GROWTH_PRICE_ID',
   pro: 'STRIPE_PRO_PRICE_ID',
 };
 
 /** Returns the configured Stripe price ID for a plan, read from environment variables. */
-export function getStripePriceId(planId: keyof typeof STRIPE_PLANS): string | null {
+export function getStripePriceId(planId: string): string | null {
   const envVar = STRIPE_PRICE_ID_ENV[planId];
-  return process.env[envVar] || null;
+  return envVar ? process.env[envVar] || null : null;
 }

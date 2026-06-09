@@ -30,6 +30,7 @@ import followUpsRouter from "./follow-ups";
 import storageRouter from "./storage";
 import appointmentPhotosRouter from "./appointment-photos";
 import contactRouter from "./contact";
+import plansRouter from "./plans";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use("/follow-ups", followUpsRouter);
 router.use(storageRouter);
 router.use("/appointment-photos", appointmentPhotosRouter);
 router.use("/contact", contactRouter);
+router.use("/plans", plansRouter);
 
 export default router;
