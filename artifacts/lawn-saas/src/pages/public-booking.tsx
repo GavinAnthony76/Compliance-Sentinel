@@ -38,57 +38,8 @@ export function PublicBookingPage() {
     }
   }, [isLoading, error, data]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedService) { toast({ title: 'Please select a service', variant: 'destructive' }); return; }
-    try {
-      await submitMut.mutateAsync({
-        slug,
-        data: {
-          ...form,
-          serviceId: selectedService,
-          preferredDate: form.preferredDate ? new Date(form.preferredDate).toISOString() : undefined,
-        } as any,
-      });
-      setSubmitted(true);
-    } catch {
-      toast({ title: 'Error submitting request', variant: 'destructive' });
-    }
-  };
-
-  if (isLoading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-    </div>
-  );
-
-  if (error || !data) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold mb-2">Company Not Found</h1>
-        <p className="text-muted-foreground">This booking page does not exist.</p>
-      </div>
-    </div>
-  );
-
-  if (submitted) return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: data.primaryColor ? `${data.primaryColor}08` : undefined }}>
-      <div className="text-center max-w-md">
-        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-          <Check className="w-10 h-10 text-green-600" />
-        </div>
-        <h1 className="text-3xl font-bold mb-3">Booking Submitted!</h1>
-        <p className="text-muted-foreground text-lg mb-2">Thank you for choosing {data.companyName}.</p>
-        <p className="text-muted-foreground">We'll contact you shortly to confirm your appointment.</p>
-      </div>
-    </div>
-  );
-
-  const primaryColor = data.primaryColor || '#22c55e';
-
-  const locationParts = [data.city, data.state].filter(Boolean).join(', ');
-
   useEffect(() => {
+    if (!data) return;
     const prevTitle = document.title;
     document.title = `Book a Service — ${data.companyName}`;
 
@@ -143,6 +94,56 @@ export function PublicBookingPage() {
       document.getElementById('booking-page-ld')?.remove();
     };
   }, [data]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedService) { toast({ title: 'Please select a service', variant: 'destructive' }); return; }
+    try {
+      await submitMut.mutateAsync({
+        slug,
+        data: {
+          ...form,
+          serviceId: selectedService,
+          preferredDate: form.preferredDate ? new Date(form.preferredDate).toISOString() : undefined,
+        } as any,
+      });
+      setSubmitted(true);
+    } catch {
+      toast({ title: 'Error submitting request', variant: 'destructive' });
+    }
+  };
+
+  if (isLoading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+    </div>
+  );
+
+  if (error || !data) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-2">Company Not Found</h1>
+        <p className="text-muted-foreground">This booking page does not exist.</p>
+      </div>
+    </div>
+  );
+
+  if (submitted) return (
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: data.primaryColor ? `${data.primaryColor}08` : undefined }}>
+      <div className="text-center max-w-md">
+        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
+          <Check className="w-10 h-10 text-green-600" />
+        </div>
+        <h1 className="text-3xl font-bold mb-3">Booking Submitted!</h1>
+        <p className="text-muted-foreground text-lg mb-2">Thank you for choosing {data.companyName}.</p>
+        <p className="text-muted-foreground">We'll contact you shortly to confirm your appointment.</p>
+      </div>
+    </div>
+  );
+
+  const primaryColor = data.primaryColor || '#22c55e';
+
+  const locationParts = [data.city, data.state].filter(Boolean).join(', ');
 
   return (
     <div className="min-h-screen bg-background" style={{ '--primary': primaryColor } as any}>
