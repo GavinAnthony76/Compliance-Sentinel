@@ -126,6 +126,98 @@ function esc(str) {
 
 const SITE = 'GreenSynk';
 
+// ---------------------------------------------------------------------------
+// JSON-LD helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace the single <script type="application/ld+json"> block in an HTML
+ * string with the provided JSON-LD object (serialised to JSON).
+ */
+function injectJsonLd(html, ldObject) {
+  const jsonStr = JSON.stringify(ldObject, null, 2);
+  return html.replace(
+    /<script type="application\/ld\+json">[\s\S]*?<\/script>/,
+    `<script type="application/ld+json">\n    ${jsonStr}\n    </script>`,
+  );
+}
+
+/**
+ * Minimal site-level JSON-LD for informational pages (about, contact, etc.).
+ * Only Organisation + WebSite — no SoftwareApplication product schema.
+ */
+const SITE_JSONLD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${CANONICAL_BASE}/#organization`,
+      name: SITE,
+      url: CANONICAL_BASE,
+      logo: { '@type': 'ImageObject', url: `${CANONICAL_BASE}/favicon.svg` },
+      contactPoint: { '@type': 'ContactPoint', email: 'hello@greensynk.com', contactType: 'customer support' },
+      sameAs: [],
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${CANONICAL_BASE}/#website`,
+      url: CANONICAL_BASE,
+      name: SITE,
+      publisher: { '@id': `${CANONICAL_BASE}/#organization` },
+    },
+  ],
+};
+
+/**
+ * Build a LocalBusiness JSON-LD object from booking API data.
+ * Returns null when bookingData is falsy.
+ */
+function buildBookingJsonLd(bookingData, slug) {
+  if (!bookingData) return null;
+  const services = bookingData.services ?? [];
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    '@id': `${CANONICAL_BASE}/book/${slug}`,
+    name: bookingData.companyName,
+    ...(bookingData.phone    && { telephone: bookingData.phone }),
+    ...(bookingData.email    && { email: bookingData.email }),
+    ...(bookingData.website  && { url: bookingData.website }),
+    ...(bookingData.address || bookingData.city || bookingData.state || bookingData.zip
+      ? {
+          address: {
+            '@type': 'PostalAddress',
+            ...(bookingData.address && { streetAddress: bookingData.address }),
+            ...(bookingData.city    && { addressLocality: bookingData.city }),
+            ...(bookingData.state   && { addressRegion: bookingData.state }),
+            ...(bookingData.zip     && { postalCode: bookingData.zip }),
+            addressCountry: 'US',
+          },
+        }
+      : {}),
+    ...(services.length > 0
+      ? {
+          hasOfferCatalog: {
+            '@type': 'OfferCatalog',
+            name: 'Lawn Care Services',
+            itemListElement: services.map((s) => ({
+              '@type': 'Offer',
+              itemOffered: {
+                '@type': 'Service',
+                name: s.name,
+                ...(s.description && { description: s.description }),
+              },
+              ...(s.basePrice != null && {
+                price: String(s.basePrice),
+                priceCurrency: 'USD',
+              }),
+            })),
+          },
+        }
+      : {}),
+  };
+}
+
 /**
  * Explicit allowlist of public routes that should be indexed and receive
  * a canonical tag. Everything not on this list (auth, portal, admin,
@@ -329,6 +421,7 @@ const server = createServer(async (req, res) => {
         ...meta,
         canonicalUrl: `${CANONICAL_BASE}${pathname}`,
       });
+      html = injectJsonLd(html, SITE_JSONLD);
       html = injectRobotsAndCanonical(html, { indexable: true, canonicalPath: pathname });
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
@@ -368,6 +461,10 @@ const server = createServer(async (req, res) => {
 
       const canonicalUrl = `${CANONICAL_BASE}/book/${slug}`;
       let html = injectMeta(template, { title, description, canonicalUrl, bodyHtml });
+      const bookingLd = buildBookingJsonLd(bookingData, slug);
+      if (bookingLd) {
+        html = injectJsonLd(html, bookingLd);
+      }
       html = injectRobotsAndCanonical(html, { indexable: true, canonicalPath: `/book/${slug}` });
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
