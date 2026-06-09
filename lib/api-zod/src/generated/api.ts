@@ -1804,6 +1804,7 @@ export const GetBillingStatusResponse = zod.object({
   trialEndsAt: zod.date().nullish(),
   currentPeriodEnd: zod.date().nullish(),
   cancelAtPeriodEnd: zod.boolean().nullish(),
+  hasBillingAccount: zod.boolean().nullish(),
 });
 
 /**

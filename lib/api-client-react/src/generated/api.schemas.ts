@@ -814,6 +814,7 @@ export interface BillingStatus {
   trialEndsAt?: string | null;
   currentPeriodEnd?: string | null;
   cancelAtPeriodEnd?: boolean | null;
+  hasBillingAccount?: boolean | null;
 }
 
 export type BillingUsageLimits = {

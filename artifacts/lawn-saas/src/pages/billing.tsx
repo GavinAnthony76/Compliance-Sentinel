@@ -170,9 +170,15 @@ export function BillingPage() {
                 </div>
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={handlePortal} isLoading={portalMut.isPending}>
-                  <CreditCard className="w-4 h-4 mr-2" />Manage Billing
-                </Button>
+                {status.hasBillingAccount ? (
+                  <Button variant="outline" onClick={handlePortal} isLoading={portalMut.isPending}>
+                    <CreditCard className="w-4 h-4 mr-2" />Manage Billing
+                  </Button>
+                ) : (
+                  <Button onClick={() => handleSubscribe(status.plan as string)} isLoading={subscribeMut.isPending}>
+                    <CreditCard className="w-4 h-4 mr-2" />Add payment method
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
@@ -224,9 +230,15 @@ export function BillingPage() {
                     ))}
                   </ul>
                   {isCurrent ? (
-                    <Button variant="outline" onClick={handlePortal} className="w-full">
-                      Manage <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
+                    status?.hasBillingAccount ? (
+                      <Button variant="outline" onClick={handlePortal} className="w-full">
+                        Manage <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    ) : (
+                      <Button onClick={() => handleSubscribe(plan.id)} isLoading={subscribeMut.isPending} className="w-full">
+                        Add payment method <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    )
                   ) : (
                     <Button
                       onClick={() => handleSubscribe(plan.id)}

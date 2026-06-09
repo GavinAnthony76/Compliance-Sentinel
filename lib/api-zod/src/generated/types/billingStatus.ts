@@ -12,4 +12,5 @@ export interface BillingStatus {
   trialEndsAt?: Date | null;
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean | null;
+  hasBillingAccount?: boolean | null;
 }

@@ -3232,6 +3232,9 @@ components:
         cancelAtPeriodEnd:
           type: boolean
           nullable: true
+        hasBillingAccount:
+          type: boolean
+          nullable: true
       required: []
 
     BillingUsage:

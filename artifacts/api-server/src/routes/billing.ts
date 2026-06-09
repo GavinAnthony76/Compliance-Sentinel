@@ -113,8 +113,20 @@ router.post("/webhook", async (req: Request, res) => {
       case "invoice.paid": {
         const inv = event.data.object;
         if (inv.subscription) {
+          // Use the subscription's real status instead of assuming "active".
+          // A subscription created with a preserved trial_end stays "trialing"
+          // until the trial ends, and Stripe finalizes a $0 invoice at trial
+          // start whose invoice.paid event would otherwise flip the company to
+          // "active" prematurely and hide the remaining free trial.
+          let nextStatus = "active";
+          try {
+            const sub = await stripe.subscriptions.retrieve(inv.subscription as string);
+            nextStatus = sub.status;
+          } catch (err) {
+            logger.error({ err, subscriptionId: inv.subscription }, "Failed to retrieve subscription on invoice.paid; defaulting to active");
+          }
           await db.update(companiesTable).set({
-            subscriptionStatus: "active",
+            subscriptionStatus: nextStatus,
             updatedAt: new Date(),
           }).where(eq(companiesTable.stripeSubscriptionId, inv.subscription as string));
         }
@@ -243,6 +255,12 @@ router.get("/status", async (req: any, res) => {
     trialEndsAt: company.trialEndsAt,
     currentPeriodEnd: company.currentPeriodEnd,
     cancelAtPeriodEnd: company.cancelAtPeriodEnd,
+    // True once a real Stripe subscription exists. The frontend uses this to
+    // decide between "Add payment method" (checkout) and "Manage Billing"
+    // (Stripe customer portal). Gating on the subscription — not just a
+    // customer id, which is created when checkout merely starts — avoids
+    // showing a dead-end portal button after an abandoned checkout.
+    hasBillingAccount: !!company.stripeSubscriptionId,
   });
 });
 
@@ -291,6 +309,22 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
       await db.update(companiesTable).set({ stripeCustomerId: customerId }).where(eq(companiesTable.id, companyId));
     }
 
+    // Preserve the customer's existing local trial: if they convert mid-trial,
+    // they keep the remaining free days and are first charged at their original
+    // trialEndsAt instead of getting a brand-new 14-day Stripe trial. Stripe
+    // requires trial_end to be at least 48h out, so if less than that remains
+    // (or they aren't trialing), we skip the trial and charge at checkout.
+    const subscriptionData: any = {
+      metadata: { companyId: String(companyId), plan: planId },
+    };
+    const trialEndMs = company.trialEndsAt ? new Date(company.trialEndsAt).getTime() : 0;
+    // Stripe requires trial_end to be at least 48h out; add a 10-minute buffer
+    // so request/clock latency never lands us just under Stripe's minimum.
+    const MIN_TRIAL_MS = 48 * 60 * 60 * 1000 + 10 * 60 * 1000;
+    if (company.subscriptionStatus === "trialing" && trialEndMs - Date.now() >= MIN_TRIAL_MS) {
+      subscriptionData.trial_end = Math.floor(trialEndMs / 1000);
+    }
+
     const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -300,10 +334,7 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
       success_url: `${baseUrl}/billing?success=true`,
       cancel_url: `${baseUrl}/billing?canceled=true`,
       metadata: { companyId: String(companyId), plan: planId },
-      subscription_data: {
-        trial_period_days: 14,
-        metadata: { companyId: String(companyId), plan: planId },
-      },
+      subscription_data: subscriptionData,
     });
 
     await logActivity({ companyId, userId, action: "billing.checkout_started", metadata: { plan: planId } });
