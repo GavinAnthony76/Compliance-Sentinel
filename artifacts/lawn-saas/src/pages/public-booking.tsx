@@ -4,11 +4,19 @@ import { useParams } from 'wouter';
 import { Button, Input, Card, CardContent } from '@/components/ui';
 import { Leaf, Check, MapPin, Phone, Star, ShieldCheck, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function PublicBookingPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
   const { data, isLoading, error } = useGetBookingPage(slug);
+
+  usePageMeta({
+    title: data?.companyName ? `Book with ${data.companyName}` : 'Request a Service',
+    description: data?.companyName
+      ? `Request lawn care services from ${data.companyName}. Choose a service, describe your property, and submit your booking online.`
+      : 'Request professional lawn care services. Choose a service and submit your booking online.',
+  });
   const submitMut = useSubmitBookingRequest();
   const { toast } = useToast();
   const [submitted, setSubmitted] = useState(false);

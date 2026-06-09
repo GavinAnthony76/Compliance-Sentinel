@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -42,12 +42,91 @@ if (!basePath) {
   );
 }
 
+const SITE_NAME = "GreenSynk";
+
+function replaceMetaTag(html: string, attr: string, name: string, value: string): string {
+  const escaped = value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const re = new RegExp(`(<meta ${attr}="${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}" content=")[^"]*(")`);
+  return html.replace(re, `$1${escaped}$2`);
+}
+
+function injectDevMeta(html: string, title: string, description: string): string {
+  const fullTitle = title.includes(SITE_NAME) ? title : `${title} — ${SITE_NAME}`;
+  html = html.replace(/<title>[^<]*<\/title>/, `<title>${fullTitle}</title>`);
+  html = replaceMetaTag(html, "name",     "description",        description);
+  html = replaceMetaTag(html, "property", "og:title",           fullTitle);
+  html = replaceMetaTag(html, "property", "og:description",     description);
+  html = replaceMetaTag(html, "name",     "twitter:title",      fullTitle);
+  html = replaceMetaTag(html, "name",     "twitter:description",description);
+  return html;
+}
+
+function devMetaInjectionPlugin(): Plugin {
+  return {
+    name: "dev-meta-injection",
+    transformIndexHtml: {
+      enforce: "pre",
+      async handler(html, ctx) {
+        if (!ctx.server || !ctx.originalUrl) return html;
+        const pathname = ctx.originalUrl.split("?")[0];
+        const apiPort  = process.env.API_PORT ?? "8080";
+
+        const bookMatch     = pathname.match(/^\/book\/([^/?#]+)/);
+        const estimateMatch = pathname.match(/^\/estimates\/([^/?#]+)\/sign/);
+
+        if (bookMatch) {
+          try {
+            const r = await fetch(
+              `http://localhost:${apiPort}/api/public/book/${encodeURIComponent(bookMatch[1])}`,
+              { signal: AbortSignal.timeout(3000) },
+            );
+            if (r.ok) {
+              const d = (await r.json()) as { companyName?: string };
+              if (d.companyName) {
+                return injectDevMeta(
+                  html,
+                  `Book with ${d.companyName}`,
+                  `Request lawn care services from ${d.companyName}. Choose a service, describe your property, and submit your booking request online.`,
+                );
+              }
+            }
+          } catch { /* API may not be running — fall through */ }
+        } else if (estimateMatch) {
+          try {
+            const r = await fetch(
+              `http://localhost:${apiPort}/api/public/estimates/${encodeURIComponent(estimateMatch[1])}`,
+              { signal: AbortSignal.timeout(3000) },
+            );
+            if (r.ok) {
+              const d = (await r.json()) as { estimateNumber?: string; company?: { name?: string } };
+              const company = d.company?.name;
+              const num     = d.estimateNumber;
+              if (company || num) {
+                return injectDevMeta(
+                  html,
+                  `${num ? `Estimate ${num}` : "Estimate"}${company ? ` from ${company}` : ""}`,
+                  company
+                    ? `Review and sign your lawn care estimate from ${company}.`
+                    : "Review and sign your lawn care estimate.",
+                );
+              }
+            }
+          } catch { /* API may not be running — fall through */ }
+        }
+
+        return html;
+      },
+    },
+  };
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    devMetaInjectionPlugin(),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

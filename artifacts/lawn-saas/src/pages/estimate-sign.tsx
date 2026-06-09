@@ -3,6 +3,7 @@ import { useParams } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/components/ui';
 import { PenLine, CheckCircle, Leaf, X } from 'lucide-react';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function EstimateSignPage() {
   const { token } = useParams<{ token: string }>();
@@ -10,6 +11,16 @@ export function EstimateSignPage() {
 
   const [estimate, setEstimate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  usePageMeta({
+    title: estimate?.estimateNumber
+      ? `Estimate ${estimate.estimateNumber}${estimate.company?.name ? ` from ${estimate.company.name}` : ''}`
+      : 'Review & Sign Estimate',
+    description: estimate?.company?.name
+      ? `Review and sign your lawn care estimate from ${estimate.company.name}.`
+      : 'Review and sign your lawn care service estimate.',
+    noIndex: true,
+  });
   const [signerName, setSignerName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [signed, setSigned] = useState(false);

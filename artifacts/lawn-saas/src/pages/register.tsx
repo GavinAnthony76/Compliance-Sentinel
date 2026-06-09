@@ -6,6 +6,7 @@ import { User, Mail, Lock, Building2, Check, ChevronRight } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 const PLANS = [
   {
@@ -33,6 +34,10 @@ const PLANS = [
 ];
 
 export function RegisterPage() {
+  usePageMeta({
+    title: 'Start Free Trial',
+    description: 'Create your GreenSynk account and start managing your lawn care business smarter.',
+  });
   const [step, setStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState('growth');
   const [form, setForm] = useState({

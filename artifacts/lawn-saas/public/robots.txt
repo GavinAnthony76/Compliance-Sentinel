@@ -1,4 +1,25 @@
 User-agent: *
 Allow: /
+Allow: /estimates/
+Disallow: /dashboard
+Disallow: /calendar
+Disallow: /customers
+Disallow: /properties
+Disallow: /services
+Disallow: /appointments
+Disallow: /invoices
+Disallow: /recurring
+Disallow: /estimates
+Disallow: /routes
+Disallow: /leads
+Disallow: /tech
+Disallow: /follow-ups
+Disallow: /reviews
+Disallow: /automations
+Disallow: /team
+Disallow: /reporting
+Disallow: /settings
+Disallow: /billing
+Disallow: /admin/
 
 Sitemap: https://greensynk.com/sitemap.xml

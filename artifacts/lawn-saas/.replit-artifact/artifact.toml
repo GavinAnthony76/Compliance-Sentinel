@@ -19,13 +19,11 @@ run = "pnpm --filter @workspace/lawn-saas run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/lawn-saas", "run", "build" ]
-publicDir = "artifacts/lawn-saas/dist/public"
-serve = "static"
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.run]
+args = ["node", "artifacts/lawn-saas/ssr-server.mjs"]
 
 [services.env]
 PORT = "26093"
 BASE_PATH = "/"
+API_PORT = "8080"

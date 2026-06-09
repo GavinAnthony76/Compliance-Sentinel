@@ -4,11 +4,17 @@ import { usePortalAuth } from '@/hooks/use-portal-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { Mail, Phone, Lock, Leaf, Loader2 } from 'lucide-react';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 type Mode = 'link' | 'password';
 
 export function PortalLoginPage() {
   const { slug } = useParams<{ slug: string }>();
+  usePageMeta({
+    title: 'Customer Portal Sign In',
+    description: 'Sign in to your customer portal to view appointments, invoices, and estimates.',
+    noIndex: true,
+  });
   const [mode, setMode] = useState<Mode>('link');
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');

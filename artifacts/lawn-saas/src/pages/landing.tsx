@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui';
 import { Logo } from '@/components/logo';
+import { usePageMeta } from '@/hooks/use-page-meta';
 import { CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield, Calendar, Navigation, FileText, Contact, ClipboardList, Zap, Clock, Fuel, Bell, Eye, PenLine, BadgeCheck, RefreshCw, Mail, Repeat, MessageSquare, ChevronRight } from 'lucide-react';
 
 const TAB_DATA = [
@@ -264,6 +265,10 @@ const TAB_DATA = [
 ];
 
 export function LandingPage() {
+  usePageMeta({
+    title: 'GreenSynk — Lawn Care Management Software',
+    description: 'GreenSynk helps lawn care businesses manage scheduling, routing, invoicing, estimates, and customer communication from one platform.',
+  });
   const [activeTab, setActiveTab] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [showDemo, setShowDemo] = useState(false);

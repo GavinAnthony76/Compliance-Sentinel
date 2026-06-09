@@ -3,9 +3,11 @@ import { Link } from 'wouter';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { Mail, ArrowLeft } from 'lucide-react';
 import { Logo } from '@/components/logo';
+import { usePageMeta } from '@/hooks/use-page-meta';
 import { useToast } from '@/hooks/use-toast';
 
 export function ForgotPasswordPage() {
+  usePageMeta({ title: 'Forgot Password', noIndex: true });
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);

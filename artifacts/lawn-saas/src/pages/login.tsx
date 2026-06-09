@@ -6,8 +6,14 @@ import { Mail, Lock, RotateCcw } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function LoginPage() {
+  usePageMeta({
+    title: 'Sign In',
+    description: 'Sign in to your GreenSynk account to manage your lawn care business.',
+    noIndex: true,
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const { login, isAuthenticated, isLoading } = useAuthState();

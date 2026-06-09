@@ -3,9 +3,11 @@ import { useSearch } from 'wouter';
 import { usePortalAuth } from '@/hooks/use-portal-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
+import { usePageMeta } from '@/hooks/use-page-meta';
 import { Lock, Leaf } from 'lucide-react';
 
 export function PortalSetPasswordPage() {
+  usePageMeta({ title: 'Set Password', noIndex: true });
   const search = useSearch();
   const params = new URLSearchParams(search);
   const token = params.get('token') || '';

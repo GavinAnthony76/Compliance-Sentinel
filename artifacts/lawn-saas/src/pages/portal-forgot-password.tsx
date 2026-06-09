@@ -3,8 +3,10 @@ import { useParams, Link } from 'wouter';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { Mail, Leaf, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function PortalForgotPasswordPage() {
+  usePageMeta({ title: 'Reset Password', noIndex: true });
   const { slug } = useParams<{ slug: string }>();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
