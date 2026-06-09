@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGetBookingPage, useSubmitBookingRequest } from '@workspace/api-client-react';
 import { useParams } from 'wouter';
 import { Button, Input, Card, CardContent } from '@/components/ui';
@@ -17,6 +17,18 @@ export function PublicBookingPage() {
     firstName: '', lastName: '', email: '', phone: '', addressLine1: '',
     city: '', state: '', zip: '', notes: '', gateNotes: '', yardSize: '', preferredDate: '',
   });
+
+  useEffect(() => {
+    if (!isLoading && (error || !data)) {
+      let robotsMeta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+      if (!robotsMeta) {
+        robotsMeta = document.createElement('meta');
+        robotsMeta.name = 'robots';
+        document.head.appendChild(robotsMeta);
+      }
+      robotsMeta.content = 'noindex, nofollow';
+    }
+  }, [isLoading, error, data]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

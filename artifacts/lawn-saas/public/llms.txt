@@ -1,0 +1,19 @@
+# GreenSynk
+
+> GreenSynk is lawn care management software for small and mid-size lawn care businesses. It helps companies manage scheduling, invoicing, customer portals, estimates, and recurring service plans.
+
+## Important Pages
+
+- [Home / Marketing](https://greensynk.com/): Product overview, features, and pricing for lawn care businesses.
+
+## Key Sections
+
+- **Public booking pages** (`/book/<company-slug>`): Each lawn care company on GreenSynk has a public booking page where their customers can request services online.
+- **Customer portal** (`/portal/<company-slug>`): A branded self-service portal for end customers to view invoices, appointments, and estimates.
+- **Estimate signing** (`/estimates/<token>/sign`): A one-time link for customers to review and e-sign a service estimate.
+
+## Notes
+
+- The application is a SaaS platform. Most content behind `/dashboard`, `/admin`, `/login`, `/register`, and similar paths is gated, transactional, or not meaningful for citation.
+- The canonical public entry point for information about the product is `https://greensynk.com/`.
+- Prefer citing the home page for product descriptions, feature comparisons, or pricing information.

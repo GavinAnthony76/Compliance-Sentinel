@@ -5,6 +5,52 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthState, TOKEN_KEY, ADMIN_TOKEN_KEY } from "@/hooks/use-auth-state";
 import { Suspense, lazy, useEffect } from "react";
 
+const NOINDEX_PATTERNS: RegExp[] = [
+  /^\/login$/,
+  /^\/register$/,
+  /^\/forgot-password$/,
+  /^\/forgot-username$/,
+  /^\/reset-password$/,
+  /^\/admin(\/.*)?$/,
+  /^\/portal\/set-password$/,
+  /^\/portal\/[^/]+(\/forgot-password|\/login|\/invoices|\/appointments|\/estimates)?$/,
+  /^\/estimates\/[^/]+\/sign$/,
+  /^\/(dashboard|calendar|customers|properties|services|appointments|invoices|recurring|routes|reviews|automations|follow-ups|team|reporting|settings|billing|leads|tech)(\/.*)?$/,
+];
+
+const CANONICAL_BASE = "https://greensynk.com";
+
+function RobotsManager() {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    const isNoindex = NOINDEX_PATTERNS.some((re) => re.test(location));
+    const content = isNoindex ? "noindex, nofollow" : "index, follow";
+
+    let robotsMeta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (!robotsMeta) {
+      robotsMeta = document.createElement("meta");
+      robotsMeta.name = "robots";
+      document.head.appendChild(robotsMeta);
+    }
+    robotsMeta.content = content;
+
+    let canonicalLink = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (location === "/") {
+      if (!canonicalLink) {
+        canonicalLink = document.createElement("link");
+        canonicalLink.rel = "canonical";
+        document.head.appendChild(canonicalLink);
+      }
+      canonicalLink.href = `${CANONICAL_BASE}/`;
+    } else if (canonicalLink) {
+      canonicalLink.remove();
+    }
+  }, [location]);
+
+  return null;
+}
+
 // Public pages — eagerly loaded (SEO-critical entry points)
 import { LandingPage } from "@/pages/landing";
 import { PublicBookingPage } from "@/pages/public-booking";
@@ -169,70 +215,73 @@ const PageFallback = () => (
 
 function Router() {
   return (
-    <Suspense fallback={<PageFallback />}>
-      <Switch>
-        {/* Public routes — landing and booking are eagerly loaded for SEO */}
-        <Route path="/" component={LandingPage} />
-        <Route path="/book/:slug" component={PublicBookingPage} />
+    <>
+      <RobotsManager />
+      <Suspense fallback={<PageFallback />}>
+        <Switch>
+          {/* Public routes — landing and booking are eagerly loaded for SEO */}
+          <Route path="/" component={LandingPage} />
+          <Route path="/book/:slug" component={PublicBookingPage} />
 
-        {/* Auth routes — lazy loaded */}
-        <Route path="/login" component={LoginPage} />
-        <Route path="/register" component={RegisterPage} />
-        <Route path="/admin/login" component={AdminLoginPage} />
-        <Route path="/forgot-password" component={ForgotPasswordPage} />
-        <Route path="/forgot-username" component={ForgotUsernamePage} />
-        <Route path="/reset-password" component={ResetPasswordPage} />
-        <Route path="/admin/forgot-password" component={AdminForgotPasswordPage} />
-        <Route path="/admin/reset-password" component={AdminResetPasswordPage} />
-        <Route path="/admin/change-password" component={AdminChangePasswordPage} />
+          {/* Auth routes — lazy loaded */}
+          <Route path="/login" component={LoginPage} />
+          <Route path="/register" component={RegisterPage} />
+          <Route path="/admin/login" component={AdminLoginPage} />
+          <Route path="/forgot-password" component={ForgotPasswordPage} />
+          <Route path="/forgot-username" component={ForgotUsernamePage} />
+          <Route path="/reset-password" component={ResetPasswordPage} />
+          <Route path="/admin/forgot-password" component={AdminForgotPasswordPage} />
+          <Route path="/admin/reset-password" component={AdminResetPasswordPage} />
+          <Route path="/admin/change-password" component={AdminChangePasswordPage} />
 
-        {/* Customer portal routes — lazy loaded */}
-        <Route path="/portal/set-password" component={PortalSetPasswordPage} />
-        <Route path="/portal/:slug/forgot-password" component={PortalForgotPasswordPage} />
-        <Route path="/portal/:slug/login" component={PortalLoginPage} />
-        <Route path="/portal/:slug/invoices" component={PortalInvoicesPage} />
-        <Route path="/portal/:slug/appointments" component={PortalAppointmentsPage} />
-        <Route path="/portal/:slug/estimates" component={PortalEstimatesPage} />
-        <Route path="/portal/:slug" component={PortalDashboardPage} />
+          {/* Customer portal routes — lazy loaded */}
+          <Route path="/portal/set-password" component={PortalSetPasswordPage} />
+          <Route path="/portal/:slug/forgot-password" component={PortalForgotPasswordPage} />
+          <Route path="/portal/:slug/login" component={PortalLoginPage} />
+          <Route path="/portal/:slug/invoices" component={PortalInvoicesPage} />
+          <Route path="/portal/:slug/appointments" component={PortalAppointmentsPage} />
+          <Route path="/portal/:slug/estimates" component={PortalEstimatesPage} />
+          <Route path="/portal/:slug" component={PortalDashboardPage} />
 
-        {/* Public e-signature — lazy loaded */}
-        <Route path="/estimates/:token/sign" component={EstimateSignPage} />
+          {/* Public e-signature — lazy loaded */}
+          <Route path="/estimates/:token/sign" component={EstimateSignPage} />
 
-        {/* Company dashboard routes — lazy loaded */}
-        <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
-        <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
-        <Route path="/leads"><ProtectedRoute component={LeadsPage} /></Route>
-        <Route path="/tech"><ProtectedRoute component={TechPage} /></Route>
-        <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
-        <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>
-        <Route path="/properties"><ProtectedRoute component={PropertiesPage} /></Route>
-        <Route path="/services"><ProtectedRoute component={ServicesPage} /></Route>
-        <Route path="/appointments"><ProtectedRoute component={AppointmentsPage} /></Route>
-        <Route path="/invoices"><ProtectedRoute component={InvoicesPage} /></Route>
-        <Route path="/recurring"><ProtectedRoute component={RecurringPage} /></Route>
-        <Route path="/estimates"><ProtectedRoute component={EstimatesPage} /></Route>
-        <Route path="/routes"><ProtectedRoute component={RoutesPage} /></Route>
-        <Route path="/reviews"><ProtectedRoute component={ReviewsPage} /></Route>
-        <Route path="/automations"><ProtectedRoute component={AutomationsPage} /></Route>
-        <Route path="/follow-ups"><ProtectedRoute component={FollowUpsPage} /></Route>
-        <Route path="/team"><ProtectedRoute component={TeamPage} /></Route>
-        <Route path="/reporting"><ProtectedRoute component={ReportingPage} /></Route>
-        <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
-        <Route path="/billing"><ProtectedRoute component={BillingPage} /></Route>
+          {/* Company dashboard routes — lazy loaded */}
+          <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
+          <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
+          <Route path="/leads"><ProtectedRoute component={LeadsPage} /></Route>
+          <Route path="/tech"><ProtectedRoute component={TechPage} /></Route>
+          <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
+          <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>
+          <Route path="/properties"><ProtectedRoute component={PropertiesPage} /></Route>
+          <Route path="/services"><ProtectedRoute component={ServicesPage} /></Route>
+          <Route path="/appointments"><ProtectedRoute component={AppointmentsPage} /></Route>
+          <Route path="/invoices"><ProtectedRoute component={InvoicesPage} /></Route>
+          <Route path="/recurring"><ProtectedRoute component={RecurringPage} /></Route>
+          <Route path="/estimates"><ProtectedRoute component={EstimatesPage} /></Route>
+          <Route path="/routes"><ProtectedRoute component={RoutesPage} /></Route>
+          <Route path="/reviews"><ProtectedRoute component={ReviewsPage} /></Route>
+          <Route path="/automations"><ProtectedRoute component={AutomationsPage} /></Route>
+          <Route path="/follow-ups"><ProtectedRoute component={FollowUpsPage} /></Route>
+          <Route path="/team"><ProtectedRoute component={TeamPage} /></Route>
+          <Route path="/reporting"><ProtectedRoute component={ReportingPage} /></Route>
+          <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
+          <Route path="/billing"><ProtectedRoute component={BillingPage} /></Route>
 
-        {/* Admin routes — lazy loaded */}
-        <Route path="/admin/dashboard"><ProtectedRoute component={AdminDashboardPage} adminOnly /></Route>
-        <Route path="/admin/companies/:id"><ProtectedRoute component={AdminCompanyDetailPage} adminOnly /></Route>
-        <Route path="/admin/companies"><ProtectedRoute component={AdminCompaniesPage} adminOnly /></Route>
-        <Route path="/admin/billing"><ProtectedRoute component={AdminBillingPage} adminOnly /></Route>
-        <Route path="/admin/activity"><ProtectedRoute component={AdminActivityPage} adminOnly /></Route>
-        <Route path="/admin/beta-readiness"><ProtectedRoute component={AdminBetaReadinessPage} adminOnly /></Route>
-        <Route path="/admin/admins"><ProtectedRoute component={AdminAdminsPage} adminOnly /></Route>
-        <Route path="/admin/settings"><ProtectedRoute component={AdminSettingsPage} adminOnly /></Route>
+          {/* Admin routes — lazy loaded */}
+          <Route path="/admin/dashboard"><ProtectedRoute component={AdminDashboardPage} adminOnly /></Route>
+          <Route path="/admin/companies/:id"><ProtectedRoute component={AdminCompanyDetailPage} adminOnly /></Route>
+          <Route path="/admin/companies"><ProtectedRoute component={AdminCompaniesPage} adminOnly /></Route>
+          <Route path="/admin/billing"><ProtectedRoute component={AdminBillingPage} adminOnly /></Route>
+          <Route path="/admin/activity"><ProtectedRoute component={AdminActivityPage} adminOnly /></Route>
+          <Route path="/admin/beta-readiness"><ProtectedRoute component={AdminBetaReadinessPage} adminOnly /></Route>
+          <Route path="/admin/admins"><ProtectedRoute component={AdminAdminsPage} adminOnly /></Route>
+          <Route path="/admin/settings"><ProtectedRoute component={AdminSettingsPage} adminOnly /></Route>
 
-        <Route component={NotFound} />
-      </Switch>
-    </Suspense>
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
+    </>
   );
 }
 
