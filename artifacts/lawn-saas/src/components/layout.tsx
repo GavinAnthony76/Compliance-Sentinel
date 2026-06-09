@@ -74,7 +74,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { href: '/appointments', icon: Clock,            label: 'Appointments' },
     { href: '/invoices',     icon: CreditCard,       label: 'Invoices' },
     { href: '/recurring',    icon: RotateCw,         label: 'Recurring Plans', requiredPlan: 'growth' },
-    { href: '/estimates',    icon: FileText,         label: 'Estimates',       requiredPlan: 'growth' },
+    { href: '/estimates',    icon: FileText,         label: 'Estimates' },
     { href: '/routes',       icon: RouteIcon,        label: 'Routes',          requiredPlan: 'growth' },
     { href: '/reviews',      icon: Star,             label: 'Reviews',         requiredPlan: 'growth' },
     { href: '/team',         icon: Users2,           label: 'Team',            requiredPlan: 'growth' },
