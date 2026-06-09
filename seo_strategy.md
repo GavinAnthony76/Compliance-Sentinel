@@ -21,9 +21,12 @@
 - lawn care CRM
 
 ## Architecture notes
-- The current public web surface is React + Vite + Wouter with client-side rendering for all public page bodies.
-- `ssr-server.mjs` now injects limited server-side metadata for `/book/:slug` and `/estimates/:token/sign`, but it does not server-render the page body.
-- Most public routes still share the baseline HTML shell in the initial response, and several informational routes still inherit homepage metadata unless the server response is made route-aware.
+- The public frontend is React + Vite + Wouter, served in production by `artifacts/lawn-saas/ssr-server.mjs`.
+- `/`, `/about`, `/contact`, `/privacy`, `/terms`, and `/cookies` are build-time prerendered through `prerender.mjs` + `src/entry-server.tsx`.
+- `/book/:slug` is runtime SSR and is intended to be indexable only when the slug resolves to a real active company.
+- `/estimates/:token/sign` remains metadata-only plus noindex; it is a transactional entry page, not a ranking target.
+- `/portal/:slug/login` and similar utility routes should remain noindex unless the SEO strategy changes.
+- The shared HTML shell still seeds baseline robots, canonical, and JSON-LD markup, so server and prerender overrides must stay aligned with the route allowlist.
 
 ## Dismissed categories
 - (None yet)
