@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetSettingsQueryKey } from '@workspace/api-client-react';
 import { useLocation } from 'wouter';
+import { useAuthState } from '@/hooks/use-auth-state';
 
 const PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash' },
@@ -49,6 +50,9 @@ export function SettingsPage() {
   const updateMut = useUpdateSettings();
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<'business' | 'branding' | 'payments'>('business');
+  const { user } = useAuthState();
+  const plan = user?.company?.subscriptionPlan;
+  const hasBranding = plan === 'growth' || plan === 'pro';
   const { status: connectStatus, loading: connectLoading, refresh: refreshConnect } = useConnectStatus();
   const [connectWorking, setConnectWorking] = useState(false);
 
@@ -296,6 +300,7 @@ export function SettingsPage() {
       ) : tab === 'branding' ? (
         <Card className="border-border/50">
           <CardContent className="p-6">
+            {hasBranding ? (
             <form onSubmit={handleSaveBranding} className="space-y-5 max-w-2xl">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Logo URL</label>
@@ -316,6 +321,20 @@ export function SettingsPage() {
               </div>
               <Button type="submit" isLoading={updateMut.isPending}>Save Branding</Button>
             </form>
+            ) : (
+            <div className="max-w-2xl text-center py-10 px-4 space-y-4">
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+                <Palette className="w-6 h-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-semibold">Branding is a Growth feature</h3>
+                <p className="text-sm text-muted-foreground">
+                  Add your own logo, brand color, and review link to your public booking page on the Growth and Pro plans. Your Starter booking page uses the default GreenSynk styling.
+                </p>
+              </div>
+              <Button onClick={() => setLocation('/billing')}>Upgrade to Growth</Button>
+            </div>
+            )}
           </CardContent>
         </Card>
       ) : (

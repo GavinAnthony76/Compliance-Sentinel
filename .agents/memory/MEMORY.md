@@ -8,3 +8,5 @@
 - [GreenSynk rebrand & email](greensynk-rebrand.md) — app renamed to GreenSynk; Resend verified on greensynk.com; noreply@greensynk.com is the from address.
 - [Portal fetch monkey-patch collision](portal-fetch-monkey-patch.md) — App.tsx global fetch override injects company JWT; guard against overwriting caller-supplied Authorization or portal auth breaks.
 - [Stripe Connect account mismatch](stripe-connect-account.md) — Replit Stripe connector and Stripe sandbox are DIFFERENT accounts; set STRIPE_SECRET_KEY + STRIPE_PUBLISHABLE_KEY secrets to override connector; re-seed products after switching; price IDs are account-scoped.
+- [Plan feature surfaces sync](plan-feature-surfaces.md) — a feature's tier lives in 3 unlinked places (features.ts gating, DB plan catalog display, in-app feature UI); change all together or you get "advertised but inert" bugs.
+- [TanStack reset bypasses enabled](tanstack-reset-enabled.md) — resetQueries/refetch force-fetch even with enabled:false; in a 401 onError handler that loops forever — use setQueryData(key,null) to clear cache instead.
