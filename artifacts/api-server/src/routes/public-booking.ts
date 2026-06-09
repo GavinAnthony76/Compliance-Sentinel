@@ -1,12 +1,20 @@
 import { Router } from "express";
 import { db, companiesTable, servicesTable, customersTable, propertiesTable, appointmentsTable, leadsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { logActivity } from "../lib/activity";
 import { hasFeature, checkPlanLimit } from "../lib/features";
 import { enqueueFollowUps } from "../lib/follow-ups";
 import { z } from "zod";
 
 const router = Router();
+
+router.get("/sitemap-slugs", async (_req, res) => {
+  const rows = await db
+    .select({ slug: companiesTable.slug, updatedAt: companiesTable.updatedAt })
+    .from(companiesTable)
+    .where(and(eq(companiesTable.isActive, true), isNotNull(companiesTable.slug)));
+  return res.json(rows.map(r => ({ slug: r.slug, updatedAt: r.updatedAt })));
+});
 
 router.get("/book/:slug", async (req, res) => {
   const { slug } = req.params;

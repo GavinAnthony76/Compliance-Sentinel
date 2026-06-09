@@ -104,13 +104,16 @@ function injectFull(template, { title, description, canonicalUrl, bodyHtml, json
   let html = template;
 
   html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
+  html = html.replace(/(<meta name="robots" content=")[^"]*(")/,              '$1index, follow$2');
   html = html.replace(/(<meta name="description" content=")[^"]*(")/,         `$1${esc(description)}$2`);
   html = html.replace(/(<meta property="og:title" content=")[^"]*(")/,        `$1${esc(title)}$2`);
   html = html.replace(/(<meta property="og:description" content=")[^"]*(")/,  `$1${esc(description)}$2`);
   html = html.replace(/(<meta property="og:url" content=")[^"]*(")/,          `$1${esc(canonicalUrl)}$2`);
   html = html.replace(/(<meta name="twitter:title" content=")[^"]*(")/,       `$1${esc(title)}$2`);
   html = html.replace(/(<meta name="twitter:description" content=")[^"]*(")/,`$1${esc(description)}$2`);
-  html = html.replace(/(<link rel="canonical" href=")[^"]*(")/,               `$1${esc(canonicalUrl)}$2`);
+
+  const canonicalTag = `<link rel="canonical" href="${esc(canonicalUrl)}" />`;
+  html = html.replace('</head>', `  ${canonicalTag}\n  </head>`);
 
   if (jsonLd) {
     html = html.replace(

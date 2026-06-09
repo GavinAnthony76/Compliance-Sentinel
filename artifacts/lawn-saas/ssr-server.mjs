@@ -259,7 +259,6 @@ function injectMeta(html, { title, description, canonicalUrl, bodyHtml } = {}) {
   }
   if (canonicalUrl) {
     html = html.replace(/(<meta property="og:url" content=")[^"]*(")/,          `$1${esc(canonicalUrl)}$2`);
-    html = html.replace(/(<link rel="canonical" href=")[^"]*(")/,               `$1${esc(canonicalUrl)}$2`);
   }
   if (bodyHtml) {
     html = html.replace(
@@ -388,6 +387,46 @@ const server = createServer(async (req, res) => {
     const url      = new URL(req.url ?? '/', 'http://localhost');
     const pathname = url.pathname;
 
+    // -----------------------------------------------------------------------
+    // Dynamic sitemap — generated from active company slugs
+    // -----------------------------------------------------------------------
+    if (pathname === '/sitemap.xml') {
+      try {
+        const r = await fetch(`${API_URL}/api/public/sitemap-slugs`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        const slugEntries = r.ok ? await r.json() : [];
+
+        const staticEntries = [
+          { loc: `${CANONICAL_BASE}/`,        changefreq: 'weekly',  priority: '1.0' },
+          { loc: `${CANONICAL_BASE}/about`,   changefreq: 'monthly', priority: '0.7' },
+          { loc: `${CANONICAL_BASE}/contact`, changefreq: 'monthly', priority: '0.6' },
+          { loc: `${CANONICAL_BASE}/privacy`, changefreq: 'yearly',  priority: '0.3' },
+          { loc: `${CANONICAL_BASE}/terms`,   changefreq: 'yearly',  priority: '0.3' },
+          { loc: `${CANONICAL_BASE}/cookies`, changefreq: 'yearly',  priority: '0.3' },
+        ];
+
+        const bookingEntries = slugEntries.map(({ slug, updatedAt }) => {
+          const lastmod = updatedAt ? `\n    <lastmod>${updatedAt.slice(0, 10)}</lastmod>` : '';
+          return `  <url>\n    <loc>${CANONICAL_BASE}/book/${encodeURIComponent(slug)}</loc>${lastmod}\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`;
+        });
+
+        const staticXml = staticEntries.map(({ loc, changefreq, priority }) =>
+          `  <url>\n    <loc>${loc}</loc>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`
+        ).join('\n');
+
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${staticXml}${bookingEntries.length ? '\n' + bookingEntries.join('\n') : ''}\n</urlset>`;
+
+        res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+        res.end(xml);
+      } catch (err) {
+        console.error('Sitemap generation error:', err.message);
+        res.writeHead(503);
+        res.end('Service Unavailable');
+      }
+      return;
+    }
+
     // Serve static assets directly (JS / CSS / images / etc.)
     if (pathname !== '/') {
       const filePath = join(DIST_DIR, pathname);
@@ -443,8 +482,19 @@ const server = createServer(async (req, res) => {
 
       const bookingData = result.bookingData;
 
+      // Fail closed: only index the page when a validated company payload is present.
+      // API errors, timeouts, and unexpected upstream responses all land here with
+      // bookingData === null — serve a 503 shell so crawlers don't index thin pages.
+      if (!bookingData) {
+        let html503 = template;
+        html503 = html503.replace(/(<meta name="robots" content=")[^"]*(")/,  '$1noindex, nofollow$2');
+        res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '60' });
+        res.end(html503);
+        return;
+      }
+
       let bodyHtml = '';
-      if (renderSSR && bookingData) {
+      if (renderSSR) {
         try {
           bodyHtml = renderSSR(`/book/${slug}`, { bookingData });
         } catch (err) {
@@ -452,12 +502,8 @@ const server = createServer(async (req, res) => {
         }
       }
 
-      const title = bookingData?.companyName
-        ? `Book with ${bookingData.companyName}`
-        : 'Request a Service';
-      const description = bookingData?.companyName
-        ? `Request outdoor services from ${bookingData.companyName}. Choose a service, describe your property, and submit your booking request online.`
-        : 'Request professional outdoor services. Choose a service and submit your booking online.';
+      const title = `Book with ${bookingData.companyName}`;
+      const description = `Request outdoor services from ${bookingData.companyName}. Choose a service, describe your property, and submit your booking request online.`;
 
       const canonicalUrl = `${CANONICAL_BASE}/book/${slug}`;
       let html = injectMeta(template, { title, description, canonicalUrl, bodyHtml });
