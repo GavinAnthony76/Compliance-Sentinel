@@ -21,8 +21,9 @@
 - lawn care CRM
 
 ## Architecture notes
-- The current public web surface is a React + Vite SPA with client-side routing.
-- Public routes presently share one HTML shell, so route-specific metadata and content are not present in the initial server response.
+- The current public web surface is React + Vite + Wouter with client-side rendering for all public page bodies.
+- `ssr-server.mjs` now injects limited server-side metadata for `/book/:slug` and `/estimates/:token/sign`, but it does not server-render the page body.
+- Most public routes still share the baseline HTML shell in the initial response, and several informational routes still inherit homepage metadata unless the server response is made route-aware.
 
 ## Dismissed categories
 - (None yet)
