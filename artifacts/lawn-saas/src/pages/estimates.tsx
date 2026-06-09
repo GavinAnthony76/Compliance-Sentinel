@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useListCustomers, useGetEstimate } from '@workspace/api-client-react';
+import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useListCustomers, useGetEstimate, useListServices } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
+import { LineItemsEditor, type LineItem } from '@/components/line-items-editor';
 import { Plus, FileText, PenLine, Send, Sparkles, X } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { useToast } from '@/hooks/use-toast';
@@ -19,7 +20,8 @@ const STATUS_COLORS: Record<string, string> = {
 
 function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: any }) {
   const isEdit = !!estimate?.id;
-  const [form, setForm] = useState({ customerId: '', subtotal: '', tax: '0', notes: '', validUntil: '', lineItems: [{ description: '', quantity: '1', unitPrice: '' }] });
+  const [form, setForm] = useState({ customerId: '', tax: '0', notes: '', validUntil: '' });
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const [initialized, setInitialized] = useState(false);
   const [showAi, setShowAi] = useState(false);
   const [aiForm, setAiForm] = useState({ jobDescription: '', propertySize: '' });
@@ -31,33 +33,60 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
   const createMut = useCreateEstimate();
   const updateMut = useUpdateEstimate();
   const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
+  const { data: services } = useListServices({ limit: 200 } as any);
   const { data: detail } = useGetEstimate(estimate?.id ?? 0, { query: { enabled: isEdit } } as any);
 
   useEffect(() => {
     if (isEdit && detail && !initialized) {
       setForm({
         customerId: String(detail.customerId),
-        subtotal: '',
         tax: String(detail.tax ?? 0),
         notes: (detail as any).notes ?? '',
         validUntil: (detail as any).validUntil ? new Date((detail as any).validUntil).toISOString().slice(0, 10) : '',
-        lineItems: (detail as any).lineItems?.length > 0
-          ? (detail as any).lineItems.map((li: any) => ({ description: li.description, quantity: String(li.quantity), unitPrice: String(li.unitPrice) }))
-          : [{ description: '', quantity: '1', unitPrice: '' }],
       });
+      setLineItems((detail as any).lineItems?.length > 0
+        ? (detail as any).lineItems.map((li: any) => ({
+            description: li.description,
+            quantity: Number(li.quantity),
+            unitPrice: Number(li.unitPrice),
+            lineTotal: Number((Number(li.quantity) * Number(li.unitPrice)).toFixed(2)),
+          }))
+        : [{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
       setInitialized(true);
     }
   }, [detail, isEdit, initialized]);
 
-  const total = form.lineItems.reduce((s, li) => s + Number(li.quantity) * Number(li.unitPrice || 0), 0) + Number(form.tax);
+  const subtotal = lineItems.reduce((s, li) => s + li.lineTotal, 0);
+  const total = subtotal + Number(form.tax);
+
+  const addServiceLine = (serviceId: string) => {
+    const svc = (services as any)?.services?.find((s: any) => String(s.id) === serviceId);
+    if (!svc) return;
+    const price = Number(svc.basePrice ?? 0);
+    const row: LineItem = { description: svc.name, quantity: 1, unitPrice: price, lineTotal: price };
+    setLineItems(prev => {
+      const onlyEmpty = prev.length === 1 && !prev[0].description && prev[0].unitPrice === 0;
+      return onlyEmpty ? [row] : [...prev, row];
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const lineItems = form.lineItems.filter(li => li.description && li.unitPrice).map(li => ({
+    const cleaned = lineItems.filter(li => li.description.trim());
+    if (cleaned.length === 0) {
+      toast({ title: 'Add at least one line item', variant: 'destructive' });
+      return;
+    }
+    const invalid = cleaned.some(li => !Number.isFinite(li.quantity) || li.quantity <= 0 || !Number.isFinite(li.unitPrice) || li.unitPrice < 0);
+    if (invalid) {
+      toast({ title: 'Check line item quantities and prices', description: 'Quantity must be greater than 0 and price cannot be negative.', variant: 'destructive' });
+      return;
+    }
+    const lineItemsPayload = cleaned.map(li => ({
       description: li.description,
-      quantity: Number(li.quantity),
-      unitPrice: Number(li.unitPrice),
-      total: Number(li.quantity) * Number(li.unitPrice),
+      quantity: li.quantity,
+      unitPrice: li.unitPrice,
+      total: li.lineTotal,
     }));
     try {
       if (isEdit) {
@@ -69,7 +98,7 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
             total,
             notes: form.notes || undefined,
             validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
-            lineItems,
+            lineItems: lineItemsPayload,
           } as any,
         });
         toast({ title: 'Estimate updated' });
@@ -82,7 +111,7 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
             total,
             notes: form.notes || undefined,
             validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
-            lineItems,
+            lineItems: lineItemsPayload,
           },
         });
         toast({ title: 'Estimate created' });
@@ -93,8 +122,6 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
       toast({ title: isEdit ? 'Error updating estimate' : 'Error creating estimate', variant: 'destructive' });
     }
   };
-
-  const addLineItem = () => setForm(f => ({ ...f, lineItems: [...f.lineItems, { description: '', quantity: '1', unitPrice: '' }] }));
 
   const handleAiDraft = async () => {
     if (aiForm.jobDescription.trim().length < 3) { toast({ title: 'Describe the job first', variant: 'destructive' }); return; }
@@ -107,9 +134,14 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.message || d.error || 'Failed to draft');
-      const items = (d.lineItems ?? []).map((li: any) => ({ description: li.description, quantity: String(li.quantity), unitPrice: String(li.unitPrice) }));
+      const items: LineItem[] = (d.lineItems ?? []).map((li: any) => ({
+        description: li.description,
+        quantity: Number(li.quantity),
+        unitPrice: Number(li.unitPrice),
+        lineTotal: Number((Number(li.quantity) * Number(li.unitPrice)).toFixed(2)),
+      }));
       if (items.length === 0) { toast({ title: 'No items generated', description: 'Try adding more detail.', variant: 'destructive' }); return; }
-      setForm(f => ({ ...f, lineItems: items }));
+      setLineItems(items);
       setShowAi(false);
       toast({ title: 'Draft generated', description: `${items.length} line item${items.length === 1 ? '' : 's'} added${d.source === 'mock' ? ' (sample estimate)' : ''}. Review before sending.` });
     } catch (err: any) {
@@ -136,14 +168,25 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium">Line Items</label>
-              <div className="flex items-center gap-3">
-                {isPro && (
-                  <button type="button" onClick={() => setShowAi(s => !s)} className="text-xs text-violet-600 hover:underline inline-flex items-center gap-1 font-medium">
-                    <Sparkles className="w-3.5 h-3.5" /> AI Draft
-                  </button>
-                )}
-                <button type="button" onClick={addLineItem} className="text-xs text-primary hover:underline">+ Add Item</button>
-              </div>
+              {isPro && (
+                <button type="button" onClick={() => setShowAi(s => !s)} className="text-xs text-violet-600 hover:underline inline-flex items-center gap-1 font-medium">
+                  <Sparkles className="w-3.5 h-3.5" /> AI Draft
+                </button>
+              )}
+            </div>
+            <div className="mb-3">
+              <select
+                className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm"
+                value=""
+                onChange={e => { if (e.target.value) { addServiceLine(e.target.value); e.target.value = ''; } }}
+              >
+                <option value="">+ Add the service the customer requested...</option>
+                {(services as any)?.services?.map((s: any) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}{s.basePrice != null ? ` — $${Number(s.basePrice).toFixed(2)}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             {isPro && showAi && (
               <div className="mb-3 rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-2">
@@ -170,15 +213,8 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
                 <p className="text-[11px] text-violet-500">AI-generated estimates are a starting point — review prices before sending.</p>
               </div>
             )}
-            <div className="space-y-2">
-              {form.lineItems.map((li, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2">
-                  <Input className="col-span-6" placeholder="Description" value={li.description} onChange={e => setForm(f => ({ ...f, lineItems: f.lineItems.map((l, j) => j === i ? { ...l, description: e.target.value } : l) }))} />
-                  <Input className="col-span-2" type="number" placeholder="Qty" value={li.quantity} onChange={e => setForm(f => ({ ...f, lineItems: f.lineItems.map((l, j) => j === i ? { ...l, quantity: e.target.value } : l) }))} />
-                  <Input className="col-span-3" type="number" step="0.01" placeholder="Price" value={li.unitPrice} onChange={e => setForm(f => ({ ...f, lineItems: f.lineItems.map((l, j) => j === i ? { ...l, unitPrice: e.target.value } : l) }))} />
-                  {form.lineItems.length > 1 && <button type="button" onClick={() => setForm(f => ({ ...f, lineItems: f.lineItems.filter((_, j) => j !== i) }))} className="col-span-1 text-destructive text-lg">×</button>}
-                </div>
-              ))}
+            <div className="border border-border rounded-xl p-3">
+              <LineItemsEditor items={lineItems} onChange={setLineItems} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -191,8 +227,10 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
               <Input type="date" className="mt-1" value={form.validUntil} onChange={e => setForm(f => ({ ...f, validUntil: e.target.value }))} />
             </div>
           </div>
-          <div className="bg-accent/50 rounded-xl p-4">
-            <div className="flex justify-between text-sm"><span>Total</span><span className="font-bold">${total.toFixed(2)}</span></div>
+          <div className="bg-accent/50 rounded-xl p-4 space-y-1">
+            <div className="flex justify-between text-sm text-muted-foreground"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+            <div className="flex justify-between text-sm text-muted-foreground"><span>Tax</span><span>${Number(form.tax || 0).toFixed(2)}</span></div>
+            <div className="flex justify-between text-sm pt-1 border-t border-border"><span className="font-medium">Total</span><span className="font-bold">${total.toFixed(2)}</span></div>
           </div>
           <div>
             <label className="text-sm font-medium">Notes</label>
