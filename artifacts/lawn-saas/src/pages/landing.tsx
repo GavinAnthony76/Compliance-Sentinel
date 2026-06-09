@@ -536,8 +536,8 @@ export function LandingPage() {
           <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent z-10 h-full w-full" />
           {/* landing page hero scenic manicured lawn */}
           <img 
-            src={`${import.meta.env.BASE_URL}images/landing-hero.png`}
-            alt="Dashboard Preview" 
+            src={`${import.meta.env.BASE_URL}images/landing-hero.webp`}
+            alt="Landscaped residential lawn in front of a home" 
             className="w-full rounded-2xl md:rounded-[2rem] shadow-2xl shadow-primary/20 border border-white/20 object-cover object-center aspect-[16/9]"
           />
         </div>
@@ -676,8 +676,10 @@ export function LandingPage() {
               <div className="absolute top-3 right-3 w-20 h-20 bg-sky-200/50 rounded-full" />
               <div className="mx-5 mt-6 bg-white rounded-2xl shadow-lg overflow-hidden relative z-10">
                 <img
-                  src={`${import.meta.env.BASE_URL}images/smartroute.png`}
-                  alt="Smart Route Planning"
+                  src={`${import.meta.env.BASE_URL}images/smartroute.webp`}
+                  alt="Route planning interface showing optimized service stops"
+                  loading="lazy"
+                  decoding="async"
                   className="w-full object-cover object-center"
                 />
               </div>
