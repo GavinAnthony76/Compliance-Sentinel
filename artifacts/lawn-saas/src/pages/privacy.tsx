@@ -15,7 +15,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function PrivacyPage() {
   usePageMeta({
     title: 'Privacy Policy — GreenSynk',
-    description: "GreenSynk's Privacy Policy explains how we collect, use, and protect your information when you use our lawn care business management platform.",
+    description: "GreenSynk's Privacy Policy explains how we collect, use, and protect your information when you use our outdoor service business management platform.",
   });
   return (
     <div className="min-h-screen bg-background">

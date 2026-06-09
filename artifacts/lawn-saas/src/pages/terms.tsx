@@ -15,7 +15,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export function TermsPage() {
   usePageMeta({
     title: 'Terms of Service — GreenSynk',
-    description: 'Read the GreenSynk Terms of Service governing your use of our lawn care business management platform.',
+    description: 'Read the GreenSynk Terms of Service governing your use of our outdoor service business management platform.',
   });
   return (
     <div className="min-h-screen bg-background">
@@ -58,7 +58,7 @@ export function TermsPage() {
 
         <Section title="2. Description of Service">
           <p>
-            GreenSynk provides a cloud-based software platform for lawn care businesses,
+            GreenSynk provides a cloud-based software platform for outdoor service businesses,
             including scheduling, customer management, invoicing, payment processing, route
             optimization, team management, and related features. The specific features available
             depend on your subscription plan.

@@ -14,8 +14,8 @@ export function PublicBookingPage() {
   usePageMeta({
     title: data?.companyName ? `Book with ${data.companyName}` : 'Request a Service',
     description: data?.companyName
-      ? `Request lawn care services from ${data.companyName}. Choose a service, describe your property, and submit your booking online.`
-      : 'Request professional lawn care services. Choose a service and submit your booking online.',
+      ? `Request outdoor services from ${data.companyName}. Choose a service, describe your property, and submit your booking online.`
+      : 'Request professional outdoor services. Choose a service and submit your booking online.',
   });
   const submitMut = useSubmitBookingRequest();
   const { toast } = useToast();
@@ -175,7 +175,7 @@ export function PublicBookingPage() {
       <div className="max-w-2xl mx-auto px-4 pt-8">
         <div className="rounded-2xl border border-border bg-card p-6 mb-2">
           <h2 className="font-semibold text-base mb-3">
-            Schedule your lawn care service with {data.companyName}
+            Schedule your service with {data.companyName}
           </h2>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
             Fill out the form below to request an appointment.

@@ -1,4 +1,4 @@
-// Seeds three demo companies — one per Goshen pricing tier (Starter, Growth,
+// Seeds three demo companies — one per GreenSynk pricing tier (Starter, Growth,
 // Pro) — with realistic users, customers, properties, services, appointments,
 // estimates, and invoices so the new plan limits/usage meters can be exercised
 // end to end. Idempotent: re-running skips any company whose slug already exists.
@@ -374,7 +374,7 @@ async function seedCompany(spec: DemoSpec) {
 }
 
 async function main() {
-  console.log("Seeding Goshen pricing-tier demo companies...\n");
+  console.log("Seeding GreenSynk pricing-tier demo companies...\n");
   for (const spec of SPECS) {
     await seedCompany(spec);
   }

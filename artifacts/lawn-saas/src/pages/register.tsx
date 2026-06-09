@@ -28,7 +28,7 @@ const PLANS = [
     id: 'pro',
     name: 'Pro',
     price: '$199/mo',
-    desc: 'For established lawn care businesses',
+    desc: 'For established outdoor service businesses',
     features: ['Unlimited users, customers & jobs', 'AI Estimate Builder & Lead Scoring', 'Advanced analytics & forecasting', 'Data export, API access & autopay', 'Priority support'],
   },
 ];
@@ -36,7 +36,7 @@ const PLANS = [
 export function RegisterPage() {
   usePageMeta({
     title: 'Start Free Trial',
-    description: 'Create your GreenSynk account and start managing your lawn care business smarter.',
+    description: 'Create your GreenSynk account and start managing your outdoor service business smarter.',
   });
   const [step, setStep] = useState(1);
   const [selectedPlan, setSelectedPlan] = useState('growth');

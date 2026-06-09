@@ -25,14 +25,14 @@ const STATIC_ROUTES = [
   {
     path: '/',
     file: 'index.html',
-    title: `${SITE} — Lawn Care Management Software`,
-    description: `${SITE} is an all-in-one lawn care business management platform. Schedule jobs, optimize routes, invoice customers, and grow your lawn care business smarter.`,
+    title: `${SITE} | Outdoor Service Business Management Software`,
+    description: `${SITE} helps landscaping, lawn care, irrigation, and outdoor service companies manage customers, crews, schedules, routes, estimates, invoices, payments, and growth from one platform.`,
   },
   {
     path: '/about',
     file: 'about.html',
-    title: `About ${SITE} — Lawn Care Business Software`,
-    description: `Learn about ${SITE}, the all-in-one business management platform built for lawn care professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.`,
+    title: `About ${SITE} — Outdoor Service Business Software`,
+    description: `Learn about ${SITE}, the all-in-one business management platform built for outdoor service professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.`,
   },
   {
     path: '/contact',
@@ -44,13 +44,13 @@ const STATIC_ROUTES = [
     path: '/privacy',
     file: 'privacy.html',
     title: `Privacy Policy — ${SITE}`,
-    description: `${SITE}'s Privacy Policy explains how we collect, use, and protect your information when you use our lawn care business management platform.`,
+    description: `${SITE}'s Privacy Policy explains how we collect, use, and protect your information when you use our outdoor service business management platform.`,
   },
   {
     path: '/terms',
     file: 'terms.html',
     title: `Terms of Service — ${SITE}`,
-    description: `Read the ${SITE} Terms of Service governing your use of our lawn care business management platform.`,
+    description: `Read the ${SITE} Terms of Service governing your use of our outdoor service business management platform.`,
   },
   {
     path: '/cookies',

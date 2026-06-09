@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Api
   version: 1.0.0
-  description: GreenSync Lawn Care SaaS API
+  description: GreenSynk Outdoor Service SaaS API
 servers:
   - url: /api
     description: Base API path

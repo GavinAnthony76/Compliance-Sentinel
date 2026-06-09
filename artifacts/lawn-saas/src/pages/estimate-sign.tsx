@@ -17,8 +17,8 @@ export function EstimateSignPage() {
       ? `Estimate ${estimate.estimateNumber}${estimate.company?.name ? ` from ${estimate.company.name}` : ''}`
       : 'Review & Sign Estimate',
     description: estimate?.company?.name
-      ? `Review and sign your lawn care estimate from ${estimate.company.name}.`
-      : 'Review and sign your lawn care service estimate.',
+      ? `Review and sign your service estimate from ${estimate.company.name}.`
+      : 'Review and sign your service estimate.',
     noIndex: true,
   });
   const [signerName, setSignerName] = useState('');

@@ -6,8 +6,8 @@ import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function AboutPage() {
   usePageMeta({
-    title: 'About GreenSynk — Lawn Care Business Software',
-    description: 'Learn about GreenSynk, the all-in-one business management platform built for lawn care professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.',
+    title: 'About GreenSynk — Outdoor Service Business Software',
+    description: 'Learn about GreenSynk, the all-in-one business management platform built for outdoor service professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.',
   });
   return (
     <div className="min-h-screen bg-background">
@@ -39,7 +39,7 @@ export function AboutPage() {
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed">
               GreenSynk is an all-in-one business management platform designed specifically for
-              lawn care professionals — from solo operators to multi-crew companies.
+              landscaping, lawn care, irrigation, and outdoor service professionals — from solo operators to multi-crew companies.
             </p>
           </div>
         </section>
@@ -50,12 +50,12 @@ export function AboutPage() {
               <div>
                 <h2 className="text-3xl font-display font-bold mb-6">Our mission</h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Running a lawn care business is hard work. Between managing schedules, chasing
+                  Running an outdoor service business is hard work. Between managing schedules, chasing
                   payments, coordinating crews, and keeping customers happy, there's barely time
                   left to grow. We built GreenSynk to change that.
                 </p>
                 <p className="text-muted-foreground leading-relaxed">
-                  Our platform gives lawn care professionals the same caliber of tools that
+                  Our platform gives outdoor service professionals the same caliber of tools that
                   enterprise businesses use — without the enterprise price tag or learning curve.
                   Schedule smarter, invoice faster, and focus on what you do best: delivering
                   exceptional results for your customers.
@@ -63,7 +63,7 @@ export function AboutPage() {
               </div>
               <div className="bg-emerald-50 rounded-3xl p-8 space-y-4">
                 {[
-                  { icon: TrendingUp, text: 'Help lawn care businesses grow revenue' },
+                  { icon: TrendingUp, text: 'Help outdoor service businesses grow revenue' },
                   { icon: Users, text: 'Save owners and crews hours every week' },
                   { icon: Shield, text: 'Make professional tools accessible to everyone' },
                   { icon: CheckCircle2, text: 'Deliver a better experience to every customer' },
@@ -79,7 +79,7 @@ export function AboutPage() {
             <div className="border-t border-border pt-16">
               <h2 className="text-3xl font-display font-bold mb-4 text-center">What we offer</h2>
               <p className="text-center text-muted-foreground mb-10 max-w-2xl mx-auto">
-                GreenSynk covers every part of your lawn care business — from the first customer
+                GreenSynk covers every part of your outdoor service business — from the first customer
                 contact to the final invoice.
               </p>
               <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-6">
@@ -105,7 +105,7 @@ export function AboutPage() {
           <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl font-display font-bold mb-4">Ready to run your business smarter?</h2>
             <p className="text-background/70 mb-8">
-              Join thousands of lawn care professionals who use GreenSynk to save time,
+              Join thousands of outdoor service professionals who use GreenSynk to save time,
               get paid faster, and grow their business.
             </p>
             <Link href="/register">

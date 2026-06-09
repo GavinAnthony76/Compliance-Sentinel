@@ -9,7 +9,7 @@ import { Link } from 'wouter';
 const PLAN_DESCRIPTIONS: Record<string, string> = {
   starter: 'For solo operators getting organized',
   growth: 'For growing crews',
-  pro: 'For established lawn care businesses',
+  pro: 'For established outdoor service businesses',
 };
 
 const PLAN_LABELS: Record<string, string> = {

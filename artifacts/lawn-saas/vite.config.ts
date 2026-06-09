@@ -63,8 +63,8 @@ function injectDevMeta(html: string, title: string, description: string): string
 
 const DEV_STATIC_META: Record<string, { title: string; description: string }> = {
   "/about": {
-    title: `About ${SITE_NAME} — Lawn Care Business Software`,
-    description: `Learn about ${SITE_NAME}, the all-in-one business management platform built for lawn care professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.`,
+    title: `About ${SITE_NAME} — Outdoor Service Business Software`,
+    description: `Learn about ${SITE_NAME}, the all-in-one business management platform built for outdoor service professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.`,
   },
   "/contact": {
     title: `Contact ${SITE_NAME} — Get in Touch`,
@@ -72,11 +72,11 @@ const DEV_STATIC_META: Record<string, { title: string; description: string }> = 
   },
   "/privacy": {
     title: `Privacy Policy — ${SITE_NAME}`,
-    description: `${SITE_NAME}'s Privacy Policy explains how we collect, use, and protect your information when you use our lawn care business management platform.`,
+    description: `${SITE_NAME}'s Privacy Policy explains how we collect, use, and protect your information when you use our outdoor service business management platform.`,
   },
   "/terms": {
     title: `Terms of Service — ${SITE_NAME}`,
-    description: `Read the ${SITE_NAME} Terms of Service governing your use of our lawn care business management platform.`,
+    description: `Read the ${SITE_NAME} Terms of Service governing your use of our outdoor service business management platform.`,
   },
   "/cookies": {
     title: `Cookie Policy — ${SITE_NAME}`,
@@ -115,7 +115,7 @@ function devMetaInjectionPlugin(): Plugin {
                 return injectDevMeta(
                   html,
                   `Book with ${d.companyName}`,
-                  `Request lawn care services from ${d.companyName}. Choose a service, describe your property, and submit your booking request online.`,
+                  `Request outdoor services from ${d.companyName}. Choose a service, describe your property, and submit your booking request online.`,
                 );
               }
             }
@@ -135,8 +135,8 @@ function devMetaInjectionPlugin(): Plugin {
                   html,
                   `${num ? `Estimate ${num}` : "Estimate"}${company ? ` from ${company}` : ""}`,
                   company
-                    ? `Review and sign your lawn care estimate from ${company}.`
-                    : "Review and sign your lawn care estimate.",
+                    ? `Review and sign your service estimate from ${company}.`
+                    : "Review and sign your service estimate.",
                 );
               }
             }

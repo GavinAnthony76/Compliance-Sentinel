@@ -323,7 +323,7 @@ const PRICING_FALLBACK: PricingPlan[] = [
     id: 'pro',
     name: 'Pro',
     price: 199,
-    tagline: 'For established lawn care businesses',
+    tagline: 'For established outdoor service businesses',
     isPopular: false,
     features: [
       'Unlimited users',
@@ -345,8 +345,8 @@ const PRICING_FALLBACK: PricingPlan[] = [
 
 export function LandingPage() {
   usePageMeta({
-    title: 'GreenSynk — Lawn Care Management Software',
-    description: 'GreenSynk helps lawn care businesses manage scheduling, routing, invoicing, estimates, and customer communication from one platform.',
+    title: 'GreenSynk | Outdoor Service Business Management Software',
+    description: 'GreenSynk helps landscaping, lawn care, irrigation, and outdoor service companies manage customers, crews, schedules, routes, estimates, invoices, payments, and growth from one platform.',
   });
   const { data: plansData } = useGetPublicPlans();
   const pricingPlans: PricingPlan[] = plansData?.plans?.length
@@ -510,10 +510,10 @@ export function LandingPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
             </span>
-            The #1 Software for Lawn Care Pros
+            The Operating System for Outdoor Service Businesses
           </div>
           <h1 className="text-5xl md:text-7xl font-display font-extrabold tracking-tight text-foreground max-w-4xl mx-auto leading-tight mb-8">
-            Run Your Lawn Care Business <span className="text-gradient">Smarter.</span>
+            Run Your Outdoor Service Business <span className="text-gradient">Smarter.</span>
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
             Scheduling, invoicing, route optimization, and customer management—all in one beautiful, easy-to-use platform.
@@ -547,7 +547,7 @@ export function LandingPage() {
       <section className="py-14 bg-white relative z-20 border-t border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-center text-sm font-semibold text-muted-foreground uppercase tracking-widest mb-8">
-            Trusted by lawn care pros across the country
+            Trusted by outdoor service professionals across the country
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 md:gap-4">
             {[
@@ -824,7 +824,7 @@ export function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center max-w-3xl mx-auto mb-12">
             <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Everything your business needs, in one place</h2>
-            <p className="text-lg text-muted-foreground">Go deep on any feature. GreenSynk is built from the ground up for lawn care professionals.</p>
+            <p className="text-lg text-muted-foreground">Go deep on any feature. GreenSynk is built from the ground up for landscaping, lawn care, irrigation, and outdoor service professionals.</p>
           </div>
 
           {/* Tab Strip */}
@@ -899,7 +899,7 @@ export function LandingPage() {
             See GreenSynk in action
           </h2>
           <p className="text-lg text-white/80 mb-10 leading-relaxed">
-            Join hundreds of lawn care businesses already saving time and growing revenue.
+            Join outdoor service businesses saving time, organizing crews, and growing revenue.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/register">
@@ -970,7 +970,7 @@ export function LandingPage() {
       <section id="testimonials" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Trusted by lawn care pros</h2>
+            <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Trusted by outdoor service professionals</h2>
             <p className="text-lg text-muted-foreground">See what business owners are saying about GreenSynk.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
@@ -1025,7 +1025,7 @@ export function LandingPage() {
             <div>
               <Logo variant="white" className="h-9 mb-3" />
               <p className="text-background/60 text-sm leading-relaxed">
-                The all-in-one platform built for lawn care professionals who want to grow smarter.
+                The all-in-one platform built for outdoor service professionals who want to grow smarter.
               </p>
             </div>
 

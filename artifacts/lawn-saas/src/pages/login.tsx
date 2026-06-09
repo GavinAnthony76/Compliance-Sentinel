@@ -11,7 +11,7 @@ import { usePageMeta } from '@/hooks/use-page-meta';
 export function LoginPage() {
   usePageMeta({
     title: 'Sign In',
-    description: 'Sign in to your GreenSynk account to manage your lawn care business.',
+    description: 'Sign in to your GreenSynk account to manage your outdoor service business.',
     noIndex: true,
   });
   const [email, setEmail] = useState('');

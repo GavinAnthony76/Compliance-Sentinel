@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 const SITE_NAME = "GreenSynk";
 const DEFAULT_DESCRIPTION =
-  "GreenSynk helps lawn care businesses manage scheduling, routing, invoicing, estimates, and customer communication from one platform.";
+  "GreenSynk helps landscaping, lawn care, irrigation, and outdoor service companies manage customers, crews, schedules, routes, estimates, invoices, payments, and growth from one platform.";
 const DEFAULT_IMAGE = "https://greensynk.com/opengraph.jpg";
 
 interface PageMetaOptions {
