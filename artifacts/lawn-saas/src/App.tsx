@@ -3,60 +3,65 @@ import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-qu
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthState, TOKEN_KEY, ADMIN_TOKEN_KEY } from "@/hooks/use-auth-state";
-import { useEffect } from "react";
+import { Suspense, lazy, useEffect } from "react";
 
-// Public pages
+// Public pages — eagerly loaded (SEO-critical entry points)
 import { LandingPage } from "@/pages/landing";
-import { LoginPage } from "@/pages/login";
-import { RegisterPage } from "@/pages/register";
-import { AdminLoginPage } from "@/pages/admin-login";
-import { ForgotPasswordPage } from "@/pages/forgot-password";
-import { ForgotUsernamePage } from "@/pages/forgot-username";
-import { ResetPasswordPage } from "@/pages/reset-password";
-import { AdminForgotPasswordPage } from "@/pages/admin-forgot-password";
-import { AdminResetPasswordPage } from "@/pages/admin-reset-password";
-import { AdminChangePasswordPage } from "@/pages/admin-change-password";
-import { PortalForgotPasswordPage } from "@/pages/portal-forgot-password";
 import { PublicBookingPage } from "@/pages/public-booking";
-import { PortalLoginPage } from "@/pages/portal-login";
-import { PortalSetPasswordPage } from "@/pages/portal-set-password";
-import { PortalDashboardPage } from "@/pages/portal-dashboard";
-import { PortalInvoicesPage } from "@/pages/portal-invoices";
-import { PortalAppointmentsPage } from "@/pages/portal-appointments";
-import { PortalEstimatesPage } from "@/pages/portal-estimates";
-import { EstimateSignPage } from "@/pages/estimate-sign";
-import NotFound from "@/pages/not-found";
 
-// Company dashboard pages
-import { DashboardPage } from "@/pages/dashboard";
-import { CustomersPage } from "@/pages/customers";
-import { CustomerDetailPage } from "@/pages/customer-detail";
-import { CalendarPage } from "@/pages/calendar";
-import { PropertiesPage } from "@/pages/properties";
-import { ServicesPage } from "@/pages/services";
-import { AppointmentsPage } from "@/pages/appointments";
-import { InvoicesPage } from "@/pages/invoices";
-import { RecurringPage } from "@/pages/recurring";
-import { EstimatesPage } from "@/pages/estimates";
-import { RoutesPage } from "@/pages/routes";
-import { LeadsPage } from "@/pages/leads";
-import { TechPage } from "@/pages/tech";
-import { FollowUpsPage } from "@/pages/follow-ups";
-import { ReviewsPage } from "@/pages/reviews";
-import { AutomationsPage } from "@/pages/automations";
-import { TeamPage } from "@/pages/team";
-import { ReportingPage } from "@/pages/reporting";
-import { SettingsPage } from "@/pages/settings";
-import { BillingPage } from "@/pages/billing";
+// Auth / misc public pages — lazy loaded
+const LoginPage = lazy(() => import("@/pages/login").then(m => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import("@/pages/register").then(m => ({ default: m.RegisterPage })));
+const AdminLoginPage = lazy(() => import("@/pages/admin-login").then(m => ({ default: m.AdminLoginPage })));
+const ForgotPasswordPage = lazy(() => import("@/pages/forgot-password").then(m => ({ default: m.ForgotPasswordPage })));
+const ForgotUsernamePage = lazy(() => import("@/pages/forgot-username").then(m => ({ default: m.ForgotUsernamePage })));
+const ResetPasswordPage = lazy(() => import("@/pages/reset-password").then(m => ({ default: m.ResetPasswordPage })));
+const AdminForgotPasswordPage = lazy(() => import("@/pages/admin-forgot-password").then(m => ({ default: m.AdminForgotPasswordPage })));
+const AdminResetPasswordPage = lazy(() => import("@/pages/admin-reset-password").then(m => ({ default: m.AdminResetPasswordPage })));
+const AdminChangePasswordPage = lazy(() => import("@/pages/admin-change-password").then(m => ({ default: m.AdminChangePasswordPage })));
+const PortalForgotPasswordPage = lazy(() => import("@/pages/portal-forgot-password").then(m => ({ default: m.PortalForgotPasswordPage })));
+const PortalLoginPage = lazy(() => import("@/pages/portal-login").then(m => ({ default: m.PortalLoginPage })));
+const PortalSetPasswordPage = lazy(() => import("@/pages/portal-set-password").then(m => ({ default: m.PortalSetPasswordPage })));
+const EstimateSignPage = lazy(() => import("@/pages/estimate-sign").then(m => ({ default: m.EstimateSignPage })));
+const NotFound = lazy(() => import("@/pages/not-found"));
 
-// Admin pages
-import { AdminDashboardPage } from "@/pages/admin-dashboard";
-import { AdminCompaniesPage, AdminCompanyDetailPage } from "@/pages/admin-companies";
-import { AdminActivityPage } from "@/pages/admin-activity";
-import { AdminBetaReadinessPage } from "@/pages/admin-beta-readiness";
-import { AdminAdminsPage } from "@/pages/admin-admins";
-import { AdminBillingPage } from "@/pages/admin-billing";
-import { AdminSettingsPage } from "@/pages/admin-settings";
+// Customer portal pages — lazy loaded
+const PortalDashboardPage = lazy(() => import("@/pages/portal-dashboard").then(m => ({ default: m.PortalDashboardPage })));
+const PortalInvoicesPage = lazy(() => import("@/pages/portal-invoices").then(m => ({ default: m.PortalInvoicesPage })));
+const PortalAppointmentsPage = lazy(() => import("@/pages/portal-appointments").then(m => ({ default: m.PortalAppointmentsPage })));
+const PortalEstimatesPage = lazy(() => import("@/pages/portal-estimates").then(m => ({ default: m.PortalEstimatesPage })));
+
+// Company dashboard pages — lazy loaded
+const DashboardPage = lazy(() => import("@/pages/dashboard").then(m => ({ default: m.DashboardPage })));
+const CustomersPage = lazy(() => import("@/pages/customers").then(m => ({ default: m.CustomersPage })));
+const CustomerDetailPage = lazy(() => import("@/pages/customer-detail").then(m => ({ default: m.CustomerDetailPage })));
+const CalendarPage = lazy(() => import("@/pages/calendar").then(m => ({ default: m.CalendarPage })));
+const PropertiesPage = lazy(() => import("@/pages/properties").then(m => ({ default: m.PropertiesPage })));
+const ServicesPage = lazy(() => import("@/pages/services").then(m => ({ default: m.ServicesPage })));
+const AppointmentsPage = lazy(() => import("@/pages/appointments").then(m => ({ default: m.AppointmentsPage })));
+const InvoicesPage = lazy(() => import("@/pages/invoices").then(m => ({ default: m.InvoicesPage })));
+const RecurringPage = lazy(() => import("@/pages/recurring").then(m => ({ default: m.RecurringPage })));
+const EstimatesPage = lazy(() => import("@/pages/estimates").then(m => ({ default: m.EstimatesPage })));
+const RoutesPage = lazy(() => import("@/pages/routes").then(m => ({ default: m.RoutesPage })));
+const LeadsPage = lazy(() => import("@/pages/leads").then(m => ({ default: m.LeadsPage })));
+const TechPage = lazy(() => import("@/pages/tech").then(m => ({ default: m.TechPage })));
+const FollowUpsPage = lazy(() => import("@/pages/follow-ups").then(m => ({ default: m.FollowUpsPage })));
+const ReviewsPage = lazy(() => import("@/pages/reviews").then(m => ({ default: m.ReviewsPage })));
+const AutomationsPage = lazy(() => import("@/pages/automations").then(m => ({ default: m.AutomationsPage })));
+const TeamPage = lazy(() => import("@/pages/team").then(m => ({ default: m.TeamPage })));
+const ReportingPage = lazy(() => import("@/pages/reporting").then(m => ({ default: m.ReportingPage })));
+const SettingsPage = lazy(() => import("@/pages/settings").then(m => ({ default: m.SettingsPage })));
+const BillingPage = lazy(() => import("@/pages/billing").then(m => ({ default: m.BillingPage })));
+
+// Admin pages — lazy loaded
+const AdminDashboardPage = lazy(() => import("@/pages/admin-dashboard").then(m => ({ default: m.AdminDashboardPage })));
+const AdminCompaniesPage = lazy(() => import("@/pages/admin-companies").then(m => ({ default: m.AdminCompaniesPage })));
+const AdminCompanyDetailPage = lazy(() => import("@/pages/admin-companies").then(m => ({ default: m.AdminCompanyDetailPage })));
+const AdminActivityPage = lazy(() => import("@/pages/admin-activity").then(m => ({ default: m.AdminActivityPage })));
+const AdminBetaReadinessPage = lazy(() => import("@/pages/admin-beta-readiness").then(m => ({ default: m.AdminBetaReadinessPage })));
+const AdminAdminsPage = lazy(() => import("@/pages/admin-admins").then(m => ({ default: m.AdminAdminsPage })));
+const AdminBillingPage = lazy(() => import("@/pages/admin-billing").then(m => ({ default: m.AdminBillingPage })));
+const AdminSettingsPage = lazy(() => import("@/pages/admin-settings").then(m => ({ default: m.AdminSettingsPage })));
 
 // Monkey-patch fetch to automatically add Authorization headers
 const originalFetch = window.fetch;
@@ -156,68 +161,78 @@ function ProtectedRoute({ component: Component, adminOnly = false }: { component
   return (adminOnly ? isAdminAuthenticated : isAuthenticated) ? <Component /> : null;
 }
 
+const PageFallback = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+  </div>
+);
+
 function Router() {
   return (
-    <Switch>
-      {/* Public routes */}
-      <Route path="/" component={LandingPage} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
-      <Route path="/admin/login" component={AdminLoginPage} />
-      <Route path="/forgot-password" component={ForgotPasswordPage} />
-      <Route path="/forgot-username" component={ForgotUsernamePage} />
-      <Route path="/reset-password" component={ResetPasswordPage} />
-      <Route path="/admin/forgot-password" component={AdminForgotPasswordPage} />
-      <Route path="/admin/reset-password" component={AdminResetPasswordPage} />
-      <Route path="/admin/change-password" component={AdminChangePasswordPage} />
-      <Route path="/book/:slug" component={PublicBookingPage} />
+    <Suspense fallback={<PageFallback />}>
+      <Switch>
+        {/* Public routes — landing and booking are eagerly loaded for SEO */}
+        <Route path="/" component={LandingPage} />
+        <Route path="/book/:slug" component={PublicBookingPage} />
 
-      {/* Customer portal routes */}
-      <Route path="/portal/set-password" component={PortalSetPasswordPage} />
-      <Route path="/portal/:slug/forgot-password" component={PortalForgotPasswordPage} />
-      <Route path="/portal/:slug/login" component={PortalLoginPage} />
-      <Route path="/portal/:slug/invoices" component={PortalInvoicesPage} />
-      <Route path="/portal/:slug/appointments" component={PortalAppointmentsPage} />
-      <Route path="/portal/:slug/estimates" component={PortalEstimatesPage} />
-      <Route path="/portal/:slug" component={PortalDashboardPage} />
+        {/* Auth routes — lazy loaded */}
+        <Route path="/login" component={LoginPage} />
+        <Route path="/register" component={RegisterPage} />
+        <Route path="/admin/login" component={AdminLoginPage} />
+        <Route path="/forgot-password" component={ForgotPasswordPage} />
+        <Route path="/forgot-username" component={ForgotUsernamePage} />
+        <Route path="/reset-password" component={ResetPasswordPage} />
+        <Route path="/admin/forgot-password" component={AdminForgotPasswordPage} />
+        <Route path="/admin/reset-password" component={AdminResetPasswordPage} />
+        <Route path="/admin/change-password" component={AdminChangePasswordPage} />
 
-      {/* Public e-signature */}
-      <Route path="/estimates/:token/sign" component={EstimateSignPage} />
+        {/* Customer portal routes — lazy loaded */}
+        <Route path="/portal/set-password" component={PortalSetPasswordPage} />
+        <Route path="/portal/:slug/forgot-password" component={PortalForgotPasswordPage} />
+        <Route path="/portal/:slug/login" component={PortalLoginPage} />
+        <Route path="/portal/:slug/invoices" component={PortalInvoicesPage} />
+        <Route path="/portal/:slug/appointments" component={PortalAppointmentsPage} />
+        <Route path="/portal/:slug/estimates" component={PortalEstimatesPage} />
+        <Route path="/portal/:slug" component={PortalDashboardPage} />
 
-      {/* Company dashboard routes */}
-      <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
-      <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
-      <Route path="/leads"><ProtectedRoute component={LeadsPage} /></Route>
-      <Route path="/tech"><ProtectedRoute component={TechPage} /></Route>
-      <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
-      <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>
-      <Route path="/properties"><ProtectedRoute component={PropertiesPage} /></Route>
-      <Route path="/services"><ProtectedRoute component={ServicesPage} /></Route>
-      <Route path="/appointments"><ProtectedRoute component={AppointmentsPage} /></Route>
-      <Route path="/invoices"><ProtectedRoute component={InvoicesPage} /></Route>
-      <Route path="/recurring"><ProtectedRoute component={RecurringPage} /></Route>
-      <Route path="/estimates"><ProtectedRoute component={EstimatesPage} /></Route>
-      <Route path="/routes"><ProtectedRoute component={RoutesPage} /></Route>
-      <Route path="/reviews"><ProtectedRoute component={ReviewsPage} /></Route>
-      <Route path="/automations"><ProtectedRoute component={AutomationsPage} /></Route>
-      <Route path="/follow-ups"><ProtectedRoute component={FollowUpsPage} /></Route>
-      <Route path="/team"><ProtectedRoute component={TeamPage} /></Route>
-      <Route path="/reporting"><ProtectedRoute component={ReportingPage} /></Route>
-      <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
-      <Route path="/billing"><ProtectedRoute component={BillingPage} /></Route>
+        {/* Public e-signature — lazy loaded */}
+        <Route path="/estimates/:token/sign" component={EstimateSignPage} />
 
-      {/* Admin routes */}
-      <Route path="/admin/dashboard"><ProtectedRoute component={AdminDashboardPage} adminOnly /></Route>
-      <Route path="/admin/companies/:id"><ProtectedRoute component={AdminCompanyDetailPage} adminOnly /></Route>
-      <Route path="/admin/companies"><ProtectedRoute component={AdminCompaniesPage} adminOnly /></Route>
-      <Route path="/admin/billing"><ProtectedRoute component={AdminBillingPage} adminOnly /></Route>
-      <Route path="/admin/activity"><ProtectedRoute component={AdminActivityPage} adminOnly /></Route>
-      <Route path="/admin/beta-readiness"><ProtectedRoute component={AdminBetaReadinessPage} adminOnly /></Route>
-      <Route path="/admin/admins"><ProtectedRoute component={AdminAdminsPage} adminOnly /></Route>
-      <Route path="/admin/settings"><ProtectedRoute component={AdminSettingsPage} adminOnly /></Route>
+        {/* Company dashboard routes — lazy loaded */}
+        <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
+        <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
+        <Route path="/leads"><ProtectedRoute component={LeadsPage} /></Route>
+        <Route path="/tech"><ProtectedRoute component={TechPage} /></Route>
+        <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
+        <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>
+        <Route path="/properties"><ProtectedRoute component={PropertiesPage} /></Route>
+        <Route path="/services"><ProtectedRoute component={ServicesPage} /></Route>
+        <Route path="/appointments"><ProtectedRoute component={AppointmentsPage} /></Route>
+        <Route path="/invoices"><ProtectedRoute component={InvoicesPage} /></Route>
+        <Route path="/recurring"><ProtectedRoute component={RecurringPage} /></Route>
+        <Route path="/estimates"><ProtectedRoute component={EstimatesPage} /></Route>
+        <Route path="/routes"><ProtectedRoute component={RoutesPage} /></Route>
+        <Route path="/reviews"><ProtectedRoute component={ReviewsPage} /></Route>
+        <Route path="/automations"><ProtectedRoute component={AutomationsPage} /></Route>
+        <Route path="/follow-ups"><ProtectedRoute component={FollowUpsPage} /></Route>
+        <Route path="/team"><ProtectedRoute component={TeamPage} /></Route>
+        <Route path="/reporting"><ProtectedRoute component={ReportingPage} /></Route>
+        <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
+        <Route path="/billing"><ProtectedRoute component={BillingPage} /></Route>
 
-      <Route component={NotFound} />
-    </Switch>
+        {/* Admin routes — lazy loaded */}
+        <Route path="/admin/dashboard"><ProtectedRoute component={AdminDashboardPage} adminOnly /></Route>
+        <Route path="/admin/companies/:id"><ProtectedRoute component={AdminCompanyDetailPage} adminOnly /></Route>
+        <Route path="/admin/companies"><ProtectedRoute component={AdminCompaniesPage} adminOnly /></Route>
+        <Route path="/admin/billing"><ProtectedRoute component={AdminBillingPage} adminOnly /></Route>
+        <Route path="/admin/activity"><ProtectedRoute component={AdminActivityPage} adminOnly /></Route>
+        <Route path="/admin/beta-readiness"><ProtectedRoute component={AdminBetaReadinessPage} adminOnly /></Route>
+        <Route path="/admin/admins"><ProtectedRoute component={AdminAdminsPage} adminOnly /></Route>
+        <Route path="/admin/settings"><ProtectedRoute component={AdminSettingsPage} adminOnly /></Route>
+
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 
