@@ -267,7 +267,34 @@ export function LandingPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
+  const [showDemoRequest, setShowDemoRequest] = useState(false);
+  const [demoForm, setDemoForm] = useState({ name: '', email: '', phone: '', company: '', message: '' });
+  const [demoSubmitting, setDemoSubmitting] = useState(false);
+  const [demoSubmitted, setDemoSubmitted] = useState(false);
+  const [demoError, setDemoError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  async function handleDemoSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setDemoSubmitting(true);
+    setDemoError('');
+    try {
+      const res = await fetch('/api/contact/demo-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(demoForm),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Something went wrong');
+      }
+      setDemoSubmitted(true);
+    } catch (err: any) {
+      setDemoError(err.message || 'Could not send request. Please try again.');
+    } finally {
+      setDemoSubmitting(false);
+    }
+  }
 
   function switchTab(index: number) {
     if (index === activeTab) return;
@@ -282,6 +309,62 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col font-sans">
+      {/* Demo Request Modal */}
+      {showDemoRequest && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={() => { setShowDemoRequest(false); setDemoSubmitted(false); setDemoError(''); }}>
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-8" onClick={e => e.stopPropagation()}>
+            <button className="absolute top-4 right-4 text-gray-400 hover:text-gray-600" onClick={() => { setShowDemoRequest(false); setDemoSubmitted(false); setDemoError(''); }}>
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            {demoSubmitted ? (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">Request received!</h3>
+                <p className="text-gray-500">We'll be in touch within one business day to schedule your demo.</p>
+                <button className="mt-6 px-6 py-2 rounded-full bg-primary text-white font-semibold hover:bg-primary/90 transition" onClick={() => { setShowDemoRequest(false); setDemoSubmitted(false); }}>Close</button>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-gray-900 mb-1">Schedule a Demo</h3>
+                <p className="text-gray-500 mb-6 text-sm">Fill in your details and we'll reach out to set up a personalized walkthrough.</p>
+                <form onSubmit={handleDemoSubmit} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                      <input required className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" value={demoForm.name} onChange={e => setDemoForm(f => ({ ...f, name: e.target.value }))} placeholder="Jane Smith" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                      <input required type="email" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" value={demoForm.email} onChange={e => setDemoForm(f => ({ ...f, email: e.target.value }))} placeholder="jane@example.com" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                      <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" value={demoForm.phone} onChange={e => setDemoForm(f => ({ ...f, phone: e.target.value }))} placeholder="(555) 000-0000" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+                      <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" value={demoForm.company} onChange={e => setDemoForm(f => ({ ...f, company: e.target.value }))} placeholder="Green Lawns Co." />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                    <textarea rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" value={demoForm.message} onChange={e => setDemoForm(f => ({ ...f, message: e.target.value }))} placeholder="Tell us a bit about your business..." />
+                  </div>
+                  {demoError && <p className="text-sm text-red-600">{demoError}</p>}
+                  <button type="submit" disabled={demoSubmitting} className="w-full py-3 rounded-full bg-primary text-white font-bold text-sm hover:bg-primary/90 transition disabled:opacity-60">
+                    {demoSubmitting ? 'Sending...' : 'Request Demo'}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Demo Video Modal */}
       {showDemo && (
         <div
@@ -736,7 +819,7 @@ export function LandingPage() {
                 Start Your Free Trial
               </Button>
             </Link>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-full text-lg px-8 h-14 border-white text-white hover:bg-white/10 bg-transparent font-bold">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-full text-lg px-8 h-14 border-white text-white hover:bg-white/10 bg-transparent font-bold" onClick={() => setShowDemoRequest(true)}>
               Schedule a Demo
             </Button>
           </div>
