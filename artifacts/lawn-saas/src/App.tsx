@@ -36,13 +36,13 @@ function RobotsManager() {
     robotsMeta.content = content;
 
     let canonicalLink = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
-    if (location === "/") {
+    if (!isNoindex) {
       if (!canonicalLink) {
         canonicalLink = document.createElement("link");
         canonicalLink.rel = "canonical";
         document.head.appendChild(canonicalLink);
       }
-      canonicalLink.href = `${CANONICAL_BASE}/`;
+      canonicalLink.href = `${CANONICAL_BASE}${location === "/" ? "/" : location}`;
     } else if (canonicalLink) {
       canonicalLink.remove();
     }

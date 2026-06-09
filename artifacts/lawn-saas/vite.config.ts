@@ -61,6 +61,29 @@ function injectDevMeta(html: string, title: string, description: string): string
   return html;
 }
 
+const DEV_STATIC_META: Record<string, { title: string; description: string }> = {
+  "/about": {
+    title: `About ${SITE_NAME} — Lawn Care Business Software`,
+    description: `Learn about ${SITE_NAME}, the all-in-one business management platform built for lawn care professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.`,
+  },
+  "/contact": {
+    title: `Contact ${SITE_NAME} — Get in Touch`,
+    description: `Get in touch with the ${SITE_NAME} team for support, sales inquiries, or general questions. We typically respond within one business day.`,
+  },
+  "/privacy": {
+    title: `Privacy Policy — ${SITE_NAME}`,
+    description: `${SITE_NAME}'s Privacy Policy explains how we collect, use, and protect your information when you use our lawn care business management platform.`,
+  },
+  "/terms": {
+    title: `Terms of Service — ${SITE_NAME}`,
+    description: `Read the ${SITE_NAME} Terms of Service governing your use of our lawn care business management platform.`,
+  },
+  "/cookies": {
+    title: `Cookie Policy — ${SITE_NAME}`,
+    description: `${SITE_NAME}'s Cookie Policy explains how we use cookies and similar tracking technologies on our website and platform.`,
+  },
+};
+
 function devMetaInjectionPlugin(): Plugin {
   return {
     name: "dev-meta-injection",
@@ -70,6 +93,12 @@ function devMetaInjectionPlugin(): Plugin {
         if (!ctx.server || !ctx.originalUrl) return html;
         const pathname = ctx.originalUrl.split("?")[0];
         const apiPort  = process.env.API_PORT ?? "8080";
+
+        // Static pages
+        if (DEV_STATIC_META[pathname]) {
+          const { title, description } = DEV_STATIC_META[pathname];
+          return injectDevMeta(html, title, description);
+        }
 
         const bookMatch     = pathname.match(/^\/book\/([^/?#]+)/);
         const estimateMatch = pathname.match(/^\/estimates\/([^/?#]+)\/sign/);

@@ -2,8 +2,13 @@ import { Link } from 'wouter';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
 import { Mail, MessageSquare, BookOpen, Clock } from 'lucide-react';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function ContactPage() {
+  usePageMeta({
+    title: 'Contact GreenSynk — Get in Touch',
+    description: 'Get in touch with the GreenSynk team for support, sales inquiries, or general questions. We typically respond within one business day.',
+  });
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white/80 backdrop-blur-sm sticky top-0 z-50">

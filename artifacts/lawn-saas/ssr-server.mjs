@@ -1,20 +1,25 @@
 /**
  * GreenSynk SSR meta-injection server.
  *
- * Serves the Vite-built SPA with route-specific <title>, Open-Graph/Twitter
- * meta tags, robots directives, and canonical links injected into index.html
- * before it reaches the browser. This gives crawlers and social-preview bots
- * server-visible metadata even though the app body is still React-rendered on
- * the client side.
+ * Serves the Vite-built SPA with route-specific HTML body and head tags
+ * injected before the response reaches the browser. This gives crawlers and
+ * social-preview bots server-visible content and metadata even for React routes.
  *
- * Public routes that get dynamic injection:
- *   /book/:slug            — company name + description from /api/public/book/:slug
- *   /estimates/:token/sign — estimate number + company from /api/public/estimates/:token
+ * Response strategy per route:
+ *   Prerendered static routes  — serve dist/prerendered/<file>.html directly
+ *   /book/:slug                — runtime SSR using dist/server/entry-server.js
+ *                                with booking data pre-fetched from the API,
+ *                                with full metadata + canonical injected
+ *   /estimates/:token/sign     — SPA shell with injected meta tags
+ *   All other routes           — SPA shell (dist/public/index.html)
  *
  * Crawl governance:
  *   Indexable routes (allowlist) receive "index, follow" + a canonical tag.
  *   Everything else receives "noindex, nofollow" and no canonical tag.
  *   Invalid /book/:slug returns HTTP 404; expired/rejected /estimates/:token/sign returns HTTP 410.
+ *
+ * Falls back gracefully when the SSR bundle or prerendered files are absent
+ * (i.e. before a production build has been run).
  */
 
 import { createServer } from 'node:http';
@@ -24,11 +29,16 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const PORT = Number(process.env.PORT ?? 3000);
-const API_URL = process.env.API_INTERNAL_URL ?? `http://localhost:${process.env.API_PORT ?? 8080}`;
-const DIST_DIR = join(__dirname, 'dist', 'public');
+const PORT           = Number(process.env.PORT ?? 3000);
+const API_URL        = process.env.API_INTERNAL_URL ?? `http://localhost:${process.env.API_PORT ?? 8080}`;
+const DIST_DIR       = join(__dirname, 'dist', 'public');
+const DIST_PRERENDERED = join(__dirname, 'dist', 'prerendered');
+const DIST_SERVER    = join(__dirname, 'dist', 'server');
 const CANONICAL_BASE = 'https://greensynk.com';
 
+// ---------------------------------------------------------------------------
+// Load the client-build template (required at startup)
+// ---------------------------------------------------------------------------
 let template;
 try {
   template = readFileSync(join(DIST_DIR, 'index.html'), 'utf-8');
@@ -37,6 +47,52 @@ try {
   process.exit(1);
 }
 
+// ---------------------------------------------------------------------------
+// Load prerendered HTML for static routes (optional — built by prerender.mjs)
+// ---------------------------------------------------------------------------
+const STATIC_PRERENDER_MAP = {
+  '/':        'index.html',
+  '/about':   'about.html',
+  '/contact': 'contact.html',
+  '/privacy': 'privacy.html',
+  '/terms':   'terms.html',
+  '/cookies': 'cookies.html',
+};
+
+const prerenderedPages = {};
+for (const [route, file] of Object.entries(STATIC_PRERENDER_MAP)) {
+  const filePath = join(DIST_PRERENDERED, file);
+  if (existsSync(filePath)) {
+    prerenderedPages[route] = readFileSync(filePath, 'utf-8');
+  }
+}
+const prerenderedCount = Object.keys(prerenderedPages).length;
+if (prerenderedCount > 0) {
+  console.log(`Loaded ${prerenderedCount} prerendered pages.`);
+} else {
+  console.warn('No prerendered pages found — run "pnpm build" to generate them.');
+}
+
+// ---------------------------------------------------------------------------
+// Load the SSR bundle for runtime rendering of /book/:slug (optional)
+// ---------------------------------------------------------------------------
+let renderSSR = null;
+const ssrBundlePath = join(DIST_SERVER, 'entry-server.js');
+if (existsSync(ssrBundlePath)) {
+  try {
+    const ssrModule = await import(ssrBundlePath);
+    renderSSR = ssrModule.render;
+    console.log('SSR bundle loaded for runtime rendering.');
+  } catch (err) {
+    console.warn('Failed to load SSR bundle:', err.message);
+  }
+} else {
+  console.warn('SSR bundle not found — run "pnpm build" to enable runtime SSR.');
+}
+
+// ---------------------------------------------------------------------------
+// MIME types
+// ---------------------------------------------------------------------------
 const MIME = {
   '.html':  'text/html; charset=utf-8',
   '.js':    'text/javascript',
@@ -57,6 +113,9 @@ const MIME = {
   '.mp4':   'video/mp4',
 };
 
+// ---------------------------------------------------------------------------
+// HTML escaping + meta injection helpers
+// ---------------------------------------------------------------------------
 function esc(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')
@@ -81,21 +140,42 @@ function isStaticIndexable(pathname) {
   return STATIC_INDEXABLE_ROUTES.has(pathname);
 }
 
-function injectMeta(html, { title, description }) {
+/**
+ * Inject route-specific metadata into an HTML template string.
+ *
+ * @param {string}  html
+ * @param {object}  opts
+ * @param {string}  [opts.title]        Page title (SITE suffix auto-appended if missing)
+ * @param {string}  [opts.description]
+ * @param {string}  [opts.canonicalUrl]
+ * @param {string}  [opts.bodyHtml]     React-rendered inner HTML for <div id="root">
+ */
+function injectMeta(html, { title, description, canonicalUrl, bodyHtml } = {}) {
   const fullTitle = title
     ? (title.includes(SITE) ? title : `${title} — ${SITE}`)
     : null;
 
   if (fullTitle) {
-    html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(fullTitle)}</title>`);
-    html = html.replace(/(<meta property="og:title" content=")[^"]*(")/,    `$1${esc(fullTitle)}$2`);
-    html = html.replace(/(<meta name="twitter:title" content=")[^"]*(")/,   `$1${esc(fullTitle)}$2`);
+    html = html.replace(/<title>[^<]*<\/title>/,                                `<title>${esc(fullTitle)}</title>`);
+    html = html.replace(/(<meta property="og:title" content=")[^"]*(")/,        `$1${esc(fullTitle)}$2`);
+    html = html.replace(/(<meta name="twitter:title" content=")[^"]*(")/,       `$1${esc(fullTitle)}$2`);
   }
   if (description) {
-    html = html.replace(/(<meta name="description" content=")[^"]*(")/,          `$1${esc(description)}$2`);
-    html = html.replace(/(<meta property="og:description" content=")[^"]*(")/,   `$1${esc(description)}$2`);
-    html = html.replace(/(<meta name="twitter:description" content=")[^"]*(")/,  `$1${esc(description)}$2`);
+    html = html.replace(/(<meta name="description" content=")[^"]*(")/,         `$1${esc(description)}$2`);
+    html = html.replace(/(<meta property="og:description" content=")[^"]*(")/,  `$1${esc(description)}$2`);
+    html = html.replace(/(<meta name="twitter:description" content=")[^"]*(")/,`$1${esc(description)}$2`);
   }
+  if (canonicalUrl) {
+    html = html.replace(/(<meta property="og:url" content=")[^"]*(")/,          `$1${esc(canonicalUrl)}$2`);
+    html = html.replace(/(<link rel="canonical" href=")[^"]*(")/,               `$1${esc(canonicalUrl)}$2`);
+  }
+  if (bodyHtml) {
+    html = html.replace(
+      /<div id="root"><\/div>/,
+      `<div id="root">${bodyHtml}</div>`,
+    );
+  }
+
   return html;
 }
 
@@ -118,11 +198,43 @@ function injectRobotsAndCanonical(html, { indexable, canonicalPath }) {
   return html;
 }
 
+// ---------------------------------------------------------------------------
+// Per-route static metadata for pages that exist as an SPA
+// (used when prerendered files are not available, and for /book/:slug runtime)
+// ---------------------------------------------------------------------------
+const STATIC_META = {
+  '/about': {
+    title: `About ${SITE} — Lawn Care Business Software`,
+    description: `Learn about ${SITE}, the all-in-one business management platform built for lawn care professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.`,
+  },
+  '/contact': {
+    title: `Contact ${SITE} — Get in Touch`,
+    description: `Get in touch with the ${SITE} team for support, sales inquiries, or general questions. We typically respond within one business day.`,
+  },
+  '/privacy': {
+    title: `Privacy Policy — ${SITE}`,
+    description: `${SITE}'s Privacy Policy explains how we collect, use, and protect your information when you use our lawn care business management platform.`,
+  },
+  '/terms': {
+    title: `Terms of Service — ${SITE}`,
+    description: `Read the ${SITE} Terms of Service governing your use of our lawn care business management platform.`,
+  },
+  '/cookies': {
+    title: `Cookie Policy — ${SITE}`,
+    description: `${SITE}'s Cookie Policy explains how we use cookies and similar tracking technologies on our website and platform.`,
+  },
+};
+
+// ---------------------------------------------------------------------------
+// API data fetchers for dynamic routes
+// ---------------------------------------------------------------------------
+
 /**
  * Fetch booking metadata.
  * Returns:
- *   { httpStatus: 404 }              — slug not found / company inactive
- *   { httpStatus: 200, meta: {...} } — valid company
+ *   { httpStatus: 404 }                       — slug not found / company inactive
+ *   { httpStatus: 200, bookingData: null }     — fetch error / unexpected response
+ *   { httpStatus: 200, bookingData: {...} }    — valid company with raw API data
  */
 async function fetchBookingMeta(slug) {
   try {
@@ -130,18 +242,12 @@ async function fetchBookingMeta(slug) {
       signal: AbortSignal.timeout(3000),
     });
     if (r.status === 404) return { httpStatus: 404 };
-    if (!r.ok) return { httpStatus: 200, meta: null };
+    if (!r.ok) return { httpStatus: 200, bookingData: null };
     const d = await r.json();
     if (!d.companyName) return { httpStatus: 404 };
-    return {
-      httpStatus: 200,
-      meta: {
-        title: `Book with ${d.companyName}`,
-        description: `Request lawn care services from ${d.companyName}. Choose a service, describe your property, and submit your booking request online.`,
-      },
-    };
+    return { httpStatus: 200, bookingData: d };
   } catch {
-    return { httpStatus: 200, meta: null };
+    return { httpStatus: 200, bookingData: null };
   }
 }
 
@@ -182,46 +288,15 @@ async function fetchEstimateMeta(token) {
   }
 }
 
-/**
- * Resolve page-specific meta and HTTP status for a given pathname.
- *
- * Returns:
- *   null                              — not a dynamic route; use template as-is
- *   { httpStatus, meta, indexable }   — dynamic route result
- */
-async function resolvePageMeta(pathname) {
-  const bookMatch     = pathname.match(/^\/book\/([^/?#]+)/);
-  const estimateMatch = pathname.match(/^\/estimates\/([^/?#]+)\/sign/);
-
-  if (bookMatch) {
-    const result = await fetchBookingMeta(bookMatch[1]);
-    return {
-      httpStatus: result.httpStatus,
-      meta: result.meta ?? null,
-      indexable: result.httpStatus === 200 && result.meta != null,
-      canonicalPath: pathname,
-    };
-  }
-
-  if (estimateMatch) {
-    const result = await fetchEstimateMeta(estimateMatch[1]);
-    return {
-      httpStatus: result.httpStatus,
-      meta: result.meta ?? null,
-      indexable: false,
-      canonicalPath: null,
-    };
-  }
-
-  return null;
-}
-
+// ---------------------------------------------------------------------------
+// Request handler
+// ---------------------------------------------------------------------------
 const server = createServer(async (req, res) => {
   try {
-    const url = new URL(req.url ?? '/', 'http://localhost');
+    const url      = new URL(req.url ?? '/', 'http://localhost');
     const pathname = url.pathname;
 
-    // Serve static assets directly (JS/CSS/images/etc.)
+    // Serve static assets directly (JS / CSS / images / etc.)
     if (pathname !== '/') {
       const filePath = join(DIST_DIR, pathname);
       if (existsSync(filePath) && statSync(filePath).isFile()) {
@@ -232,40 +307,101 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    // Resolve dynamic route (booking / estimate) or null for static routes
-    const dynamic = await resolvePageMeta(pathname);
+    const bookMatch     = pathname.match(/^\/book\/([^/?#]+)/);
+    const estimateMatch = pathname.match(/^\/estimates\/([^/?#]+)\/sign/);
 
-    // Return proper error status for invalid/expired dynamic routes
-    if (dynamic && dynamic.httpStatus === 404) {
-      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(template);
-      return;
-    }
-    if (dynamic && dynamic.httpStatus === 410) {
-      res.writeHead(410, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-      res.end(template);
+    // -----------------------------------------------------------------------
+    // Static prerendered pages — served directly (all metadata already baked in)
+    // -----------------------------------------------------------------------
+    if (prerenderedPages[pathname]) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(prerenderedPages[pathname]);
       return;
     }
 
-    // Determine indexability for this pathname
-    const indexable = dynamic
-      ? dynamic.indexable
-      : isStaticIndexable(pathname);
-
-    const canonicalPath = dynamic?.canonicalPath ?? (indexable ? pathname : null);
-
-    // Build HTML: start from template, inject title/OG meta, then robots/canonical
-    let html = template;
-    if (dynamic?.meta) {
-      html = injectMeta(html, dynamic.meta);
+    // -----------------------------------------------------------------------
+    // SPA fallback for static routes when prerendered files don't exist
+    // (development mode or before a production build)
+    // -----------------------------------------------------------------------
+    if (STATIC_META[pathname]) {
+      const meta = STATIC_META[pathname];
+      let html = injectMeta(template, {
+        ...meta,
+        canonicalUrl: `${CANONICAL_BASE}${pathname}`,
+      });
+      html = injectRobotsAndCanonical(html, { indexable: true, canonicalPath: pathname });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(html);
+      return;
     }
-    html = injectRobotsAndCanonical(html, { indexable, canonicalPath });
 
-    res.writeHead(200, {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-store',
-    });
-    res.end(html);
+    // -----------------------------------------------------------------------
+    // /book/:slug — runtime SSR with pre-fetched booking data
+    // -----------------------------------------------------------------------
+    if (bookMatch) {
+      const slug   = bookMatch[1];
+      const result = await fetchBookingMeta(slug);
+
+      if (result.httpStatus === 404) {
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(template);
+        return;
+      }
+
+      const bookingData = result.bookingData;
+
+      let bodyHtml = '';
+      if (renderSSR && bookingData) {
+        try {
+          bodyHtml = renderSSR(`/book/${slug}`, { bookingData });
+        } catch (err) {
+          console.warn(`SSR render failed for /book/${slug}:`, err.message);
+        }
+      }
+
+      const title = bookingData?.companyName
+        ? `Book with ${bookingData.companyName}`
+        : 'Request a Service';
+      const description = bookingData?.companyName
+        ? `Request lawn care services from ${bookingData.companyName}. Choose a service, describe your property, and submit your booking request online.`
+        : 'Request professional lawn care services. Choose a service and submit your booking online.';
+
+      const canonicalUrl = `${CANONICAL_BASE}/book/${slug}`;
+      let html = injectMeta(template, { title, description, canonicalUrl, bodyHtml });
+      html = injectRobotsAndCanonical(html, { indexable: true, canonicalPath: `/book/${slug}` });
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(html);
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // /estimates/:token/sign — metadata only (noindex, no canonical needed)
+    // -----------------------------------------------------------------------
+    if (estimateMatch) {
+      const result = await fetchEstimateMeta(estimateMatch[1]);
+
+      if (result.httpStatus === 404) {
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(template);
+        return;
+      }
+      if (result.httpStatus === 410) {
+        res.writeHead(410, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(template);
+        return;
+      }
+
+      const html = result.meta ? injectMeta(template, result.meta) : template;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(html);
+      return;
+    }
+
+    // -----------------------------------------------------------------------
+    // All other routes — SPA shell
+    // -----------------------------------------------------------------------
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(template);
   } catch (err) {
     console.error('Request error:', err);
     res.writeHead(500);

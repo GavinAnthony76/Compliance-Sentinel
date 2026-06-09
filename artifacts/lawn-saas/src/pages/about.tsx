@@ -2,8 +2,13 @@ import { Link } from 'wouter';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
 import { CheckCircle2, Leaf, Users, TrendingUp, Shield } from 'lucide-react';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 export function AboutPage() {
+  usePageMeta({
+    title: 'About GreenSynk — Lawn Care Business Software',
+    description: 'Learn about GreenSynk, the all-in-one business management platform built for lawn care professionals. Our mission is to help you schedule smarter, invoice faster, and grow your business.',
+  });
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white/80 backdrop-blur-sm sticky top-0 z-50">

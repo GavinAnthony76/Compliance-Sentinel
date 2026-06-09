@@ -1,6 +1,7 @@
 import { Link } from 'wouter';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
+import { usePageMeta } from '@/hooks/use-page-meta';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -12,6 +13,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export function TermsPage() {
+  usePageMeta({
+    title: 'Terms of Service — GreenSynk',
+    description: 'Read the GreenSynk Terms of Service governing your use of our lawn care business management platform.',
+  });
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white/80 backdrop-blur-sm sticky top-0 z-50">
