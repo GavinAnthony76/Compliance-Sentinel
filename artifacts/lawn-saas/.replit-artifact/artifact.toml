@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "Goshen Lawn Care Management"
+title = "GreenSynk Lawn Care Management"
 version = "1.0.0"
 id = "artifacts/lawn-saas"
 router = "path"
