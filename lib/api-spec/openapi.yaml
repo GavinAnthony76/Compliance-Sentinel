@@ -3358,11 +3358,31 @@ components:
         phone:
           type: string
           nullable: true
+        email:
+          type: string
+          nullable: true
+        website:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zip:
+          type: string
+          nullable: true
+        whiteLabel:
+          type: boolean
         services:
           type: array
           items:
             $ref: "#/components/schemas/Service"
-      required: [companyName, services]
+      required: [companyName, whiteLabel, services]
 
     BookingRequest:
       type: object

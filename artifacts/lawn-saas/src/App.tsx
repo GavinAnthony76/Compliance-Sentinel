@@ -129,9 +129,11 @@ window.fetch = async (...args) => {
     if (token) {
       // Properly convert Headers instance to a plain object so existing
       // headers (e.g. Content-Type) are preserved when spreading
-      const existingHeaders = config?.headers instanceof Headers
+      const existingHeaders: Record<string, string> = config?.headers instanceof Headers
         ? Object.fromEntries((config.headers as Headers).entries())
-        : (config?.headers ?? {});
+        : Array.isArray(config?.headers)
+          ? Object.fromEntries(config.headers as [string, string][])
+          : ((config?.headers as Record<string, string>) ?? {});
       // Caller-supplied Authorization takes precedence — never overwrite it.
       // This matters for portal pages: the portal token is passed explicitly,
       // and the company token must not clobber it (same-browser testing).

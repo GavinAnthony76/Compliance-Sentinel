@@ -1904,6 +1904,13 @@ export const GetBookingPageResponse = zod.object({
   logoUrl: zod.string().nullish(),
   primaryColor: zod.string().nullish(),
   phone: zod.string().nullish(),
+  email: zod.string().nullish(),
+  website: zod.string().nullish(),
+  address: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
+  zip: zod.string().nullish(),
+  whiteLabel: zod.boolean(),
   services: zod.array(
     zod.object({
       id: zod.number(),

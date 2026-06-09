@@ -868,6 +868,13 @@ export interface BookingPageInfo {
   logoUrl?: string | null;
   primaryColor?: string | null;
   phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  whiteLabel: boolean;
   services: Service[];
 }
 
