@@ -5,6 +5,8 @@ import {
   leadsTable,
   customersTable,
   estimatesTable,
+  usersTable,
+  companiesTable,
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
@@ -13,6 +15,8 @@ import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { enqueueFollowUps } from "../lib/follow-ups";
 import { canAccessLead, isManagerRole } from "../lib/lead-access";
+import { sendLeadAssignmentEmail, resolveBaseUrl } from "../lib/notifications";
+import { logger } from "../lib/logger";
 
 const LEAD_SOURCES = ["public_booking", "manual", "referral", "website", "phone", "other"] as const;
 const LEAD_STATUSES = ["new", "contacted", "site_visit_scheduled", "estimate_sent", "won", "lost"] as const;
@@ -37,6 +41,50 @@ const leadBodySchema = z.object({
 function normalizeValue(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   return String(v);
+}
+
+// Fire-and-forget: email the staff member a lead was just assigned to. Failures
+// must never block the lead update, so this swallows its own errors.
+async function dispatchLeadAssignmentEmail(
+  companyId: number,
+  assignedUserId: number,
+  lead: typeof leadsTable.$inferSelect,
+): Promise<void> {
+  try {
+    const [staff] = await db
+      .select()
+      .from(usersTable)
+      .where(and(eq(usersTable.id, assignedUserId), eq(usersTable.companyId, companyId)))
+      .limit(1);
+    if (!staff || !staff.isActive || !staff.email) return;
+
+    const [company] = await db
+      .select()
+      .from(companiesTable)
+      .where(eq(companiesTable.id, companyId))
+      .limit(1);
+    const companyName = company?.name || "Your team";
+
+    const leadName = `${lead.firstName} ${lead.lastName ?? ""}`.trim() || "New lead";
+    const staffName = `${staff.firstName} ${staff.lastName}`.trim() || staff.email;
+    const leadsUrl = `${resolveBaseUrl()}/leads`;
+
+    await sendLeadAssignmentEmail({
+      to: staff.email,
+      staffName,
+      companyName,
+      companyEmail: company?.email ?? undefined,
+      leadName,
+      leadStatus: lead.status,
+      leadSource: lead.source,
+      estimatedValue: lead.estimatedValue,
+      leadPhone: lead.phone,
+      leadEmail: lead.email,
+      leadsUrl,
+    });
+  } catch (err) {
+    logger.error({ err, companyId, assignedUserId, leadId: lead.id }, "Failed to send lead assignment email");
+  }
 }
 
 const router = Router();
@@ -100,6 +148,13 @@ router.post("/", requireRole("owner", "admin"), async (req: any, res) => {
     .returning();
   await logActivity({ companyId, userId, action: "lead.created", entityType: "lead", entityId: lead.id });
   await enqueueFollowUps(companyId, "lead_created", { entityType: "lead", entityId: lead.id, leadId: lead.id });
+
+  // Notify the assigned staff member when a lead is created pre-assigned to
+  // someone other than the manager creating it.
+  if (lead.assignedUserId && lead.assignedUserId !== userId) {
+    void dispatchLeadAssignmentEmail(companyId, lead.assignedUserId, lead);
+  }
+
   return res.status(201).json(lead);
 });
 
@@ -158,6 +213,18 @@ router.put("/:id", async (req: any, res) => {
     .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, companyId)))
     .returning();
   await logActivity({ companyId, userId, action: "lead.updated", entityType: "lead", entityId: id, metadata: { status: updated.status } });
+
+  // Notify the assigned staff member when the assignee actually changes (not on
+  // every edit, and not when a manager reassigns a lead to themselves).
+  if (
+    "assignedUserId" in updates &&
+    updated.assignedUserId &&
+    updated.assignedUserId !== existing.assignedUserId &&
+    updated.assignedUserId !== userId
+  ) {
+    void dispatchLeadAssignmentEmail(companyId, updated.assignedUserId, updated);
+  }
+
   return res.json(updated);
 });
 

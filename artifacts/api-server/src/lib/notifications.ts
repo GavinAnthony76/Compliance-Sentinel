@@ -598,6 +598,46 @@ export async function sendAppointmentStatusEmail(opts: {
   });
 }
 
+// Staff-facing notification when a lead is assigned (or reassigned) to them.
+export async function sendLeadAssignmentEmail(opts: {
+  to: string;
+  staffName: string;
+  companyName: string;
+  companyEmail?: string;
+  leadName: string;
+  leadStatus?: string | null;
+  leadSource?: string | null;
+  estimatedValue?: string | null;
+  leadPhone?: string | null;
+  leadEmail?: string | null;
+  leadsUrl?: string;
+}): Promise<void> {
+  const body = [
+    `Hi ${opts.staffName},`,
+    ``,
+    `A lead has been assigned to you: ${opts.leadName}.`,
+    ``,
+    ...(opts.leadStatus ? [`Status: ${opts.leadStatus}`] : []),
+    ...(opts.leadSource ? [`Source: ${opts.leadSource}`] : []),
+    ...(opts.estimatedValue ? [`Estimated value: $${opts.estimatedValue}`] : []),
+    ...(opts.leadPhone ? [`Phone: ${opts.leadPhone}`] : []),
+    ...(opts.leadEmail ? [`Email: ${opts.leadEmail}`] : []),
+    ``,
+    ...(opts.leadsUrl ? [`View it in your pipeline:`, opts.leadsUrl, ``] : []),
+    `Reach out promptly so this lead doesn't go cold.`,
+    ``,
+    `Thank you,`,
+    opts.companyName,
+  ].join("\n");
+
+  await sendEmail({
+    to: opts.to,
+    subject: `New lead assigned to you: ${opts.leadName}`,
+    body,
+    replyTo: opts.companyEmail,
+  });
+}
+
 export async function sendTeamInviteEmail(opts: {
   to: string;
   firstName: string;
