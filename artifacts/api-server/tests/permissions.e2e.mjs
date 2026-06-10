@@ -66,6 +66,11 @@ const ROLE_GATED_GET = [
   "/reviews",
   "/automations",
   "/team",
+  // Read endpoints behind manager-only pages — must reject staff at the role
+  // layer (403) before the plan-feature layer, mirroring the frontend gating.
+  "/follow-ups",
+  "/reporting",
+  "/leads",
 ];
 
 // Endpoints shared by all authenticated users — staff must retain access.

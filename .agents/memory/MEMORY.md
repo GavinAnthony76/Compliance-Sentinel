@@ -13,4 +13,4 @@
 - [TanStack reset bypasses enabled](tanstack-reset-enabled.md) — resetQueries/refetch force-fetch even with enabled:false; in a 401 onError handler that loops forever — use setQueryData(key,null) to clear cache instead.
 - [RBAC dual-surface](rbac-dual-surface.md) — managerOnly nav flag is cosmetic; matching backend route MUST have requireRole or staff are UI-blocked but API-open; sidebar must show user not company name.
 - [Tenant URL SSRF in PDFs](tenant-url-ssrf.md) — server-side fetch of tenant-supplied URLs (company.logoUrl in PDF gen) is an SSRF vector; route through fetchImageBufferSafe (https-only, block private IPs, no redirects).
-- [Role-gating drift](role-gating-drift.md) — frontend hides 10 manager-only pages but only 6 routers enforce requireRole; follow-ups/reporting/leads GET are feature-gated not role-gated. Verify: `pnpm run test:permissions`.
+- [Role-gating drift](role-gating-drift.md) — frontend hides 10 manager-only pages; all manager-only routers (incl. follow-ups/reporting/leads GETs) now enforce requireRole. Verify: `pnpm run test:permissions`.

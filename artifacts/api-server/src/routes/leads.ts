@@ -41,6 +41,10 @@ function normalizeValue(v: unknown): string | null {
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
+// Lead pipeline is a manager capability — staff have no access (frontend hides
+// it as manager-only). requireRole stays BEFORE requireFeature so staff get a
+// clean 403 rather than a 402 about the plan feature.
+router.use(requireRole("owner", "admin"));
 router.use(requireFeature("lead_pipeline"));
 
 function isManager(role: string): boolean {
