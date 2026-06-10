@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db, appointmentsTable, customersTable, servicesTable, usersTable, companiesTable, jobTrackingEventsTable } from "@workspace/db";
 import { eq, and, gte, lte, sql, desc, asc, inArray } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -175,12 +175,14 @@ function fmtAppt(a: any, customerName?: string, serviceName?: string, assignedUs
 }
 
 router.get("/", async (req: any, res) => {
-  const { companyId } = req.user;
+  const { companyId, userId, role } = req.user;
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 50;
   const offset = (page - 1) * limit;
 
   const conditions: any[] = [eq(appointmentsTable.companyId, companyId)];
+  // Staff only ever see the appointments assigned to them.
+  if (role === "staff") conditions.push(eq(appointmentsTable.assignedUserId, userId));
   if (req.query.status) conditions.push(eq(appointmentsTable.status, req.query.status as string));
   if (req.query.customerId) conditions.push(eq(appointmentsTable.customerId, Number(req.query.customerId)));
   if (req.query.assignedUserId) conditions.push(eq(appointmentsTable.assignedUserId, Number(req.query.assignedUserId)));
@@ -214,7 +216,7 @@ router.get("/", async (req: any, res) => {
   });
 });
 
-router.post("/", requireWithinPlanLimit("appointments"), async (req: any, res) => {
+router.post("/", requireRole("owner", "admin"), requireWithinPlanLimit("appointments"), async (req: any, res) => {
   const parsed = createAppointmentSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
@@ -239,10 +241,11 @@ router.post("/", requireWithinPlanLimit("appointments"), async (req: any, res) =
 });
 
 router.get("/:id", async (req: any, res) => {
-  const { companyId } = req.user;
+  const { companyId, userId, role } = req.user;
   const id = Number(req.params.id);
   const [appt] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
   if (!appt) return res.status(404).json({ error: "NotFound" });
+  if (role === "staff" && appt.assignedUserId !== userId) return res.status(403).json({ error: "Forbidden", message: "Not assigned to you" });
 
   const [customer, service] = await Promise.all([
     db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1).then(r => r[0]),
@@ -257,10 +260,13 @@ router.put("/:id", async (req: any, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
   }
-  const { companyId, userId } = req.user;
+  const { companyId, userId, role } = req.user;
   const id = Number(req.params.id);
   const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
+  // Staff may only progress their own assigned appointments — never reassign or reschedule.
+  const isStaff = role === "staff";
+  if (isStaff && existing.assignedUserId !== userId) return res.status(403).json({ error: "Forbidden", message: "Not assigned to you" });
 
   const body = parsed.data;
   const updateData: any = { updatedAt: new Date() };
@@ -275,6 +281,12 @@ router.put("/:id", async (req: any, res) => {
   if (body.notes !== undefined) updateData.notes = body.notes;
   if (body.internalNotes !== undefined) updateData.internalNotes = body.internalNotes;
   if (body.completionNotes !== undefined) updateData.completionNotes = body.completionNotes;
+  // Staff are restricted to status/notes updates; strip management-only fields.
+  if (isStaff) {
+    for (const k of ["customerId", "propertyId", "serviceId", "assignedUserId", "scheduledStart", "scheduledEnd", "price"]) {
+      delete updateData[k];
+    }
+  }
 
   const [updated] = await db.update(appointmentsTable).set(updateData).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "appointment.updated", entityType: "appointment", entityId: id });
@@ -295,7 +307,7 @@ router.put("/:id", async (req: any, res) => {
   return res.json(fmtAppt(updated));
 });
 
-router.delete("/:id", async (req: any, res) => {
+router.delete("/:id", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const id = Number(req.params.id);
   const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
@@ -306,12 +318,13 @@ router.delete("/:id", async (req: any, res) => {
 });
 
 router.post("/:id/complete", async (req: any, res) => {
-  const { companyId, userId } = req.user;
+  const { companyId, userId, role } = req.user;
   const id = Number(req.params.id);
   const geo = geoSchema.safeParse(req.body ?? {});
   const geoData = geo.success ? geo.data : {};
   const [existing] = await db.select().from(appointmentsTable).where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
+  if (role === "staff" && existing.assignedUserId !== userId) return res.status(403).json({ error: "Forbidden", message: "Not assigned to you" });
   const [updated] = await db.update(appointmentsTable).set({
     status: "completed",
     completionNotes: req.body.completionNotes ?? null,

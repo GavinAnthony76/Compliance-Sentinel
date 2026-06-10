@@ -10,6 +10,8 @@ import { sendTeamInviteEmail, resolveBaseUrl } from "../lib/notifications";
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
+// Team management is a manager capability — staff have no access.
+router.use(requireRole("owner", "admin"));
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;

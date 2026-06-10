@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'wouter';
 import { Button } from '@/components/ui';
 import { Logo } from '@/components/logo';
@@ -361,6 +361,18 @@ export function LandingPage() {
   const [demoSubmitted, setDemoSubmitted] = useState(false);
   const [demoError, setDemoError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [featuredReviews, setFeaturedReviews] = useState<{ reviewerName: string; rating: number; comment: string | null; companyName: string }[]>([]);
+
+  useEffect(() => {
+    fetch('/api/public/reviews-featured?limit=3')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.reviews?.length) setFeaturedReviews(d.reviews); })
+      .catch(() => {});
+  }, []);
+
+  function initials(name: string) {
+    return name.split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '★';
+  }
 
   async function handleDemoSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -978,6 +990,30 @@ export function LandingPage() {
             <p className="text-lg text-muted-foreground">See what business owners are saying about GreenSynk.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
+            {featuredReviews.length > 0 ? featuredReviews.map((rev, idx) => {
+              const primary = idx === 1;
+              return (
+                <div key={idx} className={primary
+                  ? "bg-primary text-primary-foreground rounded-3xl p-8 border border-primary shadow-xl shadow-primary/20 flex flex-col"
+                  : "bg-background rounded-3xl p-8 border border-border shadow-sm flex flex-col"}>
+                  <div className="flex gap-1 mb-4">
+                    {[...Array(5)].map((_, s) => (
+                      <Star key={s} className={`w-4 h-4 ${s < rev.rating
+                        ? (primary ? 'fill-white text-white' : 'fill-amber-400 text-amber-400')
+                        : (primary ? 'text-white/30' : 'text-gray-300')}`} />
+                    ))}
+                  </div>
+                  <p className={`leading-relaxed flex-1 ${primary ? 'text-primary-foreground/90' : 'text-muted-foreground'}`}>{rev.comment ? `"${rev.comment}"` : ''}</p>
+                  <div className={`flex items-center gap-3 mt-6 pt-6 border-t ${primary ? 'border-primary-foreground/20' : 'border-border'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${primary ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'}`}>{initials(rev.reviewerName)}</div>
+                    <div>
+                      <div className="font-semibold text-sm">{rev.reviewerName}</div>
+                      <div className={`text-xs ${primary ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>{rev.companyName}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }) : (<>
             <div className="bg-background rounded-3xl p-8 border border-border shadow-sm flex flex-col">
               <div className="flex gap-1 mb-4">
                 {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
@@ -1017,6 +1053,7 @@ export function LandingPage() {
                 </div>
               </div>
             </div>
+            </>)}
           </div>
         </div>
       </section>

@@ -2,9 +2,13 @@ import { Link } from 'wouter';
 import { AlertTriangle, Clock, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTrialStatus } from '@/hooks/use-trial-status';
+import { useAuthState } from '@/hooks/use-auth-state';
 
 export function TrialBanner() {
   const { isTrialing, trialExpired, trialDaysLeft } = useTrialStatus();
+  const { user } = useAuthState();
+  const plan = user?.company?.subscriptionPlan;
+  const planLabel = plan ? `${plan.charAt(0).toUpperCase()}${plan.slice(1)}` : 'your';
 
   if (!isTrialing) return null;
 
@@ -15,12 +19,12 @@ export function TrialBanner() {
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span className="font-semibold text-sm">Your free trial has ended.</span>
           <span className="text-sm text-red-100 hidden sm:inline truncate">
-            Upgrade now to continue using GreenSynk.
+            Add a payment method to keep your {planLabel} plan.
           </span>
         </div>
         <Link href="/billing">
           <button className="bg-white text-red-600 text-xs font-bold px-4 py-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0 whitespace-nowrap">
-            Upgrade Now →
+            Activate Plan →
           </button>
         </Link>
       </div>
@@ -56,10 +60,10 @@ export function TrialBanner() {
           )}
         >
           {isUrgent
-            ? `Trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''}! Upgrade to keep your data.`
+            ? `Trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? 's' : ''}! Add a payment method to keep your ${planLabel} plan.`
             : isWarning
-            ? `${trialDaysLeft} days left in your trial — upgrade before it expires.`
-            : `${trialDaysLeft} days left in your free trial.`}
+            ? `${trialDaysLeft} days left in your ${planLabel} trial — add billing before it expires.`
+            : `${trialDaysLeft} days left in your free ${planLabel} trial.`}
         </span>
       </div>
       <Link href="/billing">
@@ -73,7 +77,7 @@ export function TrialBanner() {
               : 'bg-blue-600 text-white hover:bg-blue-700',
           )}
         >
-          Upgrade
+          Activate Plan
         </button>
       </Link>
     </div>

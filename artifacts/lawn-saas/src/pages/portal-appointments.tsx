@@ -325,6 +325,11 @@ export function PortalAppointmentsPage() {
           </Button>
         </div>
 
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Visits scheduled by {session?.company.name || 'your provider'} (including recurring service plans) appear here automatically.
+          To reschedule or change a scheduled visit, please contact {session?.company.name || 'them'} directly — they'll update it for you.
+        </div>
+
         {dataLoading ? (
           <div className="flex justify-center py-12"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
         ) : (

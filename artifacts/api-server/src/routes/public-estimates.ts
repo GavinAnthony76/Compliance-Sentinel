@@ -5,6 +5,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { sendEmail, resolveBaseUrl } from "../lib/notifications";
 import { buildEstimatePdf } from "../lib/estimate-pdf";
+import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -178,6 +179,15 @@ router.post("/estimates/:token/sign", async (req, res) => {
     signatureData: parsed.data.signatureData,
     updatedAt: new Date(),
   }).where(eq(estimatesTable.publicToken, token)).returning();
+
+  // Record activity so the company's in-app activity indicator surfaces the signing.
+  await logActivity({
+    companyId: updated.companyId,
+    action: "estimate.signed",
+    entityType: "estimate",
+    entityId: updated.id,
+    metadata: { estimateNumber: updated.estimateNumber, signerName: parsed.data.signerName },
+  });
 
   // Fire-and-forget: email the customer a signed copy and notify the business.
   // Never block or fail the signing response on email/PDF errors.

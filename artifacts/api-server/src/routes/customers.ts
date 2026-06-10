@@ -63,6 +63,20 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
   }).returning();
   await logActivity({ companyId, userId, action: "customer.created", entityType: "customer", entityId: customer.id });
 
+  // Mirror the customer's service address into a property record so scheduling /
+  // routing have something to work with from day one.
+  if (parsed.data.addressLine1) {
+    await db.insert(propertiesTable).values({
+      companyId,
+      customerId: customer.id,
+      addressLine1: parsed.data.addressLine1,
+      addressLine2: parsed.data.addressLine2 ?? null,
+      city: parsed.data.city ?? null,
+      state: parsed.data.state ?? null,
+      zip: parsed.data.zip ?? null,
+    });
+  }
+
   // Fire customer_created automations (non-blocking)
   fireAutomations(companyId, "customer_created", { customerId: customer.id, userId });
 
@@ -117,6 +131,26 @@ router.put("/:id", async (req: any, res) => {
   if (!existing) return res.status(404).json({ error: "NotFound" });
   const [updated] = await db.update(customersTable).set({ ...parsed.data, updatedAt: new Date() }).where(and(eq(customersTable.id, id), eq(customersTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "customer.updated", entityType: "customer", entityId: id });
+
+  // Keep the customer's primary property address in sync. Update the oldest
+  // property if one exists, otherwise create one from the new address.
+  if (parsed.data.addressLine1 !== undefined && parsed.data.addressLine1) {
+    const addressFields = {
+      addressLine1: parsed.data.addressLine1,
+      addressLine2: parsed.data.addressLine2 ?? null,
+      city: parsed.data.city ?? null,
+      state: parsed.data.state ?? null,
+      zip: parsed.data.zip ?? null,
+    };
+    const [primary] = await db.select().from(propertiesTable)
+      .where(and(eq(propertiesTable.customerId, id), eq(propertiesTable.companyId, companyId)))
+      .orderBy(propertiesTable.id).limit(1);
+    if (primary) {
+      await db.update(propertiesTable).set({ ...addressFields, updatedAt: new Date() }).where(eq(propertiesTable.id, primary.id));
+    } else {
+      await db.insert(propertiesTable).values({ companyId, customerId: id, ...addressFields });
+    }
+  }
   return res.json(updated);
 });
 

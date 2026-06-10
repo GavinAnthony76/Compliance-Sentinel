@@ -195,6 +195,45 @@ export async function sendBookingRequestNotification(opts: {
   });
 }
 
+// Customer-facing confirmation when they submit a public booking request.
+export async function sendBookingConfirmationEmail(opts: {
+  to: string;
+  customerName: string;
+  companyName: string;
+  companyEmail?: string;
+  companyPhone?: string | null;
+  serviceName?: string | null;
+  preferredDate?: Date | null;
+  address?: string | null;
+}): Promise<void> {
+  const dateStr = opts.preferredDate
+    ? new Date(opts.preferredDate).toLocaleDateString("en-US", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric",
+      })
+    : "your preferred date (we'll confirm a time with you)";
+
+  await sendEmail({
+    to: opts.to,
+    subject: `We received your booking request — ${opts.companyName}`,
+    body: [
+      `Hi ${opts.customerName},`,
+      ``,
+      `Thanks for your booking request with ${opts.companyName}! We've received it and will reach out shortly to confirm the details.`,
+      ``,
+      `Here's what you requested:`,
+      `  Service: ${opts.serviceName || "Lawn care"}`,
+      `  Preferred date: ${dateStr}`,
+      ...(opts.address ? [`  Address: ${opts.address}`] : []),
+      ``,
+      `If anything looks off or you need to make a change, just reply to this email${opts.companyPhone ? ` or call us at ${opts.companyPhone}` : ""}.`,
+      ``,
+      `Thank you,`,
+      opts.companyName,
+    ].join("\n"),
+    replyTo: opts.companyEmail,
+  });
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -474,15 +513,17 @@ export async function sendWelcomeEmail(opts: {
   });
 }
 
-// Passwordless customer-portal access email. Used both for the initial invite
-// and for "email me a login link". The link signs the customer straight in —
-// no password required.
+// Customer-portal access email. Used both for the initial invite and for
+// "email me a login link". The link is a one-click magic link that signs the
+// customer in instantly; on first visit they're prompted to set a password so
+// they can log in any time afterwards.
 export async function sendPortalAccessEmail(opts: {
   to: string;
   customerName: string;
   companyName: string;
   companyEmail?: string;
   loginUrl: string;
+  portalUrl?: string;
   intent: "invite" | "login";
   expiresLabel: string;
 }): Promise<void> {
@@ -490,26 +531,39 @@ export async function sendPortalAccessEmail(opts: {
     opts.intent === "invite"
       ? `${opts.companyName} invited you to your customer portal`
       : `Your ${opts.companyName} portal login link`;
-  const intro =
-    opts.intent === "invite"
-      ? `${opts.companyName} has set up a customer portal for you. You can view your appointments, invoices, and service history any time.`
-      : `Here is your secure login link for the ${opts.companyName} customer portal.`;
+
+  const inviteBody = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `${opts.companyName} has set up a customer portal for you, where you can view your appointments, invoices, and service history any time.`,
+    ``,
+    `Click the secure link below to get started. It signs you in instantly — and on your first visit you'll be asked to choose a password so you can log in any time afterwards:`,
+    opts.loginUrl,
+    ``,
+    ...(opts.portalUrl ? [`After setting your password, you can log in any time at:`, opts.portalUrl, ``] : []),
+    `This sign-in link expires ${opts.expiresLabel}. If you didn't expect this email, you can safely ignore it.`,
+    ``,
+    `Thank you,`,
+    opts.companyName,
+  ];
+
+  const loginBody = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `Here is your secure, one-click login link for the ${opts.companyName} customer portal — no password needed:`,
+    opts.loginUrl,
+    ``,
+    ...(opts.portalUrl ? [`You can also log in with your email and password any time at:`, opts.portalUrl, ``] : []),
+    `This link expires ${opts.expiresLabel}. If you didn't request it, you can safely ignore this email.`,
+    ``,
+    `Thank you,`,
+    opts.companyName,
+  ];
+
   await sendEmail({
     to: opts.to,
     subject,
-    body: [
-      `Hi ${opts.customerName},`,
-      ``,
-      intro,
-      ``,
-      `Click the link below to sign in — no password required:`,
-      opts.loginUrl,
-      ``,
-      `This link expires ${opts.expiresLabel}. If you didn't request it, you can safely ignore this email.`,
-      ``,
-      `Thank you,`,
-      opts.companyName,
-    ].join("\n"),
+    body: (opts.intent === "invite" ? inviteBody : loginBody).join("\n"),
     replyTo: opts.companyEmail,
   });
 }

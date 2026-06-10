@@ -1,6 +1,7 @@
 import { db, automationRulesTable, reviewRequestsTable, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable, appointmentsTable, servicesTable } from "@workspace/db";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 import { sendReviewRequestNotification, sendEmail, sendSMS } from "./notifications";
+import { dispatchInvoiceEmail } from "./invoice-email";
 import { logActivity } from "./activity";
 
 export interface AutomationContext {
@@ -199,6 +200,8 @@ async function executeAction(
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 14);
 
+      // Create as "draft" first; only promote to "sent" once the branded
+      // invoice email has actually been dispatched, so status reflects reality.
       const [newInv] = await db.insert(invoicesTable).values({
         companyId,
         customerId,
@@ -207,7 +210,7 @@ async function executeAction(
         subtotal: String(price),
         tax: "0",
         total: String(price),
-        status: "sent",
+        status: "draft",
         dueDate,
         notes: `Auto-generated for appointment #${appointmentId}`,
       }).returning();
@@ -222,13 +225,19 @@ async function executeAction(
         sortOrder: 0,
       });
 
+      // Dispatch the branded invoice email with payable link; mark "sent" only on real delivery.
+      const emailed = await dispatchInvoiceEmail(newInv.id, companyId);
+      if (emailed) {
+        await db.update(invoicesTable).set({ status: "sent", updatedAt: new Date() }).where(eq(invoicesTable.id, newInv.id));
+      }
+
       await logActivity({
         companyId,
         userId,
         action: "automation.invoice_created",
         entityType: "automation",
         entityId: rule.id,
-        metadata: { ruleId: rule.id, triggerType: rule.triggerType, appointmentId, invoiceId: newInv.id },
+        metadata: { ruleId: rule.id, triggerType: rule.triggerType, appointmentId, invoiceId: newInv.id, emailed },
       });
       break;
     }

@@ -14,6 +14,7 @@ export const usersTable = pgTable("users", {
   phone: text("phone"),
   isActive: boolean("is_active").notNull().default(true),
   lastLoginAt: timestamp("last_login_at"),
+  activitySeenAt: timestamp("activity_seen_at"),
   passwordResetToken: text("password_reset_token"),
   passwordResetExpiresAt: timestamp("password_reset_expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

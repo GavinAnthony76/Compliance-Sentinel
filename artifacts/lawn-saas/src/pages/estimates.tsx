@@ -21,6 +21,8 @@ const STATUS_COLORS: Record<string, string> = {
 function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: any }) {
   const isEdit = !!estimate?.id;
   const [form, setForm] = useState({ customerId: '', tax: '0', notes: '', validUntil: '' });
+  const [useNewRecipient, setUseNewRecipient] = useState(false);
+  const [recipient, setRecipient] = useState({ name: '', email: '', phone: '' });
   const [lineItems, setLineItems] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const [initialized, setInitialized] = useState(false);
   const [showAi, setShowAi] = useState(false);
@@ -103,18 +105,29 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
         });
         toast({ title: 'Estimate updated' });
       } else {
+        if (useNewRecipient) {
+          if (!recipient.name.trim() || !recipient.email.trim()) {
+            toast({ title: 'Enter a name and email for the new recipient', variant: 'destructive' });
+            return;
+          }
+        } else if (!form.customerId) {
+          toast({ title: 'Select a customer', variant: 'destructive' });
+          return;
+        }
         await createMut.mutateAsync({
           data: {
-            customerId: Number(form.customerId),
+            ...(useNewRecipient
+              ? { recipient: { name: recipient.name.trim(), email: recipient.email.trim(), phone: recipient.phone.trim() || undefined } }
+              : { customerId: Number(form.customerId) }),
             subtotal: total - Number(form.tax),
             tax: Number(form.tax),
             total,
             notes: form.notes || undefined,
             validUntil: form.validUntil ? new Date(form.validUntil).toISOString() : undefined,
             lineItems: lineItemsPayload,
-          },
+          } as any,
         });
-        toast({ title: 'Estimate created' });
+        toast({ title: useNewRecipient ? 'Estimate created & lead captured' : 'Estimate created' });
       }
       qc.invalidateQueries({ queryKey: getListEstimatesQueryKey() });
       onClose();
@@ -158,11 +171,44 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isEdit && (
             <div>
-              <label className="text-sm font-medium">Customer *</label>
-              <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-                <option value="">Select customer...</option>
-                {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-              </select>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium">{useNewRecipient ? 'New Recipient *' : 'Customer *'}</label>
+                <button
+                  type="button"
+                  onClick={() => setUseNewRecipient(v => !v)}
+                  className="text-xs text-primary hover:underline font-medium"
+                >
+                  {useNewRecipient ? 'Pick an existing customer' : 'Send to someone new'}
+                </button>
+              </div>
+              {useNewRecipient ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Full name *"
+                    value={recipient.name}
+                    onChange={e => setRecipient(r => ({ ...r, name: e.target.value }))}
+                    required
+                  />
+                  <Input
+                    type="email"
+                    placeholder="Email *"
+                    value={recipient.email}
+                    onChange={e => setRecipient(r => ({ ...r, email: e.target.value }))}
+                    required
+                  />
+                  <Input
+                    placeholder="Phone (optional)"
+                    value={recipient.phone}
+                    onChange={e => setRecipient(r => ({ ...r, phone: e.target.value }))}
+                  />
+                  <p className="text-[11px] text-muted-foreground">They'll be saved as a lead so you can follow up — no account needed to receive the estimate.</p>
+                </div>
+              ) : (
+                <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
+                  <option value="">Select customer...</option>
+                  {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                </select>
+              )}
             </div>
           )}
           <div>

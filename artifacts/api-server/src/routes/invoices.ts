@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable, companiesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
-import { sendInvoiceEmail, resolveBaseUrl, dispatchPaymentReceiptEmail } from "../lib/notifications";
-import { logCommunicationEvent } from "../lib/communications";
+import { dispatchPaymentReceiptEmail } from "../lib/notifications";
+import { dispatchInvoiceEmail } from "../lib/invoice-email";
 import { logger } from "../lib/logger";
 import { fetchImageBufferSafe } from "../lib/safe-fetch";
 import PDFDocument from "pdfkit";
@@ -15,6 +15,8 @@ import PDFDocument from "pdfkit";
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
+// Invoicing is a manager capability — staff have no access.
+router.use(requireRole("owner", "admin"));
 
 function fmt(inv: any, customerName?: string, lineItems?: any[]) {
   return {
@@ -34,62 +36,6 @@ function fmtLineItem(li: any) {
     unitPrice: Number(li.unitPrice),
     lineTotal: Number(li.lineTotal),
   };
-}
-
-async function dispatchInvoiceEmail(invoiceId: number, companyId: number): Promise<void> {
-  try {
-    const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.companyId, companyId))).limit(1);
-    if (!inv) return;
-    const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, inv.customerId), eq(customersTable.companyId, companyId))).limit(1);
-    if (!customer?.email) return;
-    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
-    const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, invoiceId)).orderBy(invoiceLineItemsTable.sortOrder);
-    const companyName = company?.name || "Your Service Provider";
-    const companySlug = company?.slug || "";
-    const baseUrl = resolveBaseUrl();
-    // Online payment + the customer portal are Growth/Pro features. On Starter the
-    // portal login is a dead end for customers, so only surface "Pay Now" when the
-    // plan includes the portal; otherwise show the company's manual payment instructions.
-    const hasPortal = hasFeature(company?.subscriptionPlan, "customer_portal");
-    const payNowUrl = hasPortal && companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : null;
-    const paymentInstructions: string[] = [];
-    if (company?.paymentInstructions) paymentInstructions.push(company.paymentInstructions);
-    if (company?.checkPayableTo) paymentInstructions.push(`Check payable to: ${company.checkPayableTo}`);
-    if (company?.zelleInfo) paymentInstructions.push(`Zelle: ${company.zelleInfo}`);
-    if (company?.venmoHandle) paymentInstructions.push(`Venmo: ${company.venmoHandle}`);
-    if (company?.cashAppTag) paymentInstructions.push(`Cash App: ${company.cashAppTag}`);
-    const customerName = `${customer.firstName} ${customer.lastName}`.trim() || customer.email;
-    await sendInvoiceEmail({
-      customerEmail: customer.email,
-      customerName,
-      companyName,
-      companyEmail: company?.email ?? undefined,
-      invoiceNumber: inv.invoiceNumber,
-      dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
-      lineItems: lineItems.map(li => ({
-        description: li.description,
-        quantity: Number(li.quantity),
-        unitPrice: Number(li.unitPrice),
-        lineTotal: Number(li.lineTotal),
-      })),
-      total: Number(inv.total),
-      payNowUrl,
-      paymentInstructions,
-      logoUrl: company?.logoUrl ?? null,
-      primaryColor: company?.primaryColor ?? null,
-    });
-    await logCommunicationEvent({
-      companyId,
-      customerId: inv.customerId,
-      invoiceId: inv.id,
-      channel: "email",
-      subject: `Invoice ${inv.invoiceNumber}`,
-      bodyPreview: `Invoice ${inv.invoiceNumber} for $${Number(inv.total).toFixed(2)} sent to ${customerName}`,
-      status: "sent",
-    });
-  } catch (err) {
-    logger.error({ err, invoiceId, companyId }, "Failed to dispatch invoice email");
-  }
 }
 
 async function nextInvoiceNumber(companyId: number): Promise<string> {

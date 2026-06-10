@@ -39,7 +39,10 @@ router.post("/", async (req: any, res) => {
   if (!customer) return res.status(404).json({ error: "NotFound", message: "Customer not found" });
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
-  const reviewUrl = company?.reviewUrl || "https://g.page/review";
+  // Default to the in-app GreenSynk review page unless the company configured an
+  // external review URL (e.g. Google). The in-app page is /review/:slug.
+  const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+  const reviewUrl = company?.reviewUrl || `${baseUrl}/review/${company?.slug}`;
 
   const [request] = await db.insert(reviewRequestsTable).values({
     companyId,

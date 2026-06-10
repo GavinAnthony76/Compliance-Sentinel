@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, estimatesTable, estimateLineItemsTable, customersTable } from "@workspace/db";
+import { db, estimatesTable, estimateLineItemsTable, customersTable, leadsTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
@@ -28,14 +28,16 @@ router.post("/ai-draft", requireFeature("ai_estimate_builder"), async (req: any,
     return res.status(400).json({ error: "ValidationError", message: parsed.error.issues[0]?.message ?? "Invalid input" });
   }
 
-  const { companiesTable } = await import("@workspace/db");
+  const { companiesTable, servicesTable } = await import("@workspace/db");
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+  const services = await db.select().from(servicesTable).where(and(eq(servicesTable.companyId, companyId), eq(servicesTable.isActive, true)));
 
   const draft = await generateEstimateDraft({
     jobDescription: parsed.data.jobDescription,
     propertySize: parsed.data.propertySize,
     services: parsed.data.services,
     companyName: company?.name ?? null,
+    catalog: services.map(s => ({ name: s.name, description: s.description, basePrice: s.basePrice != null ? Number(s.basePrice) : null })),
   });
 
   const subtotal = draft.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0);
@@ -110,6 +112,12 @@ router.get("/", async (req: any, res) => {
   });
 });
 
+const estimateRecipientSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().email(),
+  phone: z.string().max(30).optional().nullable(),
+});
+
 router.post("/", requireWithinPlanLimit("estimates"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const estimateNumber = await nextEstimateNumber(companyId);
@@ -121,9 +129,34 @@ router.post("/", requireWithinPlanLimit("estimates"), async (req: any, res) => {
   const tax = Number(req.body.tax ?? 0);
   const total = subtotal + tax;
 
+  // Estimates may target an existing customer OR a brand-new recipient. For a new
+  // recipient we create a lightweight customer (the estimate FK requires one) and a
+  // matching lead so the recipient surfaces in the Leads pipeline.
+  let customerId = req.body.customerId ? Number(req.body.customerId) : null;
+  if (!customerId) {
+    const recipientParsed = estimateRecipientSchema.safeParse(req.body.recipient);
+    if (!recipientParsed.success) {
+      return res.status(400).json({ error: "ValidationError", message: "Provide a customerId or a recipient with a valid name and email." });
+    }
+    const { name, email, phone } = recipientParsed.data;
+    const trimmed = name.trim();
+    const spaceIdx = trimmed.indexOf(" ");
+    const firstName = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx);
+    const lastName = spaceIdx === -1 ? "" : trimmed.slice(spaceIdx + 1);
+    const [newCustomer] = await db.insert(customersTable).values({
+      companyId, firstName, lastName, email, phone: phone ?? null, leadSource: "estimate",
+    }).returning();
+    customerId = newCustomer.id;
+    await db.insert(leadsTable).values({
+      companyId, customerId, firstName, lastName: lastName || firstName, email, phone: phone ?? null,
+      source: "estimate", status: "new", estimatedValue: total > 0 ? String(total) : null,
+    });
+    await logActivity({ companyId, userId, action: "lead.created", entityType: "lead", metadata: { source: "estimate" } });
+  }
+
   const [est] = await db.insert(estimatesTable).values({
     companyId,
-    customerId: req.body.customerId,
+    customerId: customerId!,
     propertyId: req.body.propertyId ?? null,
     estimateNumber,
     status: req.body.status ?? "draft",

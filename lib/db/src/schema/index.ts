@@ -10,6 +10,7 @@ export * from "./invoices";
 export * from "./estimates";
 export * from "./routes";
 export * from "./review-requests";
+export * from "./reviews";
 export * from "./automations";
 export * from "./activity-logs";
 export * from "./leads";

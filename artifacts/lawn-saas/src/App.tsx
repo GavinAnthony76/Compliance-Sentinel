@@ -15,6 +15,7 @@ const NOINDEX_PATTERNS: RegExp[] = [
   /^\/portal\/set-password$/,
   /^\/portal\/[^/]+(\/forgot-password|\/login|\/invoices|\/appointments|\/estimates)?$/,
   /^\/estimates\/[^/]+\/sign$/,
+  /^\/review\/[^/]+$/,
   /^\/(dashboard|calendar|customers|properties|services|appointments|invoices|recurring|routes|reviews|automations|follow-ups|team|reporting|settings|billing|leads|tech)(\/.*)?$/,
 ];
 
@@ -76,6 +77,7 @@ const PortalForgotPasswordPage = lazy(() => import("@/pages/portal-forgot-passwo
 const PortalLoginPage = lazy(() => import("@/pages/portal-login").then(m => ({ default: m.PortalLoginPage })));
 const PortalSetPasswordPage = lazy(() => import("@/pages/portal-set-password").then(m => ({ default: m.PortalSetPasswordPage })));
 const EstimateSignPage = lazy(() => import("@/pages/estimate-sign").then(m => ({ default: m.EstimateSignPage })));
+const PublicReviewPage = lazy(() => import("@/pages/public-review").then(m => ({ default: m.PublicReviewPage })));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Customer portal pages — lazy loaded
@@ -195,10 +197,13 @@ const queryClient = new QueryClient({
   },
 });
 
-function ProtectedRoute({ component: Component, adminOnly = false }: { component: any, adminOnly?: boolean }) {
-  const { isAuthenticated, isAdminAuthenticated, isLoading, adminUser } = useAuthState();
+function ProtectedRoute({ component: Component, adminOnly = false, managerOnly = false }: { component: any, adminOnly?: boolean, managerOnly?: boolean }) {
+  const { isAuthenticated, isAdminAuthenticated, isLoading, adminUser, user } = useAuthState();
   const [, setLocation] = useLocation();
   const adminMustChangePassword = adminOnly && !!(adminUser as any)?.mustChangePassword;
+  const role = (user as any)?.role as string | undefined;
+  const isManager = role === 'owner' || role === 'admin';
+  const blockedForStaff = managerOnly && !adminOnly && isAuthenticated && !isManager;
 
   useEffect(() => {
     if (!isLoading) {
@@ -208,13 +213,17 @@ function ProtectedRoute({ component: Component, adminOnly = false }: { component
         setLocation('/admin/change-password');
       } else if (!adminOnly && !isAuthenticated) {
         setLocation('/login');
+      } else if (blockedForStaff) {
+        setLocation('/dashboard');
       }
     }
-  }, [isAuthenticated, isAdminAuthenticated, isLoading, adminOnly, adminMustChangePassword, setLocation]);
+  }, [isAuthenticated, isAdminAuthenticated, isLoading, adminOnly, adminMustChangePassword, blockedForStaff, setLocation]);
 
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
   }
+
+  if (blockedForStaff) return null;
 
   return (adminOnly ? isAdminAuthenticated : isAuthenticated) ? <Component /> : null;
 }
@@ -265,27 +274,30 @@ function Router() {
           {/* Public e-signature — lazy loaded */}
           <Route path="/estimates/:token/sign" component={EstimateSignPage} />
 
+          {/* Public review submission — lazy loaded */}
+          <Route path="/review/:slug" component={PublicReviewPage} />
+
           {/* Company dashboard routes — lazy loaded */}
           <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
           <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
-          <Route path="/leads"><ProtectedRoute component={LeadsPage} /></Route>
+          <Route path="/leads"><ProtectedRoute component={LeadsPage} managerOnly /></Route>
           <Route path="/tech"><ProtectedRoute component={TechPage} /></Route>
           <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
           <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>
           <Route path="/properties"><ProtectedRoute component={PropertiesPage} /></Route>
           <Route path="/services"><ProtectedRoute component={ServicesPage} /></Route>
           <Route path="/appointments"><ProtectedRoute component={AppointmentsPage} /></Route>
-          <Route path="/invoices"><ProtectedRoute component={InvoicesPage} /></Route>
-          <Route path="/recurring"><ProtectedRoute component={RecurringPage} /></Route>
+          <Route path="/invoices"><ProtectedRoute component={InvoicesPage} managerOnly /></Route>
+          <Route path="/recurring"><ProtectedRoute component={RecurringPage} managerOnly /></Route>
           <Route path="/estimates"><ProtectedRoute component={EstimatesPage} /></Route>
-          <Route path="/routes"><ProtectedRoute component={RoutesPage} /></Route>
-          <Route path="/reviews"><ProtectedRoute component={ReviewsPage} /></Route>
-          <Route path="/automations"><ProtectedRoute component={AutomationsPage} /></Route>
-          <Route path="/follow-ups"><ProtectedRoute component={FollowUpsPage} /></Route>
-          <Route path="/team"><ProtectedRoute component={TeamPage} /></Route>
-          <Route path="/reporting"><ProtectedRoute component={ReportingPage} /></Route>
+          <Route path="/routes"><ProtectedRoute component={RoutesPage} managerOnly /></Route>
+          <Route path="/reviews"><ProtectedRoute component={ReviewsPage} managerOnly /></Route>
+          <Route path="/automations"><ProtectedRoute component={AutomationsPage} managerOnly /></Route>
+          <Route path="/follow-ups"><ProtectedRoute component={FollowUpsPage} managerOnly /></Route>
+          <Route path="/team"><ProtectedRoute component={TeamPage} managerOnly /></Route>
+          <Route path="/reporting"><ProtectedRoute component={ReportingPage} managerOnly /></Route>
           <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
-          <Route path="/billing"><ProtectedRoute component={BillingPage} /></Route>
+          <Route path="/billing"><ProtectedRoute component={BillingPage} managerOnly /></Route>
 
           {/* Admin routes — lazy loaded */}
           <Route path="/admin/dashboard"><ProtectedRoute component={AdminDashboardPage} adminOnly /></Route>

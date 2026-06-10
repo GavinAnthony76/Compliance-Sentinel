@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { 
   LayoutDashboard, Users, CalendarDays, MapPin, Wrench, 
   Clock, RotateCw, FileText, CreditCard, Route as RouteIcon, 
-  Zap, Users2, Settings, LogOut, Menu, Lock, Star, BarChart3, Filter, Megaphone
+  Zap, Users2, Settings, LogOut, Menu, Lock, Star, BarChart3, Filter, Megaphone, Bell
 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Button } from './ui';
@@ -12,6 +12,126 @@ import { cn } from '@/lib/utils';
 import { TrialBanner } from './trial-banner';
 
 const PLAN_ORDER: Record<string, number> = { starter: 0, growth: 1, pro: 2 };
+
+function timeAgo(iso: string): string {
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return '';
+  const s = Math.floor((Date.now() - d) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const days = Math.floor(h / 24);
+  return `${days}d ago`;
+}
+
+function formatAction(action: string): string {
+  return action.replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+interface ActivityLog {
+  id: number;
+  action: string;
+  entityType: string | null;
+  userName: string | null;
+  createdAt: string;
+}
+
+function useActivityUnread() {
+  const [unread, setUnread] = React.useState(0);
+
+  const loadCount = React.useCallback(() => {
+    fetch('/api/activity/unread-count')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && typeof d.unread === 'number') setUnread(d.unread); })
+      .catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    loadCount();
+    const id = setInterval(loadCount, 60000);
+    return () => clearInterval(id);
+  }, [loadCount]);
+
+  return { unread, setUnread };
+}
+
+function ActivityBell({ unread, onSeen }: { unread: number; onSeen: () => void }) {
+  const [open, setOpen] = React.useState(false);
+  const [logs, setLogs] = React.useState<ActivityLog[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const ref = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  async function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next) {
+      setLoading(true);
+      try {
+        const r = await fetch('/api/activity?limit=10');
+        const d = r.ok ? await r.json() : null;
+        if (d?.logs) setLogs(d.logs);
+        await fetch('/api/activity/mark-seen', { method: 'POST' });
+        onSeen();
+      } catch {
+        // ignore — bell is non-critical
+      } finally {
+        setLoading(false);
+      }
+    }
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={toggle}
+        className="relative p-2 rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+        aria-label="Activity"
+      >
+        <Bell className="w-5 h-5" />
+        {unread > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center text-[10px] font-bold text-white bg-destructive rounded-full">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+            <span className="font-semibold text-sm">Activity</span>
+            <Link href="/dashboard" onClick={() => setOpen(false)} className="text-xs text-primary hover:underline">View all</Link>
+          </div>
+          <div className="max-h-80 overflow-y-auto">
+            {loading ? (
+              <div className="flex justify-center py-8"><div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full" /></div>
+            ) : logs.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-muted-foreground">No recent activity</p>
+            ) : (
+              logs.map(log => (
+                <div key={log.id} className="px-4 py-3 border-b border-border last:border-0 hover:bg-accent/50">
+                  <p className="text-sm text-foreground">{formatAction(log.action)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {log.userName ? `${log.userName} · ` : ''}{timeAgo(log.createdAt)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function planHasFeature(currentPlan: string | null | undefined, requiredPlan: 'growth' | 'pro' | null): boolean {
   if (!requiredPlan) return true;
@@ -63,35 +183,42 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuthState();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
   const plan = user?.company?.subscriptionPlan;
+  const role = (user as any)?.role as string | undefined;
+  const isManager = role === 'owner' || role === 'admin';
+  const { unread, setUnread } = useActivityUnread();
 
-  const navItems: { href: string; icon: React.ElementType; label: string; requiredPlan?: 'growth' | 'pro' | null }[] = [
+  const allNavItems: { href: string; icon: React.ElementType; label: string; requiredPlan?: 'growth' | 'pro' | null; managerOnly?: boolean }[] = [
     { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/calendar',     icon: CalendarDays,    label: 'Calendar' },
-    { href: '/leads',        icon: Filter,           label: 'Leads',           requiredPlan: 'pro' },
+    { href: '/leads',        icon: Filter,           label: 'Leads',           requiredPlan: 'pro',    managerOnly: true },
     { href: '/customers',    icon: Users,            label: 'Customers' },
     { href: '/properties',   icon: MapPin,           label: 'Properties' },
     { href: '/services',     icon: Wrench,           label: 'Services' },
     { href: '/appointments', icon: Clock,            label: 'Appointments' },
-    { href: '/invoices',     icon: CreditCard,       label: 'Invoices' },
-    { href: '/recurring',    icon: RotateCw,         label: 'Recurring Plans', requiredPlan: 'growth' },
+    { href: '/invoices',     icon: CreditCard,       label: 'Invoices',                                managerOnly: true },
+    { href: '/recurring',    icon: RotateCw,         label: 'Recurring Plans', requiredPlan: 'growth', managerOnly: true },
     { href: '/estimates',    icon: FileText,         label: 'Estimates' },
-    { href: '/routes',       icon: RouteIcon,        label: 'Routes',          requiredPlan: 'growth' },
-    { href: '/reviews',      icon: Star,             label: 'Reviews',         requiredPlan: 'growth' },
-    { href: '/team',         icon: Users2,           label: 'Team',            requiredPlan: 'growth' },
-    { href: '/reporting',    icon: BarChart3,        label: 'Reporting',       requiredPlan: 'growth' },
-    { href: '/automations',  icon: Zap,              label: 'Automations',     requiredPlan: 'growth' },
-    { href: '/follow-ups',   icon: Megaphone,        label: 'Follow-Ups',      requiredPlan: 'growth' },
+    { href: '/routes',       icon: RouteIcon,        label: 'Routes',          requiredPlan: 'growth', managerOnly: true },
+    { href: '/reviews',      icon: Star,             label: 'Reviews',         requiredPlan: 'growth', managerOnly: true },
+    { href: '/team',         icon: Users2,           label: 'Team',            requiredPlan: 'growth', managerOnly: true },
+    { href: '/reporting',    icon: BarChart3,        label: 'Reporting',       requiredPlan: 'growth', managerOnly: true },
+    { href: '/automations',  icon: Zap,              label: 'Automations',     requiredPlan: 'growth', managerOnly: true },
+    { href: '/follow-ups',   icon: Megaphone,        label: 'Follow-Ups',      requiredPlan: 'growth', managerOnly: true },
     { href: '/settings',     icon: Settings,         label: 'Settings' },
   ];
+  const navItems = allNavItems.filter(item => isManager || !item.managerOnly);
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-card border-b border-border sticky top-0 z-50">
         <Logo className="h-8" />
-        <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
-          <Menu className="w-6 h-6" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <ActivityBell unread={unread} onSeen={() => setUnread(0)} />
+          <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
+            <Menu className="w-6 h-6" />
+          </Button>
+        </div>
       </div>
 
       {/* Sidebar */}
@@ -99,8 +226,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         "fixed inset-y-0 left-0 z-40 w-72 bg-card border-r border-border flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:w-72",
         isMobileOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-6 hidden md:flex items-center">
+        <div className="p-6 hidden md:flex items-center justify-between">
           <Logo className="h-10" />
+          <ActivityBell unread={unread} onSeen={() => setUnread(0)} />
         </div>
 
         <div className="px-4 py-2">
@@ -111,7 +239,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
                 {plan || 'Free'} Plan
               </p>
-              <Link href="/billing" className="text-[10px] font-semibold text-primary hover:underline">Upgrade</Link>
+              <Link href="/billing" className="text-[10px] font-semibold text-primary hover:underline">{plan === 'pro' ? 'Manage plan' : 'Upgrade'}</Link>
             </div>
           </div>
         </div>

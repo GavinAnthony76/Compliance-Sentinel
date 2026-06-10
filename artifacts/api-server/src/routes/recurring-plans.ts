@@ -1,14 +1,17 @@
 import { Router } from "express";
 import { db, recurringPlansTable, customersTable, servicesTable } from "@workspace/db";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
+import { generateDueRecurringAppointments } from "../lib/recurring";
 
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
+// Recurring plan management is a manager capability — staff have no access.
+router.use(requireRole("owner", "admin"));
 router.use(requireFeature("recurring_plans"));
 
 router.get("/", async (req: any, res) => {
@@ -38,6 +41,8 @@ router.get("/", async (req: any, res) => {
 
 router.post("/", async (req: any, res) => {
   const { companyId, userId } = req.user;
+  // Default the first run to now so upcoming appointments materialize immediately.
+  const nextRunAt = req.body.nextRunAt ? new Date(req.body.nextRunAt) : new Date();
   const [plan] = await db.insert(recurringPlansTable).values({
     companyId,
     customerId: req.body.customerId,
@@ -47,11 +52,13 @@ router.post("/", async (req: any, res) => {
     intervalValue: req.body.intervalValue ?? null,
     dayOfWeek: req.body.dayOfWeek ?? null,
     dayOfMonth: req.body.dayOfMonth ?? null,
-    nextRunAt: req.body.nextRunAt ? new Date(req.body.nextRunAt) : null,
+    nextRunAt,
     isActive: req.body.isActive ?? true,
     price: req.body.price != null ? String(req.body.price) : null,
   }).returning();
   await logActivity({ companyId, userId, action: "recurring_plan.created", entityType: "recurring_plan", entityId: plan.id });
+  // Materialize the upcoming appointments for this company right away.
+  generateDueRecurringAppointments({ companyId }).catch(() => {});
   return res.status(201).json({ ...plan, price: plan.price ? Number(plan.price) : null });
 });
 
@@ -70,6 +77,8 @@ router.put("/:id", async (req: any, res) => {
   if (req.body.propertyId !== undefined) updates.propertyId = req.body.propertyId;
   const [updated] = await db.update(recurringPlansTable).set(updates).where(and(eq(recurringPlansTable.id, id), eq(recurringPlansTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "recurring_plan.updated", entityType: "recurring_plan", entityId: id });
+  // Reflect schedule/frequency edits in upcoming appointments.
+  generateDueRecurringAppointments({ companyId }).catch(() => {});
   return res.json({ ...updated, price: updated.price ? Number(updated.price) : null });
 });
 

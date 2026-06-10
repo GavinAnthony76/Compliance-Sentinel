@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db, automationRulesTable, appointmentsTable, invoicesTable, customersTable } from "@workspace/db";
 import { eq, and, desc, gte, lte, between } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -11,6 +11,8 @@ import { executeActionDryRun } from "../lib/automations";
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
+// Automations are a management capability — staff have no access.
+router.use(requireRole("owner", "admin"));
 // Generic rule-based automation engine — Pro's "Advanced Automation Engine"
 router.use(requireFeature("advanced_automations"));
 
@@ -109,7 +111,7 @@ router.post("/:id/test", async (req: any, res) => {
       const now = new Date();
       const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       const candidates = await db.select().from(appointmentsTable)
-        .where(and(eq(appointmentsTable.companyId, companyId), gte(appointmentsTable.scheduledStart, now.toISOString())))
+        .where(and(eq(appointmentsTable.companyId, companyId), gte(appointmentsTable.scheduledStart, now)))
         .orderBy(appointmentsTable.scheduledStart)
         .limit(5);
       const inWindow = candidates.find(a => new Date(a.scheduledStart) <= in24h);

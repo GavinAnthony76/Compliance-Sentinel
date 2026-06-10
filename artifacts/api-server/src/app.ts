@@ -121,4 +121,10 @@ import("./lib/follow-ups").then(({ processPendingFollowUps }) => {
   setInterval(processPendingFollowUps, 5 * 60 * 1000);
 });
 
+// Materialize appointments from recurring plans (runs hourly).
+import("./lib/recurring").then(({ generateDueRecurringAppointments }) => {
+  generateDueRecurringAppointments().catch(() => {});
+  setInterval(() => { generateDueRecurringAppointments().catch(() => {}); }, 60 * 60 * 1000);
+});
+
 export default app;

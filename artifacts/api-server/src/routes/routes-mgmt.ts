@@ -1,13 +1,15 @@
 import { Router } from "express";
 import { db, routesTable, routeStopsTable, appointmentsTable, usersTable, customersTable, servicesTable, companiesTable, propertiesTable } from "@workspace/db";
 import { eq, and, sql, desc, gte, lte, inArray } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { sendSMS, sendEmail } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
+// Route management/optimization is a manager capability — staff have no access.
+router.use(requireRole("owner", "admin"));
 router.use(requireFeature("route_optimization"));
 
 router.get("/", async (req: any, res) => {
