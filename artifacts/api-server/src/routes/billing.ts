@@ -111,7 +111,8 @@ router.post("/webhook", async (req: Request, res) => {
         }).where(eq(companiesTable.stripeSubscriptionId, sub.id));
         break;
       }
-      case "invoice.paid": {
+      case "invoice.paid":
+      case "invoice.payment_succeeded": {
         const inv = event.data.object;
         if (inv.subscription) {
           // Use the subscription's real status instead of assuming "active".
