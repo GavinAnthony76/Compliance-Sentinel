@@ -510,8 +510,19 @@ router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, 
 
       return res.json({ url: accountLink.url });
     }
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Error creating Connect onboarding link");
+    const isPermissionError =
+      err?.type === "StripePermissionError" ||
+      err?.statusCode === 403 ||
+      (typeof err?.message === "string" && err.message.toLowerCase().includes("does not have the required permissions"));
+    if (isPermissionError) {
+      return res.status(403).json({
+        error: "ConnectPermissionError",
+        message:
+          "The configured Stripe key is not authorized for Connect. Use a Stripe secret key with Connect enabled (full-access secret key, or a restricted key with 'Connect: write' permission).",
+      });
+    }
     return res.status(500).json({ error: "ConnectError", message: "Could not create onboarding link" });
   }
 });
