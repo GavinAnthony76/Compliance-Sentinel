@@ -35,7 +35,14 @@ interface ActivityLog {
   action: string;
   entityType: string | null;
   userName: string | null;
+  metadataJson: { actor?: string } | null;
   createdAt: string;
+}
+
+function actorLabel(log: ActivityLog): string | null {
+  if (log.userName) return log.userName;
+  if (log.metadataJson?.actor) return log.metadataJson.actor;
+  return null;
 }
 
 function useActivityUnread() {
@@ -117,14 +124,17 @@ function ActivityBell({ unread, onSeen }: { unread: number; onSeen: () => void }
             ) : logs.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-muted-foreground">No recent activity</p>
             ) : (
-              logs.map(log => (
-                <div key={log.id} className="px-4 py-3 border-b border-border last:border-0 hover:bg-accent/50">
-                  <p className="text-sm text-foreground">{formatAction(log.action)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {log.userName ? `${log.userName} · ` : ''}{timeAgo(log.createdAt)}
-                  </p>
-                </div>
-              ))
+              logs.map(log => {
+                const actor = actorLabel(log);
+                return (
+                  <div key={log.id} className="px-4 py-3 border-b border-border last:border-0 hover:bg-accent/50">
+                    <p className="text-sm text-foreground">{formatAction(log.action)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {actor ? `${actor} · ` : ''}{timeAgo(log.createdAt)}
+                    </p>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

@@ -10,6 +10,33 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+// Log a subscription status flip (e.g. active → past_due) to the activity feed,
+// but only when the status actually changed from what we have stored. Stripe
+// commonly emits both customer.subscription.updated AND invoice.* events for the
+// same flip; the change-guard ensures whichever handler runs first records it and
+// the other is a no-op, so we never double-log. These are automated events with
+// no acting user, so they're attributed to "Stripe / automated".
+async function logBillingStatusFlip(subscriptionId: string, nextStatus: string): Promise<void> {
+  try {
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.stripeSubscriptionId, subscriptionId)).limit(1);
+    if (!company || company.subscriptionStatus === nextStatus) return;
+    await logActivity({
+      companyId: company.id,
+      action: "billing.subscription_updated",
+      entityType: "company",
+      entityId: company.id,
+      metadata: {
+        plan: company.subscriptionPlan,
+        status: nextStatus,
+        previousStatus: company.subscriptionStatus,
+        actor: "Stripe / automated",
+      },
+    });
+  } catch {
+    // Activity logging must never break webhook processing
+  }
+}
+
 // Webhook must NOT be behind requireAuth and needs raw body
 router.post("/webhook", async (req: Request, res) => {
   let stripe: any;
@@ -74,6 +101,8 @@ router.post("/webhook", async (req: Request, res) => {
 
         // Company subscription checkout
         if (companyId && plan) {
+          const [existing] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+          const previousPlan = existing?.subscriptionPlan ?? null;
           const subscription = await stripe.subscriptions.retrieve(session.subscription);
           await db.update(companiesTable).set({
             stripeCustomerId: session.customer,
@@ -84,6 +113,24 @@ router.post("/webhook", async (req: Request, res) => {
             trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
             updatedAt: new Date(),
           }).where(eq(companiesTable.id, companyId));
+
+          // Attribute the plan change to the manager who started checkout (their
+          // user id was stamped into the session metadata). Webhooks arrive
+          // without a session, so this is the only reliable way to know "who".
+          const actingUserId = Number(session.metadata?.userId) || undefined;
+          await logActivity({
+            companyId,
+            userId: actingUserId,
+            action: "billing.plan_changed",
+            entityType: "company",
+            entityId: companyId,
+            metadata: {
+              plan,
+              previousPlan,
+              status: subscription.status,
+              actor: actingUserId ? undefined : "Stripe / automated",
+            },
+          });
         }
         break;
       }
@@ -93,22 +140,63 @@ router.post("/webhook", async (req: Request, res) => {
         const plan = sub.metadata?.plan;
         const companies = await db.select().from(companiesTable).where(eq(companiesTable.stripeSubscriptionId, sub.id));
         if (companies.length > 0) {
+          const before = companies[0];
+          const nextPlan = plan || before.subscriptionPlan;
           await db.update(companiesTable).set({
             subscriptionStatus: sub.status,
-            subscriptionPlan: plan || companies[0].subscriptionPlan,
+            subscriptionPlan: nextPlan,
             currentPeriodEnd: new Date(sub.current_period_end * 1000),
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             updatedAt: new Date(),
           }).where(eq(companiesTable.stripeSubscriptionId, sub.id));
+
+          // Only log when something meaningful actually flipped. This handler
+          // also fires moments after a checkout (which already logged
+          // billing.plan_changed), so without this guard we'd duplicate it.
+          // These changes come straight from Stripe (e.g. the customer portal
+          // or a status flip), so there is no acting user to attribute.
+          const planChanged = nextPlan !== before.subscriptionPlan;
+          const statusChanged = sub.status !== before.subscriptionStatus;
+          const cancelScheduleChanged = !!sub.cancel_at_period_end !== !!before.cancelAtPeriodEnd;
+          if (planChanged || statusChanged || cancelScheduleChanged) {
+            await logActivity({
+              companyId: before.id,
+              action: "billing.subscription_updated",
+              entityType: "company",
+              entityId: before.id,
+              metadata: {
+                plan: nextPlan,
+                previousPlan: planChanged ? before.subscriptionPlan : undefined,
+                status: sub.status,
+                previousStatus: statusChanged ? before.subscriptionStatus : undefined,
+                cancelAtPeriodEnd: sub.cancel_at_period_end,
+                actor: "Stripe / automated",
+              },
+            });
+          }
         }
         break;
       }
       case "customer.subscription.deleted": {
         const sub = event.data.object;
+        const companies = await db.select().from(companiesTable).where(eq(companiesTable.stripeSubscriptionId, sub.id));
         await db.update(companiesTable).set({
           subscriptionStatus: "canceled",
           updatedAt: new Date(),
         }).where(eq(companiesTable.stripeSubscriptionId, sub.id));
+        if (companies.length > 0) {
+          await logActivity({
+            companyId: companies[0].id,
+            action: "billing.subscription_canceled",
+            entityType: "company",
+            entityId: companies[0].id,
+            metadata: {
+              plan: companies[0].subscriptionPlan,
+              previousStatus: companies[0].subscriptionStatus,
+              actor: "Stripe / automated",
+            },
+          });
+        }
         break;
       }
       case "invoice.paid":
@@ -127,6 +215,7 @@ router.post("/webhook", async (req: Request, res) => {
           } catch (err) {
             logger.error({ err, subscriptionId: inv.subscription }, "Failed to retrieve subscription on invoice.paid; defaulting to active");
           }
+          await logBillingStatusFlip(inv.subscription as string, nextStatus);
           await db.update(companiesTable).set({
             subscriptionStatus: nextStatus,
             updatedAt: new Date(),
@@ -137,6 +226,7 @@ router.post("/webhook", async (req: Request, res) => {
       case "invoice.payment_failed": {
         const inv = event.data.object;
         if (inv.subscription) {
+          await logBillingStatusFlip(inv.subscription as string, "past_due");
           await db.update(companiesTable).set({
             subscriptionStatus: "past_due",
             updatedAt: new Date(),
@@ -326,7 +416,7 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
     // requires trial_end to be at least 48h out, so if less than that remains
     // (or they aren't trialing), we skip the trial and charge at checkout.
     const subscriptionData: any = {
-      metadata: { companyId: String(companyId), plan: planId },
+      metadata: { companyId: String(companyId), plan: planId, userId: String(userId) },
     };
     const trialEndMs = company.trialEndsAt ? new Date(company.trialEndsAt).getTime() : 0;
     // Stripe requires trial_end to be at least 48h out; add a 10-minute buffer
@@ -344,7 +434,7 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/billing?success=true`,
       cancel_url: `${baseUrl}/billing?canceled=true`,
-      metadata: { companyId: String(companyId), plan: planId },
+      metadata: { companyId: String(companyId), plan: planId, userId: String(userId) },
       subscription_data: subscriptionData,
     });
 
