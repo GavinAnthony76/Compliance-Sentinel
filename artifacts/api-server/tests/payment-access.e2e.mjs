@@ -214,6 +214,42 @@ async function main() {
   }
 
   // ==========================================================================
+  // 1b. Autopay opt-in consent — a Pro company has cleared the feature gate,
+  //     but money still must not move (and autopay must not even be enable-able)
+  //     for a customer who never consented, i.e. has no saved payment method.
+  //     This guards the consent logic INSIDE the handlers, independent of the
+  //     plan/connect/cross-customer gates above.
+  // ==========================================================================
+  console.log("\nAutopay opt-in consent (Pro company, customer without a saved card):");
+  {
+    const cust = await createCustomer(proCompany.ownerToken, "consent", 1);
+
+    // Enabling autopay for a customer with no saved card must be refused — you
+    // can't opt a customer into auto-charging when there's nothing to charge.
+    const toggle = await req("PATCH", `/autopay/customers/${cust.id}/autopay`, {
+      token: proCompany.ownerToken,
+      body: { enabled: true },
+    });
+    check(
+      "PATCH autopay enabled:true w/o saved card -> 400 NoPaymentMethod",
+      toggle.status === 400 && toggle.json?.error === "NoPaymentMethod",
+      `got ${toggle.status} ${JSON.stringify(toggle.json)}`,
+    );
+
+    // Charging that same customer's invoice must also be refused, not silently
+    // succeed — the charge handler requires a saved payment method.
+    const invoice = await createInvoice(proCompany.ownerToken, cust.id);
+    const charge = await req("POST", `/autopay/invoices/${invoice}/charge`, {
+      token: proCompany.ownerToken,
+    });
+    check(
+      "POST charge for customer w/o saved card -> 400 NoPaymentMethod (no charge)",
+      charge.status === 400 && charge.json?.error === "NoPaymentMethod",
+      `got ${charge.status} ${JSON.stringify(charge.json)}`,
+    );
+  }
+
+  // ==========================================================================
   // 2. Portal online-payment guards — card must be accepted AND a Stripe
   //    Connect account must be present before any charge can be initiated.
   // ==========================================================================
