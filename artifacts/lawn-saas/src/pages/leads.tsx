@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
@@ -291,6 +291,7 @@ function LeadsBoard() {
   const [, navigate] = useLocation();
   const { user } = useAuthState();
   const role = (user as any)?.role as string | undefined;
+  const userId = (user as any)?.id as number | string | undefined;
   const isManager = role === 'owner' || role === 'admin';
   const [leads, setLeads] = useState<Lead[]>([]);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -300,6 +301,32 @@ function LeadsBoard() {
   const [editing, setEditing] = useState<Lead | undefined>(undefined);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'unassigned' | number>('all');
+
+  const filterStorageKey = userId != null ? `greensync_lead_assignee_filter_${userId}` : null;
+  const filterLoadedRef = useRef(false);
+
+  useEffect(() => {
+    filterLoadedRef.current = false;
+    if (!filterStorageKey) return;
+    const saved = localStorage.getItem(filterStorageKey);
+    if (saved === 'unassigned') {
+      setAssigneeFilter('unassigned');
+    } else if (saved != null && /^\d+$/.test(saved)) {
+      setAssigneeFilter(Number(saved));
+    } else {
+      setAssigneeFilter('all');
+    }
+    filterLoadedRef.current = true;
+  }, [filterStorageKey]);
+
+  useEffect(() => {
+    if (!filterStorageKey || !filterLoadedRef.current) return;
+    if (assigneeFilter === 'all') {
+      localStorage.removeItem(filterStorageKey);
+    } else {
+      localStorage.setItem(filterStorageKey, String(assigneeFilter));
+    }
+  }, [assigneeFilter, filterStorageKey]);
 
   const load = useCallback(async () => {
     setLoading(true);
