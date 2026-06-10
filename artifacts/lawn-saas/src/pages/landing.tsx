@@ -460,7 +460,7 @@ export function LandingPage() {
           onClick={() => { setShowDemo(false); videoRef.current?.pause(); }}
         >
           <div
-            className="relative w-full max-w-4xl rounded-2xl overflow-hidden shadow-2xl"
+            className="relative w-full max-w-4xl max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl bg-black flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -472,9 +472,11 @@ export function LandingPage() {
             <video
               ref={videoRef}
               src={`${import.meta.env.BASE_URL}greensyncad1.mp4`}
-              className="w-full"
+              className="w-full h-auto max-h-[90vh] object-contain"
               controls
               autoPlay
+              muted
+              playsInline
               loop={false}
             />
           </div>
