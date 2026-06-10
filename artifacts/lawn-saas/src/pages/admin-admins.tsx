@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useAdminListAdmins, useAdminCreateAdmin } from '@workspace/api-client-react';
 import { AdminLayout } from './admin-dashboard';
 import { Button, Input } from '@/components/ui';
-import { Plus, Shield, Mail, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Shield, Mail, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAdminListAdminsQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
+
+const STALE_DAYS = 90;
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+function getLoginStatus(lastLoginAt: string | null | undefined): { stale: boolean; never: boolean; days: number | null } {
+  if (!lastLoginAt) return { stale: true, never: true, days: null };
+  const days = Math.floor((Date.now() - new Date(lastLoginAt).getTime()) / DAY_MS);
+  return { stale: days >= STALE_DAYS, never: false, days };
+}
 
 function adminFetch(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem('greensync_admin_token');
@@ -90,9 +99,21 @@ export function AdminAdminsPage() {
   const [showNew, setShowNew] = useState(false);
   const [editAdmin, setEditAdmin] = useState<any | null>(null);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: 'admin' as 'admin' | 'superadmin' });
+  const [staleOnly, setStaleOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'created'>('created');
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useAdminCreateAdmin();
+
+  const admins = (data?.admins ?? []) as any[];
+  const staleCount = useMemo(() => admins.filter(a => getLoginStatus(a.lastLoginAt).stale).length, [admins]);
+  const visibleAdmins = useMemo(() => {
+    let list = staleOnly ? admins.filter(a => getLoginStatus(a.lastLoginAt).stale) : [...admins];
+    if (sortBy === 'created') return list;
+    const ts = (a: any) => (a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0);
+    list = [...list].sort((a, b) => sortBy === 'recent' ? ts(b) - ts(a) : ts(a) - ts(b));
+    return list;
+  }, [admins, staleOnly, sortBy]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,13 +197,44 @@ export function AdminAdminsPage() {
         <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Admin</Button>
       </div>
 
+      {!isLoading && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          {staleCount > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-400/10 text-amber-400 text-sm font-medium">
+              <AlertTriangle className="w-4 h-4" />
+              {staleCount} admin{staleCount === 1 ? '' : 's'} inactive {STALE_DAYS}+ days
+            </div>
+          )}
+          <button
+            onClick={() => setStaleOnly(v => !v)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${staleOnly ? 'bg-amber-400/10 border-amber-400/40 text-amber-400' : 'border-slate-700 text-slate-300 hover:bg-slate-800'}`}
+          >
+            {staleOnly ? 'Showing inactive only' : 'Show inactive only'}
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-xs text-slate-400">Sort by</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as any)}
+              className="h-9 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm"
+            >
+              <option value="created">Newest admin</option>
+              <option value="recent">Most recent login</option>
+              <option value="oldest">Oldest login</option>
+            </select>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>
       ) : (
         <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
           <div className="divide-y divide-slate-800">
-            {data?.admins.map((admin: any) => (
-              <div key={admin.id} className="flex items-center justify-between p-5 hover:bg-slate-800/50 transition-colors">
+            {visibleAdmins.map((admin: any) => {
+              const status = getLoginStatus(admin.lastLoginAt);
+              return (
+              <div key={admin.id} className={`flex items-center justify-between p-5 transition-colors ${status.stale ? 'bg-amber-400/[0.04] hover:bg-amber-400/[0.08]' : 'hover:bg-slate-800/50'}`}>
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
                     {admin.firstName[0]}{admin.lastName[0]}
@@ -193,7 +245,14 @@ export function AdminAdminsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {admin.lastLoginAt && <span className="text-xs text-slate-500">Last login: {format(new Date(admin.lastLoginAt), 'MMM d')}</span>}
+                  {status.stale && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-400/10 text-amber-400" title={status.never ? 'This admin has never signed in' : `No sign-in for ${status.days} days`}>
+                      <AlertTriangle className="w-3 h-3" />{status.never ? 'Never signed in' : 'Inactive'}
+                    </span>
+                  )}
+                  <span className={`text-xs ${status.stale ? 'text-amber-400/80' : 'text-slate-500'}`}>
+                    {admin.lastLoginAt ? `Last login: ${format(new Date(admin.lastLoginAt), 'MMM d, yyyy')}` : 'Never signed in'}
+                  </span>
                   <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${admin.role === 'superadmin' ? 'bg-purple-400/10 text-purple-400' : 'bg-blue-400/10 text-blue-400'}`}>
                     <Shield className="w-3 h-3" />{admin.role}
                   </span>
@@ -213,8 +272,9 @@ export function AdminAdminsPage() {
                   </button>
                 </div>
               </div>
-            ))}
-            {data?.admins.length === 0 && <div className="py-20 text-center text-slate-400">No admin users found</div>}
+              );
+            })}
+            {visibleAdmins.length === 0 && <div className="py-20 text-center text-slate-400">{staleOnly ? 'No inactive admins' : 'No admin users found'}</div>}
           </div>
         </div>
       )}
