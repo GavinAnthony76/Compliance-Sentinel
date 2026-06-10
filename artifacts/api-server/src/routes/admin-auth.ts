@@ -31,6 +31,8 @@ router.post("/login", async (req, res) => {
     return res.status(401).json({ error: "AuthError", message: "Invalid credentials" });
   }
 
+  await db.update(platformAdminsTable).set({ lastLoginAt: new Date() }).where(eq(platformAdminsTable.id, admin.id));
+
   await logActivity({ adminId: admin.id, action: "admin.login", entityType: "admin", entityId: admin.id });
 
   const token = signAdminToken({ adminId: admin.id, role: admin.role });
