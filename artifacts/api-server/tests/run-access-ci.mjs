@@ -10,9 +10,10 @@
  *   2. Start it on an isolated port with the current environment.
  *   3. Wait until it answers HTTP.
  *   4. Run, in order:
- *        - tests/invoice-billing-access.e2e.mjs  (invoices + billing access)
- *        - tests/portal-auth.e2e.mjs             (customer portal auth)
- *        - tests/payment-access.e2e.mjs          (autopay + portal payment guards)
+ *        - tests/invoice-billing-access.e2e.mjs       (invoices + billing access)
+ *        - tests/appointment-customer-access.e2e.mjs  (appointments + customers access)
+ *        - tests/portal-auth.e2e.mjs                  (customer portal auth)
+ *        - tests/payment-access.e2e.mjs               (autopay + portal payment guards)
  *   5. Always tear the server down.
  *
  * Exit code 0 = every suite passed, non-zero = at least one suite failed (which
@@ -117,6 +118,7 @@ async function main() {
   // --- Run the suites -------------------------------------------------------
   const suites = [
     "tests/invoice-billing-access.e2e.mjs",
+    "tests/appointment-customer-access.e2e.mjs",
     "tests/portal-auth.e2e.mjs",
     "tests/payment-access.e2e.mjs",
   ];
