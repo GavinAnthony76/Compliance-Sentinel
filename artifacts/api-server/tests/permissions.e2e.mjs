@@ -76,6 +76,38 @@ const ROLE_GATED_GET = [
 // Endpoints shared by all authenticated users — staff must retain access.
 const STAFF_ALLOWED_GET = ["/customers", "/appointments", "/dashboard"];
 
+// Write endpoints (create/update/delete/convert) on manager-only routers.
+// Staff must receive 403 from the router-level requireRole BEFORE any body
+// validation or row lookup runs; a manager must NOT receive 403 (they may get
+// 201/400/404 depending on payload, all of which are acceptable here).
+const ROLE_GATED_WRITE = [
+  {
+    method: "POST",
+    path: "/leads",
+    body: { firstName: "Lead", lastName: "Test", source: "manual", status: "new" },
+  },
+  { method: "PUT", path: "/leads/999999999", body: { status: "contacted" } },
+  { method: "DELETE", path: "/leads/999999999" },
+  {
+    method: "POST",
+    path: "/leads/999999999/convert-to-customer",
+  },
+  {
+    method: "POST",
+    path: "/follow-ups",
+    body: {
+      name: "Perm test campaign",
+      triggerType: "lead_created",
+      delayHours: 0,
+      channel: "email",
+      subject: "Hi",
+      messageTemplate: "Hello {{firstName}}",
+    },
+  },
+  { method: "PUT", path: "/follow-ups/999999999", body: { name: "Renamed" } },
+  { method: "DELETE", path: "/follow-ups/999999999" },
+];
+
 async function main() {
   console.log(`Permissions e2e against: ${BASE}\n`);
 
@@ -140,11 +172,24 @@ async function main() {
     check("POST /billing/subscribe -> 403 for staff", r.status === 403, `got ${r.status}`);
   }
 
+  // --- Staff is BLOCKED (403) from WRITING to lead-pipeline data ------------
+  console.log("\nStaff must be FORBIDDEN (403) on manager-only write endpoints:");
+  for (const { method, path, body } of ROLE_GATED_WRITE) {
+    const r = await req(method, path, { token: staffToken, body });
+    check(`${method} ${path} -> 403 for staff`, r.status === 403, `got ${r.status}`);
+  }
+
   // --- Manager (owner) RETAINS full access ----------------------------------
   console.log("\nManager (owner) must retain access on the same endpoints:");
   for (const path of ROLE_GATED_GET) {
     const r = await req("GET", path, { token: ownerToken });
     check(`GET ${path} -> not 403 for owner`, r.status !== 403, `got ${r.status}`);
+  }
+
+  console.log("\nManager (owner) must NOT be blocked on the write endpoints:");
+  for (const { method, path, body } of ROLE_GATED_WRITE) {
+    const r = await req(method, path, { token: ownerToken, body });
+    check(`${method} ${path} -> not 403 for owner`, r.status !== 403, `got ${r.status}`);
   }
 
   // --- Staff RETAINS access to shared endpoints (not globally locked out) ---
