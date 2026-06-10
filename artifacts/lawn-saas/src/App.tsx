@@ -280,7 +280,7 @@ function Router() {
           {/* Company dashboard routes — lazy loaded */}
           <Route path="/dashboard"><ProtectedRoute component={DashboardPage} /></Route>
           <Route path="/calendar"><ProtectedRoute component={CalendarPage} /></Route>
-          <Route path="/leads"><ProtectedRoute component={LeadsPage} managerOnly /></Route>
+          <Route path="/leads"><ProtectedRoute component={LeadsPage} /></Route>
           <Route path="/tech"><ProtectedRoute component={TechPage} /></Route>
           <Route path="/customers"><ProtectedRoute component={CustomersPage} /></Route>
           <Route path="/customers/:id"><ProtectedRoute component={CustomerDetailPage} /></Route>

@@ -204,7 +204,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const allNavItems: { href: string; icon: React.ElementType; label: string; requiredPlan?: 'growth' | 'pro' | null; managerOnly?: boolean }[] = [
     { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/calendar',     icon: CalendarDays,    label: 'Calendar' },
-    { href: '/leads',        icon: Filter,           label: 'Leads',           requiredPlan: 'pro',    managerOnly: true },
+    { href: '/leads',        icon: Filter,           label: 'Leads',           requiredPlan: 'pro' },
     { href: '/customers',    icon: Users,            label: 'Customers' },
     { href: '/properties',   icon: MapPin,           label: 'Properties' },
     { href: '/services',     icon: Wrench,           label: 'Services' },

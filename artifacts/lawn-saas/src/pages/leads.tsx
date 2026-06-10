@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input, Badge } from '@/components/ui';
 import { useToast } from '@/hooks/use-toast';
+import { useAuthState } from '@/hooks/use-auth-state';
 import {
   Plus, X, Phone, Mail, MapPin, DollarSign, UserPlus, FileText,
   Trash2, ChevronLeft, ChevronRight, Pencil, Inbox,
@@ -188,7 +189,7 @@ function LeadFormModal({ lead, onClose, onSaved }: { lead?: Lead; onClose: () =>
   );
 }
 
-function LeadCard({ lead, onMove, onEdit, onConvert, onEstimate, onDelete, busy }: {
+function LeadCard({ lead, onMove, onEdit, onConvert, onEstimate, onDelete, busy, isManager }: {
   lead: Lead;
   onMove: (lead: Lead, dir: -1 | 1) => void;
   onEdit: (lead: Lead) => void;
@@ -196,6 +197,7 @@ function LeadCard({ lead, onMove, onEdit, onConvert, onEstimate, onDelete, busy 
   onEstimate: (lead: Lead) => void;
   onDelete: (lead: Lead) => void;
   busy: boolean;
+  isManager: boolean;
 }) {
   const idx = ordering(lead.status);
   return (
@@ -224,17 +226,21 @@ function LeadCard({ lead, onMove, onEdit, onConvert, onEstimate, onDelete, busy 
           <ChevronRight className="w-4 h-4" />
         </button>
         <div className="flex-1" />
-        {!lead.customerId && (
+        {isManager && !lead.customerId && (
           <button disabled={busy} onClick={() => onConvert(lead)} className="p-1 rounded hover:bg-accent text-emerald-600 disabled:opacity-30" title="Convert to customer">
             <UserPlus className="w-4 h-4" />
           </button>
         )}
-        <button disabled={busy} onClick={() => onEstimate(lead)} className="p-1 rounded hover:bg-accent text-violet-600 disabled:opacity-30" title="Create estimate">
-          <FileText className="w-4 h-4" />
-        </button>
-        <button disabled={busy} onClick={() => onDelete(lead)} className="p-1 rounded hover:bg-accent text-rose-600 disabled:opacity-30" title="Delete">
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {isManager && (
+          <button disabled={busy} onClick={() => onEstimate(lead)} className="p-1 rounded hover:bg-accent text-violet-600 disabled:opacity-30" title="Create estimate">
+            <FileText className="w-4 h-4" />
+          </button>
+        )}
+        {isManager && (
+          <button disabled={busy} onClick={() => onDelete(lead)} className="p-1 rounded hover:bg-accent text-rose-600 disabled:opacity-30" title="Delete">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -243,6 +249,9 @@ function LeadCard({ lead, onMove, onEdit, onConvert, onEstimate, onDelete, busy 
 function LeadsBoard() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { user } = useAuthState();
+  const role = (user as any)?.role as string | undefined;
+  const isManager = role === 'owner' || role === 'admin';
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -331,12 +340,16 @@ function LeadsBoard() {
         <div>
           <h1 className="text-2xl font-bold">Lead Pipeline</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {leads.length} {leads.length === 1 ? 'lead' : 'leads'} · ${totalValue.toLocaleString()} in open pipeline
+            {isManager
+              ? <>{leads.length} {leads.length === 1 ? 'lead' : 'leads'} · ${totalValue.toLocaleString()} in open pipeline</>
+              : <>{leads.length} {leads.length === 1 ? 'lead' : 'leads'} assigned to you</>}
           </p>
         </div>
-        <Button onClick={() => { setEditing(undefined); setShowForm(true); }} className="gap-2">
-          <Plus className="w-4 h-4" /> New Lead
-        </Button>
+        {isManager && (
+          <Button onClick={() => { setEditing(undefined); setShowForm(true); }} className="gap-2">
+            <Plus className="w-4 h-4" /> New Lead
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -356,13 +369,17 @@ function LeadsBoard() {
       ) : leads.length === 0 ? (
         <Card className="p-12 text-center">
           <Inbox className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-          <h3 className="font-semibold">No leads yet</h3>
+          <h3 className="font-semibold">{isManager ? 'No leads yet' : 'No leads assigned to you'}</h3>
           <p className="text-sm text-muted-foreground mt-1 mb-4">
-            Leads from your booking page land here automatically, or add one manually.
+            {isManager
+              ? 'Leads from your booking page land here automatically, or add one manually.'
+              : 'Leads assigned to you will appear here. Reach out to a manager if you expect to see leads.'}
           </p>
-          <Button onClick={() => { setEditing(undefined); setShowForm(true); }} className="gap-2">
-            <Plus className="w-4 h-4" /> Add your first lead
-          </Button>
+          {isManager && (
+            <Button onClick={() => { setEditing(undefined); setShowForm(true); }} className="gap-2">
+              <Plus className="w-4 h-4" /> Add your first lead
+            </Button>
+          )}
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -380,6 +397,7 @@ function LeadsBoard() {
                       key={lead.id}
                       lead={lead}
                       busy={busyId === lead.id}
+                      isManager={isManager}
                       onMove={move}
                       onEdit={(l) => { setEditing(l); setShowForm(true); }}
                       onConvert={convert}

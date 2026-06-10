@@ -70,11 +70,12 @@ const ROLE_GATED_GET = [
   // layer (403) before the plan-feature layer, mirroring the frontend gating.
   "/follow-ups",
   "/reporting",
-  "/leads",
 ];
 
 // Endpoints shared by all authenticated users — staff must retain access.
-const STAFF_ALLOWED_GET = ["/customers", "/appointments", "/dashboard"];
+// /leads is included: staff can list the pipeline (scoped to leads assigned to
+// them by the row-level guard); mutating lead actions stay manager-only below.
+const STAFF_ALLOWED_GET = ["/customers", "/appointments", "/dashboard", "/leads"];
 
 // Write endpoints (create/update/delete/convert) on manager-only routers.
 // Staff must receive 403 from the router-level requireRole BEFORE any body
@@ -86,11 +87,17 @@ const ROLE_GATED_WRITE = [
     path: "/leads",
     body: { firstName: "Lead", lastName: "Test", source: "manual", status: "new" },
   },
-  { method: "PUT", path: "/leads/999999999", body: { status: "contacted" } },
+  // NOTE: PUT /leads/:id is intentionally NOT here — staff may update leads
+  // assigned to them, so it is no longer router-level role-gated. Row-level
+  // ownership (canAccessLead) is covered by tests/lead-ownership.test.mjs.
   { method: "DELETE", path: "/leads/999999999" },
   {
     method: "POST",
     path: "/leads/999999999/convert-to-customer",
+  },
+  {
+    method: "POST",
+    path: "/leads/999999999/create-estimate",
   },
   {
     method: "POST",

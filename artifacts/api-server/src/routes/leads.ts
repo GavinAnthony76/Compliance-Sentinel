@@ -42,10 +42,12 @@ function normalizeValue(v: unknown): string | null {
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
-// Lead pipeline is a manager capability — staff have no access (frontend hides
-// it as manager-only). requireRole stays BEFORE requireFeature so staff get a
-// clean 403 rather than a 402 about the plan feature.
-router.use(requireRole("owner", "admin"));
+// The lead pipeline is gated by plan feature for everyone. Read/update access is
+// open to all authenticated users here; staff are then scoped to their own
+// assigned leads by the row-level guard (canAccessLead) on GET/:id and PUT/:id,
+// and the list route filters to assigned leads for non-managers. Mutating
+// actions that create/delete/convert/reassign stay manager-only via per-route
+// requireRole("owner","admin") below.
 router.use(requireFeature("lead_pipeline"));
 
 // GET /api/leads — list (staff see only assigned)
@@ -142,6 +144,10 @@ router.put("/:id", async (req: any, res) => {
   const data = parsed.data;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   for (const k of ["customerId", "propertyId", "firstName", "lastName", "email", "phone", "address", "source", "status", "assignedUserId", "notes", "nextFollowUpAt", "lostReason"] as const) {
+    // Reassigning a lead (changing assignedUserId) is a manager-only action.
+    // Silently ignore it for non-managers so staff can't reassign leads — even
+    // their own — to themselves or anyone else.
+    if (k === "assignedUserId" && !isManagerRole(role)) continue;
     if (k in data) updates[k] = (data as any)[k];
   }
   if ("estimatedValue" in data) updates.estimatedValue = normalizeValue(data.estimatedValue);
