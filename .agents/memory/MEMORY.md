@@ -14,3 +14,4 @@
 - [RBAC dual-surface](rbac-dual-surface.md) — managerOnly nav flag is cosmetic; matching backend route MUST have requireRole or staff are UI-blocked but API-open; sidebar must show user not company name.
 - [Tenant URL SSRF in PDFs](tenant-url-ssrf.md) — server-side fetch of tenant-supplied URLs (company.logoUrl in PDF gen) is an SSRF vector; route through fetchImageBufferSafe (https-only, block private IPs, no redirects).
 - [Role-gating drift](role-gating-drift.md) — frontend hides 10 manager-only pages; all manager-only routers (incl. follow-ups/reporting/leads GETs) now enforce requireRole. Verify: `pnpm run test:permissions`.
+- [Test suites pollute NEON](test-suites-pollute-neon.md) — access-control e2e suites self-provision companies via dev server into the SHARED NEON prod DB; no cleanup; purge only after churn stops.
