@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:permissions": "node tests/lead-ownership.test.mjs && node tests/permissions.e2e.mjs && node tests/lead-ownership.e2e.mjs",
     "test:permissions:ci": "node tests/run-permissions-ci.mjs",
-    "test:access": "node tests/invoice-billing-access.e2e.mjs && node tests/appointment-customer-access.e2e.mjs && node tests/portal-auth.e2e.mjs",
+    "test:access": "node tests/invoice-billing-access.e2e.mjs && node tests/appointment-customer-access.e2e.mjs && node tests/property-service-access.e2e.mjs && node tests/portal-auth.e2e.mjs",
     "test:access:ci": "node tests/run-access-ci.mjs"
   },
   "dependencies": {

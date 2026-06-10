@@ -12,6 +12,7 @@
  *   4. Run, in order:
  *        - tests/invoice-billing-access.e2e.mjs       (invoices + billing access)
  *        - tests/appointment-customer-access.e2e.mjs  (appointments + customers access)
+ *        - tests/property-service-access.e2e.mjs      (properties + services access)
  *        - tests/portal-auth.e2e.mjs                  (customer portal auth)
  *        - tests/payment-access.e2e.mjs               (autopay + portal payment guards)
  *   5. Always tear the server down.
@@ -119,6 +120,7 @@ async function main() {
   const suites = [
     "tests/invoice-billing-access.e2e.mjs",
     "tests/appointment-customer-access.e2e.mjs",
+    "tests/property-service-access.e2e.mjs",
     "tests/portal-auth.e2e.mjs",
     "tests/payment-access.e2e.mjs",
   ];

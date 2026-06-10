@@ -10,6 +10,13 @@ import { startAutomationScheduler } from "./lib/automations";
 const _rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 function rateLimit(maxRequests: number, windowMs: number) {
   return (req: Request, res: Response, next: NextFunction): void => {
+    // The access-control e2e suites run many registrations/logins against a
+    // single shared server from one IP inside the rate-limit window; disable the
+    // limiter under test so a growing suite list can't trip the shared counter.
+    if (process.env.NODE_ENV === "test") {
+      next();
+      return;
+    }
     // Use originalUrl so the key is stable regardless of where middleware is mounted
     const key = `${req.ip}:${req.originalUrl.split("?")[0]}`;
     const now = Date.now();
