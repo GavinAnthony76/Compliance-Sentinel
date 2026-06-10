@@ -299,6 +299,7 @@ function LeadsBoard() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Lead | undefined>(undefined);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'unassigned' | number>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -380,9 +381,19 @@ function LeadsBoard() {
     }
   };
 
-  const totalValue = leads
+  const matchesFilter = (l: Lead) => {
+    if (!isManager || assigneeFilter === 'all') return true;
+    if (assigneeFilter === 'unassigned') return l.assignedUserId == null;
+    return l.assignedUserId === assigneeFilter;
+  };
+
+  const visibleLeads = leads.filter(matchesFilter);
+
+  const totalValue = visibleLeads
     .filter((l) => l.status !== 'lost')
     .reduce((sum, l) => sum + (l.estimatedValue ? Number(l.estimatedValue) : 0), 0);
+
+  const unassignedCount = leads.filter((l) => l.assignedUserId == null).length;
 
   return (
     <div className="space-y-6">
@@ -391,7 +402,7 @@ function LeadsBoard() {
           <h1 className="text-2xl font-bold">Lead Pipeline</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {isManager
-              ? <>{leads.length} {leads.length === 1 ? 'lead' : 'leads'} · ${totalValue.toLocaleString()} in open pipeline</>
+              ? <>{visibleLeads.length} {visibleLeads.length === 1 ? 'lead' : 'leads'} · ${totalValue.toLocaleString()} in open pipeline{assigneeFilter !== 'all' ? ' (filtered)' : ''}</>
               : <>{leads.length} {leads.length === 1 ? 'lead' : 'leads'} assigned to you</>}
           </p>
         </div>
@@ -401,6 +412,35 @@ function LeadsBoard() {
           </Button>
         )}
       </div>
+
+      {isManager && teamMembers.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground mr-1">Assignee:</span>
+          {(() => {
+            const chip = (active: boolean) =>
+              `px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                active
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-border hover:bg-accent'
+              }`;
+            return (
+              <>
+                <button className={chip(assigneeFilter === 'all')} onClick={() => setAssigneeFilter('all')}>
+                  All
+                </button>
+                <button className={chip(assigneeFilter === 'unassigned')} onClick={() => setAssigneeFilter('unassigned')}>
+                  Unassigned ({unassignedCount})
+                </button>
+                {teamMembers.map((m) => (
+                  <button key={m.id} className={chip(assigneeFilter === m.id)} onClick={() => setAssigneeFilter(m.id)}>
+                    {memberName(m)}{m.isActive ? '' : ' (inactive)'}
+                  </button>
+                ))}
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -434,7 +474,7 @@ function LeadsBoard() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           {STAGES.map((stage) => {
-            const items = leads.filter((l) => l.status === stage.key);
+            const items = visibleLeads.filter((l) => l.status === stage.key);
             return (
               <div key={stage.key} className={`bg-muted/40 rounded-xl border-t-4 ${stage.accent} p-2.5 min-h-[120px]`}>
                 <div className="flex items-center justify-between px-1 mb-2">
