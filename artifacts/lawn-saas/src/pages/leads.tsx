@@ -422,6 +422,15 @@ function LeadsBoard() {
 
   const unassignedCount = leads.filter((l) => l.assignedUserId == null).length;
 
+  const filterActive = isManager && assigneeFilter !== 'all';
+  const filterEmpty = filterActive && leads.length > 0 && visibleLeads.length === 0;
+  const filterName =
+    assigneeFilter === 'unassigned'
+      ? 'Unassigned'
+      : typeof assigneeFilter === 'number'
+        ? (memberMap.get(assigneeFilter) ?? 'this team member')
+        : '';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -497,6 +506,17 @@ function LeadsBoard() {
               <Plus className="w-4 h-4" /> Add your first lead
             </Button>
           )}
+        </Card>
+      ) : filterEmpty ? (
+        <Card className="p-12 text-center">
+          <Inbox className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+          <h3 className="font-semibold">No leads assigned to {filterName}</h3>
+          <p className="text-sm text-muted-foreground mt-1 mb-4">
+            The filter is active — no leads match this assignee right now.
+          </p>
+          <Button variant="outline" className="gap-2" onClick={() => setAssigneeFilter('all')}>
+            <X className="w-4 h-4" /> Clear filter
+          </Button>
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
