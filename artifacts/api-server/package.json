@@ -30,6 +30,7 @@
     "resend": "^6.12.4",
     "stripe": "^20.4.1",
     "stripe-replit-sync": "^1.0.0",
+    "twilio": "^6.0.2",
     "zod": "catalog:"
   },
   "devDependencies": {

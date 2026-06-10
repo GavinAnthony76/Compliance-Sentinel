@@ -101,6 +101,7 @@ async function buildAll() {
       "puppeteer-core",
       "electron",
       "pdfkit",
+      "twilio",
     ],
     sourcemap: "linked",
     plugins: [
