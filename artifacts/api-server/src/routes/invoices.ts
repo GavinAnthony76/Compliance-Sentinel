@@ -88,7 +88,7 @@ router.get("/", async (req: any, res) => {
   const customers = customerIds.length > 0 ? await db.select().from(customersTable).where(inArray(customersTable.id, customerIds)) : [];
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c.firstName || c.phone ? `${c.firstName} ${c.lastName}`.trim() || c.phone : "Customer"]));
 
-  return res.json({ invoices: invoices.map(i => fmt(i, customerMap[i.customerId])), total: Number(total[0].count), page, limit });
+  return res.json({ invoices: invoices.map(i => fmt(i, customerMap[i.customerId] ?? undefined)), total: Number(total[0].count), page, limit });
 });
 
 // Shared handler for GET and POST /invoices/from-appointment/:appointmentId
@@ -254,7 +254,10 @@ router.get("/:id/pdf", async (req: any, res) => {
   const { companyId } = req.user;
   const id = Number(req.params.id);
   const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
-  if (!inv) return res.status(404).json({ error: "NotFound" });
+  if (!inv) {
+    res.status(404).json({ error: "NotFound" });
+    return;
+  }
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, inv.customerId)).limit(1);
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
@@ -296,7 +299,7 @@ router.get("/:id/pdf", async (req: any, res) => {
   const logoMaxW = contentWidth * 0.35;
   if (logoBuffer) {
     try {
-      doc.image(logoBuffer, margin, 28, { fit: [logoMaxW, logoMaxH], align: "left", valign: "center" });
+      doc.image(logoBuffer, margin, 28, { fit: [logoMaxW, logoMaxH], valign: "center" });
     } catch {
       // If pdfkit can't render the logo format, fall back to text
       doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(22).text(companyName, margin, 28, { width: contentWidth * 0.6 });

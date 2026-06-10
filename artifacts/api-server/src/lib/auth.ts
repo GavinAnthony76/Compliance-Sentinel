@@ -2,15 +2,18 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import type { Request, Response, NextFunction } from "express";
 
-const JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET;
-const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET;
+const JWT_SECRET_ENV = process.env.SESSION_SECRET || process.env.JWT_SECRET;
+const ADMIN_JWT_SECRET_ENV = process.env.ADMIN_JWT_SECRET;
 
-if (!JWT_SECRET) {
+if (!JWT_SECRET_ENV) {
   throw new Error("Missing required environment variable: SESSION_SECRET or JWT_SECRET");
 }
-if (!ADMIN_JWT_SECRET) {
+if (!ADMIN_JWT_SECRET_ENV) {
   throw new Error("Missing required environment variable: ADMIN_JWT_SECRET");
 }
+
+const JWT_SECRET: string = JWT_SECRET_ENV;
+const ADMIN_JWT_SECRET: string = ADMIN_JWT_SECRET_ENV;
 
 export interface UserJWTPayload {
   userId: number;
@@ -34,11 +37,11 @@ export function signAdminToken(payload: Omit<AdminJWTPayload, "type">): string {
 }
 
 export function verifyUserToken(token: string): UserJWTPayload {
-  return jwt.verify(token, JWT_SECRET) as UserJWTPayload;
+  return jwt.verify(token, JWT_SECRET) as unknown as UserJWTPayload;
 }
 
 export function verifyAdminToken(token: string): AdminJWTPayload {
-  return jwt.verify(token, ADMIN_JWT_SECRET) as AdminJWTPayload;
+  return jwt.verify(token, ADMIN_JWT_SECRET) as unknown as AdminJWTPayload;
 }
 
 export async function hashPassword(password: string): Promise<string> {

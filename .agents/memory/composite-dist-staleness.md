@@ -19,3 +19,13 @@ server works — because the bundlers resolve via the package `exports` field
 **How to apply:** after editing schema exports (db) or running orval codegen
 (api-client-react), rebuild that library's dist before trusting/relying on a
 consumer typecheck. Don't waste time hunting a phantom export bug.
+
+**Related gotchas (api-server typecheck):**
+- A referenced composite lib whose `dist` was never built surfaces as `TS6305`
+  ("Output file ... has not been built from source file"). Build it with
+  `tsc -b lib/<lib>/tsconfig.json`. `integrations-openai-ai-server` ships no dist
+  by default and had its own latent errors (`response.data` possibly undefined →
+  use `response.data?.[0]`) that block the build.
+- After editing `lib/db` schema, rebuild BOTH `lib/db` dist and re-run the
+  consumer typecheck; a stale db dist makes drizzle column adds invisible
+  (e.g. `Property 'lastLoginAt' does not exist on PgTableWithColumns`).

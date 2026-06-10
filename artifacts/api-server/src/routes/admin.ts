@@ -35,10 +35,11 @@ router.use(async (req: any, res, next) => {
       .where(eq(platformAdminsTable.id, adminId))
       .limit(1);
     if (admin?.mustChangePassword) {
-      return res.status(403).json({
+      res.status(403).json({
         error: "PasswordChangeRequired",
         message: "You must change your password before continuing.",
       });
+      return;
     }
     next();
   } catch (err) {
