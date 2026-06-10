@@ -47,6 +47,17 @@ interface Lead {
   updatedAt: string;
 }
 
+interface TeamMember {
+  id: number;
+  firstName: string;
+  lastName: string;
+  isActive: boolean;
+}
+
+function memberName(m: { firstName: string; lastName: string }) {
+  return `${m.firstName} ${m.lastName}`.trim();
+}
+
 const STAGES: { key: string; label: string; accent: string }[] = [
   { key: 'new', label: 'New', accent: 'border-t-sky-400' },
   { key: 'contacted', label: 'Contacted', accent: 'border-t-indigo-400' },
@@ -70,7 +81,13 @@ function ordering(status: string) {
   return i === -1 ? 0 : i;
 }
 
-function LeadFormModal({ lead, onClose, onSaved }: { lead?: Lead; onClose: () => void; onSaved: () => void }) {
+function LeadFormModal({ lead, teamMembers, isManager, onClose, onSaved }: {
+  lead?: Lead;
+  teamMembers: TeamMember[];
+  isManager: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const isEdit = !!lead?.id;
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -83,6 +100,7 @@ function LeadFormModal({ lead, onClose, onSaved }: { lead?: Lead; onClose: () =>
     source: lead?.source ?? 'manual',
     status: lead?.status ?? 'new',
     estimatedValue: lead?.estimatedValue ?? '',
+    assignedUserId: lead?.assignedUserId != null ? String(lead.assignedUserId) : '',
     notes: lead?.notes ?? '',
   });
 
@@ -107,6 +125,9 @@ function LeadFormModal({ lead, onClose, onSaved }: { lead?: Lead; onClose: () =>
         estimatedValue: form.estimatedValue === '' ? null : form.estimatedValue,
         notes: form.notes.trim() || null,
       };
+      if (isManager) {
+        payload.assignedUserId = form.assignedUserId === '' ? null : Number(form.assignedUserId);
+      }
       if (isEdit) {
         await api(`/leads/${lead!.id}`, { method: 'PUT', body: JSON.stringify(payload) });
         toast({ title: 'Lead updated' });
@@ -175,6 +196,17 @@ function LeadFormModal({ lead, onClose, onSaved }: { lead?: Lead; onClose: () =>
               <Input type="number" step="0.01" value={form.estimatedValue ?? ''} onChange={(e) => set('estimatedValue', e.target.value)} />
             </div>
           </div>
+          {isManager && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">Assigned to</label>
+              <select className={inputCls} value={form.assignedUserId} onChange={(e) => set('assignedUserId', e.target.value)}>
+                <option value="">Unassigned</option>
+                {teamMembers.map((m) => (
+                  <option key={m.id} value={String(m.id)}>{memberName(m)}{m.isActive ? '' : ' (inactive)'}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="text-xs font-medium text-muted-foreground">Notes</label>
             <textarea className={`${inputCls} min-h-[80px]`} value={form.notes} onChange={(e) => set('notes', e.target.value)} />
@@ -189,8 +221,9 @@ function LeadFormModal({ lead, onClose, onSaved }: { lead?: Lead; onClose: () =>
   );
 }
 
-function LeadCard({ lead, onMove, onEdit, onConvert, onEstimate, onDelete, busy, isManager }: {
+function LeadCard({ lead, assignedName, onMove, onEdit, onConvert, onEstimate, onDelete, busy, isManager }: {
   lead: Lead;
+  assignedName: string | null;
   onMove: (lead: Lead, dir: -1 | 1) => void;
   onEdit: (lead: Lead) => void;
   onConvert: (lead: Lead) => void;
@@ -217,7 +250,14 @@ function LeadCard({ lead, onMove, onEdit, onConvert, onEstimate, onDelete, busy,
         {lead.address && <p className="flex items-center gap-1.5 truncate"><MapPin className="w-3 h-3 shrink-0" />{lead.address}</p>}
         {lead.estimatedValue && <p className="flex items-center gap-1.5 font-medium text-foreground"><DollarSign className="w-3 h-3 shrink-0" />{Number(lead.estimatedValue).toLocaleString()}</p>}
       </div>
-      {lead.customerId && <Badge variant="success" className="text-[10px]">Customer linked</Badge>}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {lead.customerId && <Badge variant="success" className="text-[10px]">Customer linked</Badge>}
+        {isManager && (
+          assignedName
+            ? <Badge variant="secondary" className="text-[10px]"><UserPlus className="w-2.5 h-2.5 mr-1" />{assignedName}</Badge>
+            : <Badge variant="outline" className="text-[10px] text-muted-foreground">Unassigned</Badge>
+        )}
+      </div>
       <div className="flex items-center gap-1 pt-1">
         <button disabled={idx === 0 || busy} onClick={() => onMove(lead, -1)} className="p-1 rounded hover:bg-accent disabled:opacity-30" title="Move back">
           <ChevronLeft className="w-4 h-4" />
@@ -253,6 +293,7 @@ function LeadsBoard() {
   const role = (user as any)?.role as string | undefined;
   const isManager = role === 'owner' || role === 'admin';
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -273,6 +314,15 @@ function LeadsBoard() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!isManager) return;
+    api('/team')
+      .then((data) => setTeamMembers(data.members ?? []))
+      .catch(() => setTeamMembers([]));
+  }, [isManager]);
+
+  const memberMap = new Map(teamMembers.map((m) => [m.id, memberName(m)]));
 
   const move = async (lead: Lead, dir: -1 | 1) => {
     const next = STAGES[ordering(lead.status) + dir];
@@ -396,6 +446,7 @@ function LeadsBoard() {
                     <LeadCard
                       key={lead.id}
                       lead={lead}
+                      assignedName={lead.assignedUserId != null ? (memberMap.get(lead.assignedUserId) ?? null) : null}
                       busy={busyId === lead.id}
                       isManager={isManager}
                       onMove={move}
@@ -415,6 +466,8 @@ function LeadsBoard() {
       {showForm && (
         <LeadFormModal
           lead={editing}
+          teamMembers={teamMembers}
+          isManager={isManager}
           onClose={() => setShowForm(false)}
           onSaved={load}
         />
