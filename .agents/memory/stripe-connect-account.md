@@ -27,6 +27,14 @@ If `STRIPE_SECRET_KEY` is a **restricted key** (`rk_live_…`/`rk_test_…`), `c
 
 **How to apply:** use a **standard secret key** (`sk_live_…`/`sk_test_…`, full access) OR edit the restricted key (Dashboard → Developers → API keys → the rk → grant "Connect / Connected accounts: Write" + the account KYC reads). billing.ts now detects this and returns 403 `ConnectPermissionError` with an actionable message instead of a generic 500.
 
+## V1 Express accounts.create: business_profile.name, NOT display_name
+The V1 Express fallback `stripe.accounts.create({ type: "express", ... })` rejects `display_name` with `parameter_unknown`. Use `business_profile: { name: company.name }` instead. `display_name` is a V2-only field.
+
+## Connect platform profile must be completed (loss responsibilities)
+Even with valid key permissions, the FIRST connected-account creation fails with `invalid_request_error`: "Please review the responsibilities of managing losses for connected accounts …/settings/connect/platform-profile". This is a one-time Dashboard step (Settings → Connect → Platform profile), NOT a code bug — no code can bypass it.
+
+**How to apply:** billing.ts catch now tiers errors: 403 `ConnectPermissionError` (restricted-key perms) → 400 `ConnectPlatformProfileIncomplete` (platform-profile/loss msg) → 400 `ConnectError` passthrough of other `invalid_request_error` messages (key/account substrings redacted) → 500 generic. Frontend settings.tsx surfaces `err.message` in a toast.
+
 ## Express onboarding test data
 To get `charges_enabled: true` in test/sandbox mode, the company must complete Express onboarding with:
 - SSN: `000-00-0000`

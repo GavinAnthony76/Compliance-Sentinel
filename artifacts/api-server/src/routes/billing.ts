@@ -493,7 +493,7 @@ router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, 
         const account = await stripe.accounts.create({
           type: "express",
           email: company.email || undefined,
-          display_name: company.name,
+          business_profile: company.name ? { name: company.name } : undefined,
         });
         accountId = account.id;
         await db.update(companiesTable)
@@ -522,6 +522,22 @@ router.post("/connect/onboard", requireRole("owner", "admin"), async (req: any, 
         message:
           "The configured Stripe key is not authorized for Connect. Use a Stripe secret key with Connect enabled (full-access secret key, or a restricted key with 'Connect: write' permission).",
       });
+    }
+    const isPlatformProfileError =
+      typeof err?.message === "string" &&
+      (err.message.toLowerCase().includes("responsibilities of managing losses") ||
+        err.message.toLowerCase().includes("platform-profile") ||
+        err.message.toLowerCase().includes("platform profile"));
+    if (isPlatformProfileError) {
+      return res.status(400).json({
+        error: "ConnectPlatformProfileIncomplete",
+        message:
+          "Stripe Connect isn't fully set up yet. Complete your Connect platform profile in the Stripe Dashboard (Settings → Connect → Platform profile) — including who is responsible for losses on connected accounts — then try again.",
+      });
+    }
+    if (err?.rawType === "invalid_request_error" && typeof err?.message === "string") {
+      const safeMessage = err.message.replace(/\b(rk|sk|pk|acct|rak)_[A-Za-z0-9_]+/g, "[redacted]");
+      return res.status(400).json({ error: "ConnectError", message: safeMessage });
     }
     return res.status(500).json({ error: "ConnectError", message: "Could not create onboarding link" });
   }
