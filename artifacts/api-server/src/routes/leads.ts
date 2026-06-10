@@ -12,6 +12,7 @@ import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { enqueueFollowUps } from "../lib/follow-ups";
+import { canAccessLead, isManagerRole } from "../lib/lead-access";
 
 const LEAD_SOURCES = ["public_booking", "manual", "referral", "website", "phone", "other"] as const;
 const LEAD_STATUSES = ["new", "contacted", "site_visit_scheduled", "estimate_sent", "won", "lost"] as const;
@@ -47,17 +48,13 @@ router.use(requireActiveSubscription);
 router.use(requireRole("owner", "admin"));
 router.use(requireFeature("lead_pipeline"));
 
-function isManager(role: string): boolean {
-  return role === "owner" || role === "admin";
-}
-
 // GET /api/leads — list (staff see only assigned)
 router.get("/", async (req: any, res) => {
   const { companyId, userId, role } = req.user;
   const status = req.query.status as string | undefined;
 
   const conditions = [eq(leadsTable.companyId, companyId)];
-  if (!isManager(role)) conditions.push(eq(leadsTable.assignedUserId, userId));
+  if (!isManagerRole(role)) conditions.push(eq(leadsTable.assignedUserId, userId));
   if (status && (LEAD_STATUSES as readonly string[]).includes(status)) {
     conditions.push(eq(leadsTable.status, status));
   }
@@ -116,7 +113,7 @@ router.get("/:id", async (req: any, res) => {
     .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, companyId)))
     .limit(1);
   if (!lead) return res.status(404).json({ error: "NotFound" });
-  if (!isManager(role) && lead.assignedUserId !== userId) {
+  if (!canAccessLead(lead, { role, userId })) {
     return res.status(403).json({ error: "Forbidden", message: "Lead not assigned to you" });
   }
   return res.json(lead);
@@ -138,7 +135,7 @@ router.put("/:id", async (req: any, res) => {
     .where(and(eq(leadsTable.id, id), eq(leadsTable.companyId, companyId)))
     .limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
-  if (!isManager(role) && existing.assignedUserId !== userId) {
+  if (!canAccessLead(existing, { role, userId })) {
     return res.status(403).json({ error: "Forbidden", message: "Lead not assigned to you" });
   }
 
