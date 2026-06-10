@@ -983,6 +983,7 @@ export function LandingPage() {
       </section>
 
       {/* Testimonials */}
+      {featuredReviews.length > 0 && (
       <section id="testimonials" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
@@ -990,7 +991,7 @@ export function LandingPage() {
             <p className="text-lg text-muted-foreground">See what business owners are saying about GreenSynk.</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
-            {featuredReviews.length > 0 ? featuredReviews.map((rev, idx) => {
+            {featuredReviews.map((rev, idx) => {
               const primary = idx === 1;
               return (
                 <div key={idx} className={primary
@@ -1013,50 +1014,11 @@ export function LandingPage() {
                   </div>
                 </div>
               );
-            }) : (<>
-            <div className="bg-background rounded-3xl p-8 border border-border shadow-sm flex flex-col">
-              <div className="flex gap-1 mb-4">
-                {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
-              </div>
-              <p className="text-muted-foreground leading-relaxed flex-1">"GreenSynk cut my admin time in half. I used to spend Sunday evenings doing invoices — now they go out automatically the moment I mark a job complete. My customers love how professional it looks."</p>
-              <div className="flex items-center gap-3 mt-6 pt-6 border-t border-border">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">TH</div>
-                <div>
-                  <div className="font-semibold text-sm">Travis Hendricks</div>
-                  <div className="text-xs text-muted-foreground">Hendricks Lawn & Landscape · Austin, TX</div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-primary text-primary-foreground rounded-3xl p-8 border border-primary shadow-xl shadow-primary/20 flex flex-col">
-              <div className="flex gap-1 mb-4">
-                {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-white text-white" />)}
-              </div>
-              <p className="text-primary-foreground/90 leading-relaxed flex-1">"We grew from 40 to 110 customers in one season and GreenSynk scaled right with us. The route planning alone saves my crew 45 minutes a day. Worth every penny of the Pro plan."</p>
-              <div className="flex items-center gap-3 mt-6 pt-6 border-t border-primary-foreground/20">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold text-sm shrink-0">MR</div>
-                <div>
-                  <div className="font-semibold text-sm">Maria Reyes</div>
-                  <div className="text-xs text-primary-foreground/70">GreenEdge Services · Phoenix, AZ</div>
-                </div>
-              </div>
-            </div>
-            <div className="bg-background rounded-3xl p-8 border border-border shadow-sm flex flex-col">
-              <div className="flex gap-1 mb-4">
-                {[...Array(5)].map((_, i) => <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />)}
-              </div>
-              <p className="text-muted-foreground leading-relaxed flex-1">"The customer portal is a game changer. My clients can log in, see their upcoming appointments, pay invoices, and accept estimates without ever calling me. I actually get weekends back now."</p>
-              <div className="flex items-center gap-3 mt-6 pt-6 border-t border-border">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm shrink-0">DK</div>
-                <div>
-                  <div className="font-semibold text-sm">Derek Kim</div>
-                  <div className="text-xs text-muted-foreground">Pristine Yards Co. · Nashville, TN</div>
-                </div>
-              </div>
-            </div>
-            </>)}
+            })}
           </div>
         </div>
       </section>
+      )}
 
       {/* Footer */}
       <footer className="bg-foreground text-background pt-16 pb-10">
