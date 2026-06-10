@@ -10,7 +10,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "start:local": "node --env-file=.env --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:permissions": "node tests/lead-ownership.test.mjs && node tests/permissions.e2e.mjs"
+    "test:permissions": "node tests/lead-ownership.test.mjs && node tests/permissions.e2e.mjs && node tests/lead-ownership.e2e.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
