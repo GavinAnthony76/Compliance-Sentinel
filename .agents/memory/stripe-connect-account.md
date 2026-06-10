@@ -20,6 +20,13 @@ Stripe requires Connect to be enabled on the SAME account as the API keys being 
 - Click "Continue setup" → may prompt "Switch to sandbox" — accept it for test mode
 - Connect is now active; `stripe.accounts.create({ type: "express" })` will work
 
+## Restricted keys (rk_) cannot do Connect onboarding
+If `STRIPE_SECRET_KEY` is a **restricted key** (`rk_live_…`/`rk_test_…`), `connect/onboard` (both V2 `accounts.create`/`accountLinks.create` and the V1 Express fallback) fails with `StripePermissionError` 403: missing `rak_connected_account_write`, `rak_accounts_kyc_basic_read`, `rak_accounts_kyc_raw_bank_details_read`.
+
+**Why:** restricted keys only carry the permissions explicitly toggled on them; Connect onboarding needs connected-account write + KYC reads that are off by default.
+
+**How to apply:** use a **standard secret key** (`sk_live_…`/`sk_test_…`, full access) OR edit the restricted key (Dashboard → Developers → API keys → the rk → grant "Connect / Connected accounts: Write" + the account KYC reads). billing.ts now detects this and returns 403 `ConnectPermissionError` with an actionable message instead of a generic 500.
+
 ## Express onboarding test data
 To get `charges_enabled: true` in test/sandbox mode, the company must complete Express onboarding with:
 - SSN: `000-00-0000`
