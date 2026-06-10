@@ -3,7 +3,7 @@ import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsT
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
-import { requireWithinPlanLimit } from "../lib/features";
+import { requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
 import { sendInvoiceEmail, resolveBaseUrl, dispatchPaymentReceiptEmail } from "../lib/notifications";
@@ -47,7 +47,17 @@ async function dispatchInvoiceEmail(invoiceId: number, companyId: number): Promi
     const companyName = company?.name || "Your Service Provider";
     const companySlug = company?.slug || "";
     const baseUrl = resolveBaseUrl();
-    const portalUrl = companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : baseUrl;
+    // Online payment + the customer portal are Growth/Pro features. On Starter the
+    // portal login is a dead end for customers, so only surface "Pay Now" when the
+    // plan includes the portal; otherwise show the company's manual payment instructions.
+    const hasPortal = hasFeature(company?.subscriptionPlan, "customer_portal");
+    const payNowUrl = hasPortal && companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : null;
+    const paymentInstructions: string[] = [];
+    if (company?.paymentInstructions) paymentInstructions.push(company.paymentInstructions);
+    if (company?.checkPayableTo) paymentInstructions.push(`Check payable to: ${company.checkPayableTo}`);
+    if (company?.zelleInfo) paymentInstructions.push(`Zelle: ${company.zelleInfo}`);
+    if (company?.venmoHandle) paymentInstructions.push(`Venmo: ${company.venmoHandle}`);
+    if (company?.cashAppTag) paymentInstructions.push(`Cash App: ${company.cashAppTag}`);
     const customerName = `${customer.firstName} ${customer.lastName}`.trim() || customer.email;
     await sendInvoiceEmail({
       customerEmail: customer.email,
@@ -63,7 +73,8 @@ async function dispatchInvoiceEmail(invoiceId: number, companyId: number): Promi
         lineTotal: Number(li.lineTotal),
       })),
       total: Number(inv.total),
-      portalUrl,
+      payNowUrl,
+      paymentInstructions,
       logoUrl: company?.logoUrl ?? null,
       primaryColor: company?.primaryColor ?? null,
     });

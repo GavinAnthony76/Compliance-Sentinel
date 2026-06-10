@@ -20,6 +20,12 @@ but does nothing" (or vice-versa) bugs:
 page already ignored those fields for Starter, but the Settings → Branding tab had
 NO gate, so Starter users could fill in branding that silently did nothing.
 
+**Also a surface:** transactional EMAIL CTAs. The invoice email's "Pay Now" linked
+to `/portal/{slug}/invoices` unconditionally, but the customer portal + online card
+pay are Growth/Pro only — so Starter customers hit a portal-login dead-end. Customer-
+facing payment links must mirror `hasFeature(plan,'customer_portal')`: only show the
+portal CTA when enabled, else render the company's manual payment instructions.
+
 **How to apply:** When changing a feature's plan tier, update all three. Frontend
 plan checks use `user?.company?.subscriptionPlan` via `useAuthState`; the shared
 helper pattern is `planHasFeature(currentPlan, 'growth'|'pro')` in

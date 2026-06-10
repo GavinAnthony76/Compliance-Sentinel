@@ -11,6 +11,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getListInvoicesQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 import { LineItemsEditor, type LineItem as InvoiceLineItemInput } from '@/components/line-items-editor';
+import { MdyDateInput } from '@/components/mdy-date-input';
 
 function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
@@ -183,7 +184,7 @@ function NewInvoiceModal({ onClose, preselectedApptId }: { onClose: () => void; 
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium">Due Date</label>
-              <Input type="date" className="mt-1" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} />
+              <MdyDateInput className="mt-1" value={form.dueDate} onChange={v => setForm(f => ({ ...f, dueDate: v }))} />
             </div>
             <div>
               <label className="text-sm font-medium">Notes</label>
@@ -335,7 +336,7 @@ function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoi
 
             <div className="grid grid-cols-2 gap-3 text-sm">
               {detail.dueDate && (
-                <div><span className="text-muted-foreground">Due Date: </span>{format(new Date(detail.dueDate), 'MMM d, yyyy')}</div>
+                <div><span className="text-muted-foreground">Due Date: </span>{format(new Date(detail.dueDate), 'M/d/yyyy')}</div>
               )}
               {displayPaymentMethod(detail) && (
                 <div><span className="text-muted-foreground">Payment: </span>{displayPaymentMethod(detail)}</div>
@@ -444,7 +445,7 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: { id: number; invoice
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">Due Date</label>
-                <Input type="date" className="mt-1" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                <MdyDateInput className="mt-1" value={dueDate} onChange={setDueDate} />
               </div>
               <div>
                 <label className="text-sm font-medium">Notes</label>

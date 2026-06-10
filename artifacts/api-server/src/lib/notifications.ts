@@ -155,6 +155,46 @@ export async function sendReviewRequestNotification(opts: {
   }
 }
 
+export async function sendBookingRequestNotification(opts: {
+  companyEmail: string;
+  companyName: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  serviceName?: string | null;
+  address?: string | null;
+  preferredDate?: Date | null;
+  notes?: string | null;
+}): Promise<void> {
+  const dateStr = opts.preferredDate
+    ? new Date(opts.preferredDate).toLocaleDateString("en-US", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric",
+      })
+    : "Not specified (customer is flexible)";
+
+  const body = [
+    `You have a new booking request from ${opts.customerName}.`,
+    ``,
+    `Service: ${opts.serviceName || "Not specified"}`,
+    `Preferred date: ${dateStr}`,
+    ...(opts.address ? [`Address: ${opts.address}`] : []),
+    ``,
+    `Customer contact:`,
+    ...(opts.customerEmail ? [`  Email: ${opts.customerEmail}`] : []),
+    ...(opts.customerPhone ? [`  Phone: ${opts.customerPhone}`] : []),
+    ...(opts.notes ? [``, `Notes: ${opts.notes}`] : []),
+    ``,
+    `This request is now in your dashboard under Appointments (status: pending). Confirm it to notify the customer.`,
+  ].join("\n");
+
+  await sendEmail({
+    to: opts.companyEmail,
+    subject: `New booking request from ${opts.customerName}`,
+    body,
+    replyTo: opts.customerEmail || undefined,
+  });
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -171,7 +211,8 @@ function buildInvoiceEmailHtml(opts: {
   dueDateStr: string;
   lineItems: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
   total: number;
-  portalUrl: string;
+  payNowUrl?: string | null;
+  paymentInstructions?: string[];
   logoUrl?: string | null;
   primaryColor?: string | null;
 }): string {
@@ -179,7 +220,8 @@ function buildInvoiceEmailHtml(opts: {
   const companyName = escapeHtml(opts.companyName);
   const invoiceNumber = escapeHtml(opts.invoiceNumber);
   const customerName = escapeHtml(opts.customerName);
-  const portalUrl = escapeHtml(opts.portalUrl);
+  const payNowUrl = opts.payNowUrl ? escapeHtml(opts.payNowUrl) : null;
+  const paymentInstructions = (opts.paymentInstructions ?? []).map(escapeHtml);
 
   const header = opts.logoUrl
     ? `<img src="${escapeHtml(opts.logoUrl)}" alt="${companyName}" style="max-height:56px;max-width:200px;display:block;" />`
@@ -241,14 +283,23 @@ function buildInvoiceEmailHtml(opts: {
                 </tr>
               </tfoot>
             </table>
-            <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            ${payNowUrl
+              ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
               <tr>
                 <td style="border-radius:6px;background-color:${accent};">
-                  <a href="${portalUrl}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">Pay Now</a>
+                  <a href="${payNowUrl}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">Pay Now</a>
                 </td>
               </tr>
             </table>
-            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">If the button doesn't work, copy and paste this link into your browser:<br /><a href="${portalUrl}" style="color:${accent};word-break:break-all;">${portalUrl}</a></p>
+            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">If the button doesn't work, copy and paste this link into your browser:<br /><a href="${payNowUrl}" style="color:${accent};word-break:break-all;">${payNowUrl}</a></p>`
+              : paymentInstructions.length
+              ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">How to Pay</p>
+                ${paymentInstructions.map(p => `<p style="margin:0 0 4px;font-size:14px;color:#374151;line-height:1.5;">${p}</p>`).join("")}
+              </td></tr>
+            </table>`
+              : `<p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">Please reply to this email to arrange payment.</p>`}
           </td>
         </tr>
         <tr>
@@ -273,7 +324,8 @@ export async function sendInvoiceEmail(opts: {
   dueDate?: Date | null;
   lineItems: Array<{ description: string; quantity: number; unitPrice: number; lineTotal: number }>;
   total: number;
-  portalUrl: string;
+  payNowUrl?: string | null;
+  paymentInstructions?: string[];
   logoUrl?: string | null;
   primaryColor?: string | null;
 }): Promise<void> {
@@ -297,9 +349,11 @@ export async function sendInvoiceEmail(opts: {
     ``,
     `Total Due: $${opts.total.toFixed(2)}`,
     ``,
-    `View and pay your invoice online:`,
-    opts.portalUrl,
-    ``,
+    ...(opts.payNowUrl
+      ? [`View and pay your invoice online:`, opts.payNowUrl, ``]
+      : (opts.paymentInstructions && opts.paymentInstructions.length)
+        ? [`How to pay:`, ...opts.paymentInstructions, ``]
+        : [`Please reply to this email to arrange payment.`, ``]),
     `Thank you for your business,`,
     `${opts.companyName}`,
   ].join("\n");
@@ -311,7 +365,8 @@ export async function sendInvoiceEmail(opts: {
     dueDateStr,
     lineItems: opts.lineItems,
     total: opts.total,
-    portalUrl: opts.portalUrl,
+    payNowUrl: opts.payNowUrl,
+    paymentInstructions: opts.paymentInstructions,
     logoUrl: opts.logoUrl,
     primaryColor: opts.primaryColor,
   });

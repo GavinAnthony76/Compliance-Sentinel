@@ -4,6 +4,8 @@ import { eq, and, isNotNull } from "drizzle-orm";
 import { logActivity } from "../lib/activity";
 import { hasFeature, checkPlanLimit } from "../lib/features";
 import { enqueueFollowUps } from "../lib/follow-ups";
+import { sendBookingRequestNotification } from "../lib/notifications";
+import { logger } from "../lib/logger";
 import { z } from "zod";
 
 const router = Router();
@@ -134,6 +136,33 @@ router.post("/book/:slug/submit", async (req, res) => {
     entityId: appointment.id,
     metadata: { source: "booking_page", slug },
   });
+
+  // Notify the business that a new booking request came in (fire-and-forget).
+  if (company.email) {
+    const companyEmail = company.email;
+    void (async () => {
+      try {
+        let serviceName: string | null = null;
+        if (data.serviceId) {
+          const [svc] = await db.select({ name: servicesTable.name }).from(servicesTable).where(and(eq(servicesTable.id, data.serviceId), eq(servicesTable.companyId, company.id))).limit(1);
+          serviceName = svc?.name ?? null;
+        }
+        await sendBookingRequestNotification({
+          companyEmail,
+          companyName: company.name,
+          customerName: `${data.firstName} ${data.lastName}`.trim(),
+          customerEmail: data.email ?? null,
+          customerPhone: data.phone ?? null,
+          serviceName,
+          address: [data.addressLine1, data.city, data.state, data.zip].filter(Boolean).join(", ") || null,
+          preferredDate: data.preferredDate ? scheduledStart : null,
+          notes: data.notes ?? null,
+        });
+      } catch (err) {
+        logger.error({ err, companyId: company.id }, "Failed to send booking request notification");
+      }
+    })();
+  }
 
   // Create a pipeline lead for companies that have the lead pipeline feature.
   if (hasFeature(company.subscriptionPlan, "lead_pipeline")) {
