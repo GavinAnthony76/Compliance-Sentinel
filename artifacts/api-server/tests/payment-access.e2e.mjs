@@ -131,6 +131,17 @@ async function provisionPortalCustomer(ownerToken, customerId) {
   return { portalToken: setPw.json.token, slug };
 }
 
+async function markInvoicePaid(ownerToken, invoiceId) {
+  const r = await req("POST", `/invoices/${invoiceId}/mark-paid`, {
+    token: ownerToken,
+    body: { paymentMethod: "cash" },
+  });
+  if (r.status !== 200 || r.json?.status !== "paid") {
+    console.error("Setup failed: could not mark invoice paid", r.status, r.json);
+    process.exit(1);
+  }
+}
+
 async function createInvoice(ownerToken, customerId) {
   const created = await req("POST", "/invoices", {
     token: ownerToken,
@@ -310,6 +321,39 @@ async function main() {
     const portalB1 = await provisionPortalCustomer(companyB.ownerToken, custB1.id);
     const r = await req("POST", `/portal/invoices/${invoiceA1}/pay`, { token: portalB1.portalToken });
     check("portal pay across companies -> 404", r.status === 404, `got ${r.status}`);
+  }
+
+  // ==========================================================================
+  // 4. Double-charge protection — a paid invoice can never be charged again.
+  //    Both the autopay charge handler and the portal pay handler must
+  //    short-circuit with 400 AlreadyPaid once an invoice is settled, so a
+  //    regression can't re-run a Stripe charge on an already-paid invoice.
+  // ==========================================================================
+  console.log("\nDouble-charge protection — a paid invoice must return 400 AlreadyPaid:");
+
+  {
+    // Reuse Pro company A + its portal customer A1, then create a fresh invoice,
+    // mark it paid out-of-band (cash), and confirm both charging surfaces refuse.
+    const paidInvoice = await createInvoice(companyA.ownerToken, custA1.id);
+    await markInvoicePaid(companyA.ownerToken, paidInvoice);
+
+    const autopay = await req("POST", `/autopay/invoices/${paidInvoice}/charge`, {
+      token: companyA.ownerToken,
+    });
+    check(
+      "autopay charge a paid invoice -> 400 AlreadyPaid",
+      autopay.status === 400 && autopay.json?.error === "AlreadyPaid",
+      `got ${autopay.status} ${JSON.stringify(autopay.json)}`,
+    );
+
+    const portalPay = await req("POST", `/portal/invoices/${paidInvoice}/pay`, {
+      token: portalA1.portalToken,
+    });
+    check(
+      "portal pay a paid invoice -> 400 AlreadyPaid",
+      portalPay.status === 400 && portalPay.json?.error === "AlreadyPaid",
+      `got ${portalPay.status} ${JSON.stringify(portalPay.json)}`,
+    );
   }
 
   // --- Summary --------------------------------------------------------------
