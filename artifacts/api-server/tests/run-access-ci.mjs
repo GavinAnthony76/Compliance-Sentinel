@@ -15,6 +15,7 @@
  *        - tests/property-service-access.e2e.mjs      (properties + services access)
  *        - tests/estimate-recurring-plan-access.e2e.mjs (estimates + recurring plans access)
  *        - tests/shared-screen-access.e2e.mjs         (automations, review-requests, reviews, communications, routes, appointment-photos access)
+ *        - tests/manager-screen-access.e2e.mjs        (team, settings, activity, dashboard, reporting, admin access)
  *        - tests/portal-auth.e2e.mjs                  (customer portal auth)
  *        - tests/payment-access.e2e.mjs               (autopay + portal payment guards)
  *   5. Always tear the server down.
@@ -125,6 +126,7 @@ async function main() {
     "tests/property-service-access.e2e.mjs",
     "tests/estimate-recurring-plan-access.e2e.mjs",
     "tests/shared-screen-access.e2e.mjs",
+    "tests/manager-screen-access.e2e.mjs",
     "tests/portal-auth.e2e.mjs",
     "tests/payment-access.e2e.mjs",
   ];
