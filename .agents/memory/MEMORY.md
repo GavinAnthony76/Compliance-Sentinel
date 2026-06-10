@@ -11,4 +11,5 @@
 - [Appointment lifecycle notifications](appointment-lifecycle-notifications.md) — status emails must be wired in BOTH PUT /:id AND dedicated endpoints (/complete); automations aren't baseline; Twilio creds-set-but-pkg-absent breaks all SMS; verify email via logs not HTTP 200.
 - [Plan feature surfaces sync](plan-feature-surfaces.md) — a feature's tier lives in 3 unlinked places (features.ts gating, DB plan catalog display, in-app feature UI); change all together or you get "advertised but inert" bugs.
 - [TanStack reset bypasses enabled](tanstack-reset-enabled.md) — resetQueries/refetch force-fetch even with enabled:false; in a 401 onError handler that loops forever — use setQueryData(key,null) to clear cache instead.
+- [RBAC dual-surface](rbac-dual-surface.md) — managerOnly nav flag is cosmetic; matching backend route MUST have requireRole or staff are UI-blocked but API-open; sidebar must show user not company name.
 - [Tenant URL SSRF in PDFs](tenant-url-ssrf.md) — server-side fetch of tenant-supplied URLs (company.logoUrl in PDF gen) is an SSRF vector; route through fetchImageBufferSafe (https-only, block private IPs, no redirects).

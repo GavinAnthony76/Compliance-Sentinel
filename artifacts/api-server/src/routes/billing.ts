@@ -248,13 +248,13 @@ router.get("/plans", async (_req, res) => {
   });
 });
 
-router.get("/usage", async (req: any, res) => {
+router.get("/usage", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId } = req.user;
   const summary = await getPlanUsageSummary(companyId);
   return res.json(summary);
 });
 
-router.get("/status", async (req: any, res) => {
+router.get("/status", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound" });
@@ -359,7 +359,7 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
 
 // GET /billing/connect/status
 // Uses the V2 accounts API to get live onboarding + capability status.
-router.get("/connect/status", async (req: any, res) => {
+router.get("/connect/status", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId } = req.user;
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound" });

@@ -187,6 +187,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const isManager = role === 'owner' || role === 'admin';
   const { unread, setUnread } = useActivityUnread();
 
+  const displayName =
+    [(user as any)?.firstName, (user as any)?.lastName].filter(Boolean).join(' ') ||
+    (user as any)?.email ||
+    'User';
+  const initials =
+    displayName
+      .split(' ')
+      .map((s: string) => s[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'U';
+  const roleLabel = role === 'owner' ? 'Owner' : role === 'admin' ? 'Admin' : role === 'staff' ? 'Staff' : role;
+
   const allNavItems: { href: string; icon: React.ElementType; label: string; requiredPlan?: 'growth' | 'pro' | null; managerOnly?: boolean }[] = [
     { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/calendar',     icon: CalendarDays,    label: 'Calendar' },
@@ -233,13 +247,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         <div className="px-4 py-2">
           <div className="p-4 rounded-xl bg-accent border border-primary/10 mb-4">
-            <p className="text-sm font-semibold text-foreground truncate">{user?.company?.name || 'My Company'}</p>
-            <div className="flex items-center justify-between mt-1">
+            <p className="text-[11px] font-medium text-muted-foreground truncate">{user?.company?.name || 'My Company'}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <div className="w-8 h-8 shrink-0 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold">
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{displayName}</p>
+                {roleLabel && <p className="text-[11px] text-muted-foreground leading-tight">{roleLabel}</p>}
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-2.5">
               <p className="text-xs text-muted-foreground capitalize flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
                 {plan || 'Free'} Plan
               </p>
-              <Link href="/billing" className="text-[10px] font-semibold text-primary hover:underline">{plan === 'pro' ? 'Manage plan' : 'Upgrade'}</Link>
+              {isManager && (
+                <Link href="/billing" className="text-[10px] font-semibold text-primary hover:underline">{plan === 'pro' ? 'Manage plan' : 'Upgrade'}</Link>
+              )}
             </div>
           </div>
         </div>

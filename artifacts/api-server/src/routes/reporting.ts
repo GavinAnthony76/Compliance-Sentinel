@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { db, appointmentsTable, invoicesTable, customersTable, recurringPlansTable, servicesTable, usersTable, companiesTable } from "@workspace/db";
 import { eq, sql, and, gte, desc } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { requireFeature, hasFeature } from "../lib/features";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireRole("owner", "admin"));
 // Base reporting requires Growth's "growth_analytics"; deeper breakdowns below require Pro's "advanced_analytics"
 router.use(requireFeature("growth_analytics"));
 

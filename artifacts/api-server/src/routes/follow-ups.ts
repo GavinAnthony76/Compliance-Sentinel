@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { db, followUpCampaignsTable, followUpLogsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -12,6 +12,7 @@ const CHANNELS = ["email", "sms"] as const;
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireRole("owner", "admin"));
 router.use(requireActiveSubscription);
 router.use(requireFeature("follow_up_campaigns"));
 
