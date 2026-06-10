@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuthState } from '@/hooks/use-auth-state';
 import {
   Plus, X, Phone, Mail, MapPin, DollarSign, UserPlus, FileText,
-  Trash2, ChevronLeft, ChevronRight, Pencil, Inbox,
+  Trash2, ChevronLeft, ChevronRight, Pencil, Inbox, Search,
 } from 'lucide-react';
 
 const TOKEN = () => localStorage.getItem('greensync_token');
@@ -301,6 +301,7 @@ function LeadsBoard() {
   const [editing, setEditing] = useState<Lead | undefined>(undefined);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [assigneeFilter, setAssigneeFilter] = useState<'all' | 'unassigned' | number>('all');
+  const [search, setSearch] = useState('');
 
   const filterStorageKey = userId != null ? `greensync_lead_assignee_filter_${userId}` : null;
   const filterLoadedRef = useRef(false);
@@ -414,7 +415,21 @@ function LeadsBoard() {
     return l.assignedUserId === assigneeFilter;
   };
 
-  const visibleLeads = leads.filter(matchesFilter);
+  const searchTerm = search.trim().toLowerCase();
+  const searchActive = searchTerm !== '';
+  const matchesSearch = (l: Lead) => {
+    if (!searchActive) return true;
+    const haystack = [
+      `${l.firstName} ${l.lastName}`,
+      l.email ?? '',
+      l.phone ?? '',
+    ]
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(searchTerm);
+  };
+
+  const visibleLeads = leads.filter((l) => matchesFilter(l) && matchesSearch(l));
 
   const totalValue = visibleLeads
     .filter((l) => l.status !== 'lost')
@@ -423,13 +438,18 @@ function LeadsBoard() {
   const unassignedCount = leads.filter((l) => l.assignedUserId == null).length;
 
   const filterActive = isManager && assigneeFilter !== 'all';
-  const filterEmpty = filterActive && leads.length > 0 && visibleLeads.length === 0;
+  const noMatches = (filterActive || searchActive) && leads.length > 0 && visibleLeads.length === 0;
   const filterName =
     assigneeFilter === 'unassigned'
       ? 'Unassigned'
       : typeof assigneeFilter === 'number'
         ? (memberMap.get(assigneeFilter) ?? 'this team member')
         : '';
+
+  const clearAll = () => {
+    setSearch('');
+    if (filterActive) setAssigneeFilter('all');
+  };
 
   return (
     <div className="space-y-6">
@@ -448,6 +468,28 @@ function LeadsBoard() {
           </Button>
         )}
       </div>
+
+      {leads.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search leads by name, email, or phone…"
+            className="pl-9 pr-9"
+          />
+          {searchActive && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              title="Clear search"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      )}
 
       {isManager && teamMembers.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -507,15 +549,23 @@ function LeadsBoard() {
             </Button>
           )}
         </Card>
-      ) : filterEmpty ? (
+      ) : noMatches ? (
         <Card className="p-12 text-center">
           <Inbox className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-          <h3 className="font-semibold">No leads assigned to {filterName}</h3>
+          <h3 className="font-semibold">
+            {searchActive
+              ? <>No leads match “{search.trim()}”</>
+              : <>No leads assigned to {filterName}</>}
+          </h3>
           <p className="text-sm text-muted-foreground mt-1 mb-4">
-            The filter is active — no leads match this assignee right now.
+            {searchActive && filterActive
+              ? <>No leads match your search for {filterName}. Try a different name or clear the filters.</>
+              : searchActive
+                ? 'Try a different name, email, or phone number.'
+                : 'The filter is active — no leads match this assignee right now.'}
           </p>
-          <Button variant="outline" className="gap-2" onClick={() => setAssigneeFilter('all')}>
-            <X className="w-4 h-4" /> Clear filter
+          <Button variant="outline" className="gap-2" onClick={clearAll}>
+            <X className="w-4 h-4" /> {searchActive && filterActive ? 'Clear search & filter' : searchActive ? 'Clear search' : 'Clear filter'}
           </Button>
         </Card>
       ) : (
