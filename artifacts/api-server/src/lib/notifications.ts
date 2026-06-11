@@ -777,23 +777,60 @@ export async function dispatchOwnerPaymentNotification(invoiceId: number, compan
     const paymentDate = inv.paidAt ? new Date(inv.paidAt) : new Date();
     const paymentDateStr = paymentDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
     const baseUrl = resolveBaseUrl();
+    const companyName = company.name || "Your Business";
+    const amountStr = `$${Number(inv.total).toFixed(2)}`;
+    const dashboardUrl = `${baseUrl}/invoices`;
+
+    const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Good news — you've been paid!</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">${escapeHtml(customerName)} has paid invoice <strong>${escapeHtml(inv.invoiceNumber)}</strong>.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Amount:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(amountStr)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Payment date:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(paymentDateStr)}</td>
+                  </tr>
+                  ${inv.paymentMethod ? `<tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Method:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(inv.paymentMethod)}</td>
+                  </tr>` : ""}
+                </table>
+              </td></tr>
+            </table>`;
+
+    const html = buildBrandedEmailHtml({
+      title: `Payment received — invoice ${inv.invoiceNumber}`,
+      companyName,
+      bodyHtml,
+      cta: { label: "View in Dashboard", url: dashboardUrl },
+      footerHtml: `Thank you,<br /><strong>${escapeHtml(companyName)}</strong>`,
+      logoUrl: company.logoUrl,
+      primaryColor: company.primaryColor,
+    });
+
     await sendEmail({
       to: company.email,
-      subject: `Payment received: ${customerName} paid invoice ${inv.invoiceNumber} — $${Number(inv.total).toFixed(2)}`,
+      subject: `Payment received: ${customerName} paid invoice ${inv.invoiceNumber} — ${amountStr}`,
       body: [
         `Good news — you've been paid!`,
         ``,
         `${customerName} has paid invoice ${inv.invoiceNumber}.`,
         ``,
-        `Amount: $${Number(inv.total).toFixed(2)}`,
+        `Amount: ${amountStr}`,
         `Payment date: ${paymentDateStr}`,
         ...(inv.paymentMethod ? [`Method: ${inv.paymentMethod}`] : []),
         ``,
         `View it in your dashboard:`,
-        `${baseUrl}/invoices`,
+        dashboardUrl,
         ``,
         `— GreenSynk`,
       ].join("\n"),
+      html,
     });
   } catch (err) {
     logger.error({ err, invoiceId, companyId }, "Failed to dispatch owner payment notification");
@@ -869,6 +906,28 @@ export async function sendWelcomeEmail(opts: {
   companyName: string;
   loginUrl: string;
 }): Promise<void> {
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Welcome to GreenSynk! Your company <strong>${escapeHtml(opts.companyName)}</strong> is all set up and your 14-day free trial has started.</p>
+            <p style="margin:0 0 12px;font-size:15px;color:#374151;line-height:1.5;">Here are a few things you can do right away:</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr><td style="font-size:14px;color:#374151;padding:2px 0;line-height:1.5;">• Add your customers and properties</td></tr>
+                  <tr><td style="font-size:14px;color:#374151;padding:2px 0;line-height:1.5;">• Schedule appointments and dispatch your crew</td></tr>
+                  <tr><td style="font-size:14px;color:#374151;padding:2px 0;line-height:1.5;">• Send estimates and invoices, and get paid online</td></tr>
+                </table>
+              </td></tr>
+            </table>`;
+
+  const html = buildBrandedEmailHtml({
+    title: `Welcome to GreenSynk, ${opts.firstName}!`,
+    companyName: "GreenSynk",
+    bodyHtml,
+    cta: { label: "Log in to GreenSynk", url: opts.loginUrl },
+    footerHtml: `If you have any questions, just reply to this email — we're happy to help.<br /><br />Welcome aboard,<br /><strong>The GreenSynk Team</strong>`,
+  });
+
   await sendEmail({
     to: opts.to,
     subject: `Welcome to GreenSynk, ${opts.firstName}!`,
@@ -890,6 +949,7 @@ export async function sendWelcomeEmail(opts: {
       `Welcome aboard,`,
       `The GreenSynk Team`,
     ].join("\n"),
+    html,
   });
 }
 
