@@ -8,6 +8,7 @@ import { getPlanUsageSummary, type Plan } from "../lib/features";
 import { isEmailConfigured } from "../lib/resend";
 import { sendAdminDeactivationEmail, sendAdminReactivationEmail, resolveBaseUrl } from "../lib/notifications";
 import { getCatalog } from "../lib/plan-catalog";
+import { deactivateStaleAdmins } from "../lib/stale-admins";
 import { z } from "zod";
 
 // MRR-per-plan (in cents) and labels are derived from the DB-backed plan
@@ -669,41 +670,16 @@ router.put("/admins/:id", async (req: any, res) => {
   return res.json({ id: updated.id, email: updated.email, firstName: updated.firstName, lastName: updated.lastName, role: updated.role, isActive: updated.isActive });
 });
 
-// Bulk-deactivate every admin that has gone dormant (no sign-in for STALE_DAYS, or
-// never signed in). The acting admin is always excluded so they can't lock themselves out.
-const STALE_ADMIN_DAYS = 90;
+// Bulk-deactivate every admin that has gone dormant (no sign-in for STALE_ADMIN_DAYS,
+// or never signed in). The acting admin is always excluded so they can't lock
+// themselves out. Shares its dormancy logic with the recurring background sweep.
 router.post("/admins/deactivate-stale", async (req: any, res) => {
-  const cutoff = new Date(Date.now() - STALE_ADMIN_DAYS * 24 * 60 * 60 * 1000);
-  const stale = await db.update(platformAdminsTable)
-    .set({ isActive: false, updatedAt: new Date() })
-    .where(and(
-      eq(platformAdminsTable.isActive, true),
-      sql`${platformAdminsTable.id} <> ${req.admin.adminId}`,
-      or(
-        sql`${platformAdminsTable.lastLoginAt} is null`,
-        sql`${platformAdminsTable.lastLoginAt} < ${cutoff}`,
-      ),
-    ))
-    .returning({ id: platformAdminsTable.id, email: platformAdminsTable.email, firstName: platformAdminsTable.firstName });
-  const deactivatedIds = stale.map(s => s.id);
-  if (deactivatedIds.length > 0) {
-    await logActivity({ adminId: req.admin.adminId, action: "admin.admins_bulk_deactivated", entityType: "admin", metadata: { count: deactivatedIds.length, ids: deactivatedIds, thresholdDays: STALE_ADMIN_DAYS } });
-
-    // Let each newly deactivated admin know their access was disabled for
-    // inactivity. Best-effort and isolated so one failure can't sink the rest.
-    const supportEmail = resolveAdminSupportEmail();
-    await Promise.allSettled(
-      stale
-        .filter(a => a.email)
-        .map(a => sendAdminDeactivationEmail({
-          to: a.email,
-          firstName: a.firstName,
-          reason: "inactivity",
-          supportEmail,
-        })),
-    );
-  }
-  return res.json({ success: true, deactivatedCount: deactivatedIds.length, deactivatedIds });
+  const { deactivatedCount, deactivatedIds } = await deactivateStaleAdmins({
+    excludeAdminId: req.admin.adminId,
+    actorAdminId: req.admin.adminId,
+    trigger: "manual",
+  });
+  return res.json({ success: true, deactivatedCount, deactivatedIds });
 });
 
 router.delete("/admins/:id", async (req: any, res) => {
