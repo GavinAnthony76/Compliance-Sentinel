@@ -90,6 +90,9 @@ export function AdminActivityPage() {
                     <tr key={log.id} className="hover:bg-slate-800/50 transition-colors">
                       <td className="p-4">
                         <span className={`px-2 py-0.5 rounded-md text-xs font-mono ${actionClass(log.action)}`}>{log.action}</span>
+                        {log.action === 'admin.admin_deactivated' && log.metadataJson?.note && (
+                          <p className="mt-1.5 text-xs text-slate-400 italic max-w-xs">“{log.metadataJson.note}”</p>
+                        )}
                       </td>
                       <td className="p-4 text-sm text-slate-300">{log.companyName || '—'}</td>
                       <td className="p-4 text-sm text-slate-300">{log.userName || (log.adminId ? 'Admin' : '—')}</td>
