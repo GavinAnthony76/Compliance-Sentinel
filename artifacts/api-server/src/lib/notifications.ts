@@ -800,6 +800,69 @@ export async function dispatchOwnerPaymentNotification(invoiceId: number, compan
   }
 }
 
+// Owner-facing alert that Stripe flipped the company's subscription billing
+// status. Sent only on a genuine flip (the caller reuses buildStatusFlipLog's
+// change-guard, so Stripe retries/replays of the same invoice event don't spam
+// the owner). Two transitions matter: any -> past_due (a failed payment, the
+// account is degrading) and past_due -> active (the payment recovered). Other
+// flips (e.g. trialing -> active) are silent.
+export async function dispatchBillingStatusEmail(
+  companyId: number,
+  previousStatus: string | null,
+  nextStatus: string,
+): Promise<void> {
+  try {
+    const isFailure = nextStatus === "past_due";
+    const isRecovery = nextStatus === "active" && previousStatus === "past_due";
+    if (!isFailure && !isRecovery) return;
+
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    if (!company?.email) return;
+    const baseUrl = resolveBaseUrl();
+    const billingUrl = `${baseUrl}/billing`;
+
+    if (isFailure) {
+      await sendEmail({
+        to: company.email,
+        subject: `Action needed: your GreenSynk payment failed`,
+        body: [
+          `Hi ${company.name || "there"},`,
+          ``,
+          `We weren't able to process the latest payment for your GreenSynk subscription, so your account has been marked past due.`,
+          ``,
+          `To avoid any interruption to your service, please update your payment method or settle the outstanding balance as soon as you can:`,
+          billingUrl,
+          ``,
+          `If you've already updated your billing details, you can safely ignore this message — Stripe will retry the charge automatically.`,
+          ``,
+          `Need a hand? Just reply to this email.`,
+          ``,
+          `— GreenSynk`,
+        ].join("\n"),
+      });
+    } else {
+      await sendEmail({
+        to: company.email,
+        subject: `You're all set — your GreenSynk subscription is active again`,
+        body: [
+          `Hi ${company.name || "there"},`,
+          ``,
+          `Good news — your latest payment went through and your GreenSynk subscription is active again. There's nothing more you need to do.`,
+          ``,
+          `View your billing details any time:`,
+          billingUrl,
+          ``,
+          `Thanks for being with GreenSynk!`,
+          ``,
+          `— GreenSynk`,
+        ].join("\n"),
+      });
+    }
+  } catch (err) {
+    logger.error({ err, companyId, previousStatus, nextStatus }, "Failed to dispatch billing status email");
+  }
+}
+
 export async function sendWelcomeEmail(opts: {
   to: string;
   firstName: string;

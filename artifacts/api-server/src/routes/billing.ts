@@ -27,8 +27,15 @@ async function logBillingStatusFlip(subscriptionId: string, nextStatus: string):
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.stripeSubscriptionId, subscriptionId)).limit(1);
     if (!company) return;
     const log = buildStatusFlipLog({ company, nextStatus });
+    // A non-null log means buildStatusFlipLog's change-guard confirmed this is a
+    // genuine flip (not a Stripe retry/replay of a status we already have), so it
+    // is also the right gate for proactively emailing the owner — that way the
+    // alert fires once per real flip and never on duplicate webhook deliveries.
     if (!log) return;
     await logActivity(log);
+    const previousStatus = company.subscriptionStatus;
+    const { dispatchBillingStatusEmail } = await import("../lib/notifications");
+    dispatchBillingStatusEmail(company.id, previousStatus, nextStatus);
   } catch {
     // Activity logging must never break webhook processing
   }
