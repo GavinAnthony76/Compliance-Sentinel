@@ -89,3 +89,4 @@ STRIPE_GROWTH_PRICE_ID = "price_1Tg8lIJc1EWYOrCtRHwWPFML"
 STRIPE_PRO_PRICE_ID = "price_1Tg8lIJc1EWYOrCtO98FXhMF"
 STRIPE_V2_WEBHOOK_SECRET = ""  # ROTATED: secret was exposed in git — set a new value from the Stripe Dashboard → Developers → Webhooks
 APP_BASE_URL = "https://greensynk.com"
+FRONTEND_URL = "https://greensynk.com"
