@@ -470,7 +470,8 @@ export function InvoicesPage() {
   const [editingDraft, setEditingDraft] = useState<{ id: number; invoiceNumber: string } | null>(null);
   const [viewingInvoice, setViewingInvoice] = useState<{ id: number; invoiceNumber: string; status: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
-  const { data, isLoading } = useListInvoices({ status: statusFilter || undefined, page: 1, limit: 50 } as Parameters<typeof useListInvoices>[0]);
+  const [methodFilter, setMethodFilter] = useState('');
+  const { data, isLoading } = useListInvoices({ status: statusFilter || undefined, paymentMethod: methodFilter || undefined, page: 1, limit: 50 } as Parameters<typeof useListInvoices>[0]);
   const { toast } = useToast();
   const qc = useQueryClient();
   const sendMut = useSendInvoice();
@@ -527,7 +528,13 @@ export function InvoicesPage() {
   };
 
   const totalUnpaid = data?.invoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + Number(i.total), 0) ?? 0;
-  const totalPaid = data?.invoices.filter(i => i.status === 'paid').reduce((sum, i) => sum + Number(i.total), 0) ?? 0;
+  const paidInvoices = data?.invoices.filter(i => i.status === 'paid') ?? [];
+  const totalPaid = paidInvoices.reduce((sum, i) => sum + Number(i.total), 0);
+  // "Online" = paid via Stripe card; everything else recorded manually is "offline".
+  const isOnlinePayment = (i: typeof paidInvoices[number]) =>
+    i.paymentMethod === 'card' || (!i.paymentMethod && !!i.stripePaymentIntentId);
+  const paidOnline = paidInvoices.filter(isOnlinePayment).reduce((sum, i) => sum + Number(i.total), 0);
+  const paidOffline = totalPaid - paidOnline;
 
   return (
     <AppLayout>
@@ -556,7 +563,7 @@ export function InvoicesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <Card className="p-4 border-border/50">
           <p className="text-sm text-muted-foreground">Outstanding</p>
           <p className="text-2xl font-bold text-orange-600">${totalUnpaid.toFixed(2)}</p>
@@ -565,15 +572,36 @@ export function InvoicesPage() {
           <p className="text-sm text-muted-foreground">Collected</p>
           <p className="text-2xl font-bold text-green-600">${totalPaid.toFixed(2)}</p>
         </Card>
+        <Card className="p-4 border-border/50">
+          <p className="text-sm text-muted-foreground">Paid online</p>
+          <p className="text-2xl font-bold text-emerald-600">${paidOnline.toFixed(2)}</p>
+        </Card>
+        <Card className="p-4 border-border/50">
+          <p className="text-sm text-muted-foreground">Paid offline</p>
+          <p className="text-2xl font-bold text-teal-600">${paidOffline.toFixed(2)}</p>
+        </Card>
       </div>
 
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {['', 'draft', 'sent', 'paid', 'overdue', 'cancelled'].map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${statusFilter === s ? 'bg-primary text-primary-foreground shadow-md' : 'bg-card border border-border hover:border-primary/50 text-muted-foreground'}`}>
-            {s ? s.charAt(0).toUpperCase() + s.slice(1) : 'All'}
-          </button>
-        ))}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <div className="flex gap-2 flex-wrap">
+          {['', 'draft', 'sent', 'paid', 'overdue', 'cancelled'].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${statusFilter === s ? 'bg-primary text-primary-foreground shadow-md' : 'bg-card border border-border hover:border-primary/50 text-muted-foreground'}`}>
+              {s ? s.charAt(0).toUpperCase() + s.slice(1) : 'All'}
+            </button>
+          ))}
+        </div>
+        <div className="sm:ml-auto">
+          <select
+            value={methodFilter}
+            onChange={e => setMethodFilter(e.target.value)}
+            className="h-10 px-3 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground hover:border-primary/50 transition-all"
+            aria-label="Filter by payment method"
+          >
+            <option value="">All payment methods</option>
+            {Object.entries(PAYMENT_METHOD_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
       </div>
 
       {isLoading ? (

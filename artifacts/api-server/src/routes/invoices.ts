@@ -76,6 +76,7 @@ router.get("/", async (req: any, res) => {
   const offset = (page - 1) * limit;
   const conditions: any[] = [eq(invoicesTable.companyId, companyId)];
   if (req.query.status) conditions.push(eq(invoicesTable.status, req.query.status as string));
+  if (req.query.paymentMethod) conditions.push(eq(invoicesTable.paymentMethod, req.query.paymentMethod as string));
   if (req.query.customerId) conditions.push(eq(invoicesTable.customerId, Number(req.query.customerId)));
 
   const [invoices, total] = await Promise.all([

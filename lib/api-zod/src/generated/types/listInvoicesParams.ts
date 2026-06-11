@@ -8,6 +8,7 @@
 
 export type ListInvoicesParams = {
   status?: string;
+  paymentMethod?: string;
   customerId?: number;
   page?: number;
   limit?: number;

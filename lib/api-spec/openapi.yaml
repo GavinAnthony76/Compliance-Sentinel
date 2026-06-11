@@ -685,6 +685,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: paymentMethod
+          in: query
+          schema:
+            type: string
         - name: customerId
           in: query
           schema:
@@ -2650,6 +2654,15 @@ components:
           format: date-time
           nullable: true
         notes:
+          type: string
+          nullable: true
+        paymentMethod:
+          type: string
+          nullable: true
+        paymentMethodNote:
+          type: string
+          nullable: true
+        stripePaymentIntentId:
           type: string
           nullable: true
         customerName:

@@ -243,6 +243,9 @@ export interface Invoice {
   dueDate?: string | null;
   paidAt?: string | null;
   notes?: string | null;
+  paymentMethod?: string | null;
+  paymentMethodNote?: string | null;
+  stripePaymentIntentId?: string | null;
   customerName?: string | null;
   createdAt: string;
 }
@@ -1050,6 +1053,7 @@ export type CompleteAppointmentBody = {
 
 export type ListInvoicesParams = {
   status?: string;
+  paymentMethod?: string;
   customerId?: number;
   page?: number;
   limit?: number;

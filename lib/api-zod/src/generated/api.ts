@@ -350,6 +350,9 @@ export const GetCustomerResponse = zod.object({
       dueDate: zod.date().nullish(),
       paidAt: zod.date().nullish(),
       notes: zod.string().nullish(),
+      paymentMethod: zod.string().nullish(),
+      paymentMethodNote: zod.string().nullish(),
+      stripePaymentIntentId: zod.string().nullish(),
       customerName: zod.string().nullish(),
       createdAt: zod.date(),
     }),
@@ -966,6 +969,7 @@ export const listInvoicesQueryLimitDefault = 20;
 
 export const ListInvoicesQueryParams = zod.object({
   status: zod.coerce.string().optional(),
+  paymentMethod: zod.coerce.string().optional(),
   customerId: zod.coerce.number().optional(),
   page: zod.coerce.number().default(listInvoicesQueryPageDefault),
   limit: zod.coerce.number().default(listInvoicesQueryLimitDefault),
@@ -986,6 +990,9 @@ export const ListInvoicesResponse = zod.object({
       dueDate: zod.date().nullish(),
       paidAt: zod.date().nullish(),
       notes: zod.string().nullish(),
+      paymentMethod: zod.string().nullish(),
+      paymentMethodNote: zod.string().nullish(),
+      stripePaymentIntentId: zod.string().nullish(),
       customerName: zod.string().nullish(),
       createdAt: zod.date(),
     }),
@@ -1041,6 +1048,9 @@ export const GetInvoiceResponse = zod.object({
   dueDate: zod.date().nullish(),
   paidAt: zod.date().nullish(),
   notes: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  paymentMethodNote: zod.string().nullish(),
+  stripePaymentIntentId: zod.string().nullish(),
   customerName: zod.string().nullish(),
   createdAt: zod.date(),
 });
@@ -1087,6 +1097,9 @@ export const UpdateInvoiceResponse = zod.object({
   dueDate: zod.date().nullish(),
   paidAt: zod.date().nullish(),
   notes: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  paymentMethodNote: zod.string().nullish(),
+  stripePaymentIntentId: zod.string().nullish(),
   customerName: zod.string().nullish(),
   createdAt: zod.date(),
 });
@@ -1123,6 +1136,9 @@ export const SendInvoiceResponse = zod.object({
   dueDate: zod.date().nullish(),
   paidAt: zod.date().nullish(),
   notes: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  paymentMethodNote: zod.string().nullish(),
+  stripePaymentIntentId: zod.string().nullish(),
   customerName: zod.string().nullish(),
   createdAt: zod.date(),
 });
@@ -1151,6 +1167,9 @@ export const MarkInvoicePaidResponse = zod.object({
   dueDate: zod.date().nullish(),
   paidAt: zod.date().nullish(),
   notes: zod.string().nullish(),
+  paymentMethod: zod.string().nullish(),
+  paymentMethodNote: zod.string().nullish(),
+  stripePaymentIntentId: zod.string().nullish(),
   customerName: zod.string().nullish(),
   createdAt: zod.date(),
 });

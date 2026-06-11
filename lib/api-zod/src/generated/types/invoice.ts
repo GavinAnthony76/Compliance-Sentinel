@@ -20,6 +20,9 @@ export interface Invoice {
   dueDate?: Date | null;
   paidAt?: Date | null;
   notes?: string | null;
+  paymentMethod?: string | null;
+  paymentMethodNote?: string | null;
+  stripePaymentIntentId?: string | null;
   customerName?: string | null;
   createdAt: Date;
 }
