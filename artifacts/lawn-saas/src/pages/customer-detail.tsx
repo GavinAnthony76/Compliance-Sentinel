@@ -7,6 +7,7 @@ import {
   useCreateInvoice, useMarkInvoicePaid, useDeleteInvoice,
   useListServices, useListTeam,
   getListCustomersQueryKey,
+  useGetSettings,
 } from '@workspace/api-client-react';
 import type { CreateInvoiceRequest } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
@@ -17,7 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   ArrowLeft, User, MapPin, Phone, Mail, Globe, Edit2, Trash2,
-  Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap, Pencil, Copy,
+  Plus, Calendar, FileText, Check, Home, Tag, ExternalLink, CreditCard, Zap, Pencil, Copy, Star,
 } from 'lucide-react';
 import { CommunicationTimeline } from '@/components/communication-timeline';
 import { formatCurrency, formatDate } from '@/lib/utils';
@@ -512,6 +513,42 @@ export function CustomerDetailPage() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [togglingAutopay, setTogglingAutopay] = useState(false);
   const [removingCard, setRemovingCard] = useState(false);
+  const { data: companySettings } = useGetSettings();
+
+  const handleCopyReviewLink = async () => {
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+    const reviewLink =
+      companySettings?.reviewUrl?.trim() ||
+      (companySettings?.slug ? `${window.location.origin}${base}/review/${companySettings.slug}` : '');
+    if (!reviewLink) {
+      toast({ title: 'Review link unavailable', description: 'Could not determine your review link. Try again in a moment.', variant: 'destructive' });
+      return;
+    }
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(reviewLink);
+      copied = true;
+    } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = reviewLink;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        copied = false;
+      }
+    }
+    if (copied) {
+      toast({ title: 'Review link copied!', description: 'Paste it into an email or text to ask this customer for a review.' });
+    } else {
+      toast({ title: "Couldn't copy automatically", description: reviewLink, variant: 'destructive' });
+    }
+  };
 
   const handleSendPortalInvite = async () => {
     if (!customer.phone) {
@@ -649,6 +686,9 @@ export function CustomerDetailPage() {
           )}
         </div>
         <div className="flex gap-2 shrink-0 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleCopyReviewLink}>
+            <Star className="w-4 h-4 mr-2" />Copy Review Link
+          </Button>
           <Button variant="outline" size="sm" onClick={handleSendPortalInvite} isLoading={sendingInvite}>
             <ExternalLink className="w-4 h-4 mr-2" />Portal Invite
           </Button>
