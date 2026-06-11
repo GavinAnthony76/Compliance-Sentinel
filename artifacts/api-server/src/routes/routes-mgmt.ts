@@ -302,6 +302,10 @@ router.post("/send-appointment-reminders", async (req: any, res) => {
         scheduledStart: new Date(appt.scheduledStart!),
         serviceName: service?.name,
         channel: customer.phone ? "sms" : "email",
+        companyName: company?.name || undefined,
+        companyEmail: company?.email || undefined,
+        logoUrl: company?.logoUrl ?? null,
+        primaryColor: company?.primaryColor ?? null,
       });
       sent++;
     } catch (_err) { /* non-fatal */ }

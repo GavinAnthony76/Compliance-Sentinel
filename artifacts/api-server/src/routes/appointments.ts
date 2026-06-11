@@ -83,7 +83,7 @@ async function sendAppointmentNotification(appt: any, companyId: number, channel
       });
     } else {
       const useSms = customer.phone && smsAllowed;
-      await sendReminder({ customerName: `${customer.firstName} ${customer.lastName}`, customerEmail: customer.email || undefined, customerPhone: customer.phone || undefined, scheduledStart: new Date(appt.scheduledStart), serviceName, channel: useSms ? 'sms' : 'email', companyEmail: company?.email || undefined });
+      await sendReminder({ customerName: `${customer.firstName} ${customer.lastName}`, customerEmail: customer.email || undefined, customerPhone: customer.phone || undefined, scheduledStart: new Date(appt.scheduledStart), serviceName, channel: useSms ? 'sms' : 'email', companyName: company?.name || undefined, companyEmail: company?.email || undefined, logoUrl: company?.logoUrl ?? null, primaryColor: company?.primaryColor ?? null });
     }
     await logCommunicationEvent({
       companyId,

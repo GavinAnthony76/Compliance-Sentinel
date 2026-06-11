@@ -45,10 +45,12 @@ export async function fireAutomations(
 
     const reviewUrl = (company as any)?.reviewUrl || "https://g.page/review";
     const companyName = company?.name || "Your Service Provider";
+    const companyLogoUrl = company?.logoUrl ?? null;
+    const companyPrimaryColor = company?.primaryColor ?? null;
 
     for (const rule of rules) {
       try {
-        await executeAction(rule, companyId, companyName, reviewUrl, ctx);
+        await executeAction(rule, companyId, companyName, reviewUrl, ctx, companyLogoUrl, companyPrimaryColor);
       } catch (_err) {
         // Non-fatal: one action failure should not block others
       }
@@ -64,6 +66,8 @@ async function executeAction(
   companyName: string,
   reviewUrl: string,
   ctx: AutomationContext,
+  companyLogoUrl: string | null = null,
+  companyPrimaryColor: string | null = null,
 ): Promise<void> {
   const { customerId, userId, appointmentId, appointmentPrice, appointmentServiceId } = ctx;
 
@@ -93,6 +97,8 @@ async function executeAction(
         reviewUrl,
         companyName,
         channel: customer.phone ? "sms" : "email",
+        logoUrl: companyLogoUrl,
+        primaryColor: companyPrimaryColor,
       });
 
       await logActivity({

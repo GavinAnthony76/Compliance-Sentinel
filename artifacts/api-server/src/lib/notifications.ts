@@ -107,7 +107,10 @@ export async function sendReminder(opts: {
   scheduledStart: Date;
   serviceName?: string;
   channel: "sms" | "email";
+  companyName?: string;
   companyEmail?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }): Promise<void> {
   const dateStr = opts.scheduledStart.toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -117,10 +120,42 @@ export async function sendReminder(opts: {
   });
 
   if (opts.channel === "email" && opts.customerEmail) {
+    const serviceName = opts.serviceName || "Lawn Care";
+    const companyName = opts.companyName || "Your Service Provider";
+    const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.customerName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">This is a friendly reminder about your upcoming appointment with ${escapeHtml(companyName)}.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Service:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(serviceName)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Date:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(dateStr)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Time:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(timeStr)}</td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>`;
+    const html = buildBrandedEmailHtml({
+      title: `Appointment Reminder — ${serviceName}`,
+      companyName,
+      bodyHtml,
+      footerHtml: `See you soon,<br /><strong>${escapeHtml(companyName)}</strong>`,
+      logoUrl: opts.logoUrl,
+      primaryColor: opts.primaryColor,
+    });
     await sendEmail({
       to: opts.customerEmail,
-      subject: `Appointment Reminder: ${opts.serviceName || "Lawn Care"} on ${dateStr}`,
-      body: `Hi ${opts.customerName},\n\nThis is a reminder for your upcoming appointment on ${dateStr} at ${timeStr}.\n\nService: ${opts.serviceName || "Lawn Care"}\n\nThank you!`,
+      subject: `Appointment Reminder: ${serviceName} on ${dateStr}`,
+      body: `Hi ${opts.customerName},\n\nThis is a reminder for your upcoming appointment on ${dateStr} at ${timeStr}.\n\nService: ${serviceName}\n\nThank you!`,
+      html,
       replyTo: opts.companyEmail,
     });
   } else if (opts.channel === "sms" && opts.customerPhone) {
@@ -139,12 +174,28 @@ export async function sendReviewRequestNotification(opts: {
   companyName: string;
   channel: "sms" | "email";
   companyEmail?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }): Promise<void> {
   if (opts.channel === "email" && opts.customerEmail) {
+    const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.customerName)},</p>
+            <p style="margin:0 0 8px;font-size:15px;color:#374151;line-height:1.5;">Thank you for choosing ${escapeHtml(opts.companyName)}! We'd love to hear about your experience.</p>
+            <p style="margin:0 0 8px;font-size:15px;color:#374151;line-height:1.5;">It only takes a moment, and your feedback helps us serve you better.</p>`;
+    const html = buildBrandedEmailHtml({
+      title: `How was your experience with ${opts.companyName}?`,
+      companyName: opts.companyName,
+      bodyHtml,
+      cta: { label: "Leave a Review", url: opts.reviewUrl },
+      footerHtml: `Thank you,<br /><strong>${escapeHtml(opts.companyName)}</strong>`,
+      logoUrl: opts.logoUrl,
+      primaryColor: opts.primaryColor,
+    });
     await sendEmail({
       to: opts.customerEmail,
       subject: `How was your experience with ${opts.companyName}?`,
       body: `Hi ${opts.customerName},\n\nThank you for choosing ${opts.companyName}! We'd love to hear your feedback.\n\nLeave a review: ${opts.reviewUrl}\n\nThank you!`,
+      html,
       replyTo: opts.companyEmail,
     });
   } else if (opts.channel === "sms" && opts.customerPhone) {
@@ -243,6 +294,85 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// Shared branded styling for all customer-facing HTML emails. Resolves the
+// company accent color (falling back to the GreenSynk green) and renders the
+// logo/name header used across invoices, reminders, and review requests.
+function resolveAccent(primaryColor?: string | null): string {
+  return primaryColor && /^#[0-9a-fA-F]{3,8}$/.test(primaryColor) ? primaryColor : "#16a34a";
+}
+
+function buildBrandedHeader(companyName: string, logoUrl?: string | null): string {
+  return logoUrl
+    ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(companyName)}" style="max-height:56px;max-width:200px;display:block;" />`
+    : `<span style="font-size:22px;font-weight:700;color:#ffffff;">${escapeHtml(companyName)}</span>`;
+}
+
+// Generic branded email shell: header band, content area, optional call-to-action
+// button (matching the invoice "Pay Now" style), and a signature footer.
+function buildBrandedEmailHtml(opts: {
+  title: string;
+  companyName: string;
+  bodyHtml: string;
+  cta?: { label: string; url: string } | null;
+  footerHtml?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): string {
+  const accent = resolveAccent(opts.primaryColor);
+  const companyName = escapeHtml(opts.companyName);
+  const header = buildBrandedHeader(opts.companyName, opts.logoUrl);
+  const ctaUrl = opts.cta ? escapeHtml(opts.cta.url) : null;
+  const ctaLabel = opts.cta ? escapeHtml(opts.cta.label) : null;
+
+  const ctaBlock = ctaUrl && ctaLabel
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;">
+              <tr>
+                <td style="border-radius:6px;background-color:${accent};">
+                  <a href="${ctaUrl}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">${ctaLabel}</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">If the button doesn't work, copy and paste this link into your browser:<br /><a href="${ctaUrl}" style="color:${accent};word-break:break-all;">${ctaUrl}</a></p>`
+    : "";
+
+  const footerBlock = opts.footerHtml
+    ? `<tr>
+          <td style="padding:24px 32px;border-top:1px solid #e5e7eb;">
+            <p style="margin:0;font-size:14px;color:#374151;">${opts.footerHtml}</p>
+          </td>
+        </tr>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escapeHtml(opts.title)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr>
+          <td style="background-color:${accent};padding:24px 32px;">${header}</td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            ${opts.bodyHtml}
+            ${ctaBlock}
+          </td>
+        </tr>
+        ${footerBlock}
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+}
+
 function buildInvoiceEmailHtml(opts: {
   customerName: string;
   companyName: string;
@@ -255,16 +385,14 @@ function buildInvoiceEmailHtml(opts: {
   logoUrl?: string | null;
   primaryColor?: string | null;
 }): string {
-  const accent = opts.primaryColor && /^#[0-9a-fA-F]{3,8}$/.test(opts.primaryColor) ? opts.primaryColor : "#16a34a";
+  const accent = resolveAccent(opts.primaryColor);
   const companyName = escapeHtml(opts.companyName);
   const invoiceNumber = escapeHtml(opts.invoiceNumber);
   const customerName = escapeHtml(opts.customerName);
   const payNowUrl = opts.payNowUrl ? escapeHtml(opts.payNowUrl) : null;
   const paymentInstructions = (opts.paymentInstructions ?? []).map(escapeHtml);
 
-  const header = opts.logoUrl
-    ? `<img src="${escapeHtml(opts.logoUrl)}" alt="${companyName}" style="max-height:56px;max-width:200px;display:block;" />`
-    : `<span style="font-size:22px;font-weight:700;color:#ffffff;">${companyName}</span>`;
+  const header = buildBrandedHeader(opts.companyName, opts.logoUrl);
 
   const rows = opts.lineItems.length
     ? opts.lineItems
