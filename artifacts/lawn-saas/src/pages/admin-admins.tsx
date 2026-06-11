@@ -94,11 +94,48 @@ function EditAdminModal({ admin, onClose, onSaved }: { admin: any; onClose: () =
   );
 }
 
+function DeactivateAdminModal({ admin, busy, onClose, onConfirm }: { admin: any; busy: boolean; onClose: () => void; onConfirm: (note: string) => void }) {
+  const [note, setNote] = useState('');
+  const name = `${admin.firstName} ${admin.lastName}`;
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2"><Ban className="w-5 h-5 text-red-400" />Deactivate Admin</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-slate-300">
+            Deactivate admin <span className="font-medium text-white">{name}</span>? They will be blocked from signing in until reactivated and will receive an email letting them know.
+          </p>
+          <div>
+            <label className="text-sm font-medium text-slate-300">Note <span className="text-slate-500 font-normal">(optional — included in their email)</span></label>
+            <textarea
+              className="w-full mt-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm resize-none"
+              rows={3}
+              maxLength={500}
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="e.g. Temporary lockout pending security review."
+            />
+            <p className="mt-1 text-xs text-slate-500 text-right">{note.length}/500</p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1 border-slate-700 text-slate-300">Cancel</Button>
+            <Button type="button" onClick={() => onConfirm(note)} isLoading={busy} className="flex-1 bg-red-500 hover:bg-red-600 text-white">Deactivate</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AdminAdminsPage() {
   const { data, isLoading, refetch } = useAdminListAdmins();
   const { data: me } = useAdminGetMe();
   const [showNew, setShowNew] = useState(false);
   const [editAdmin, setEditAdmin] = useState<any | null>(null);
+  const [deactivateAdmin, setDeactivateAdmin] = useState<any | null>(null);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: 'admin' as 'admin' | 'superadmin' });
   const [staleOnly, setStaleOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'created'>('created');
@@ -148,15 +185,30 @@ export function AdminAdminsPage() {
     }
   };
 
-  const handleToggleActive = async (admin: any) => {
-    const deactivating = admin.isActive !== false;
-    const name = `${admin.firstName} ${admin.lastName}`;
-    if (deactivating && !confirm(`Deactivate admin "${name}"? They will be blocked from signing in until reactivated.`)) return;
+  const handleReactivate = async (admin: any) => {
     setBusyId(admin.id);
     try {
-      const res = await adminFetch(`/api/admin/admins/${admin.id}`, { method: 'PUT', body: JSON.stringify({ isActive: !deactivating }) });
+      const res = await adminFetch(`/api/admin/admins/${admin.id}`, { method: 'PUT', body: JSON.stringify({ isActive: true }) });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update admin'); }
-      toast({ title: deactivating ? 'Admin deactivated' : 'Admin reactivated' });
+      toast({ title: 'Admin reactivated' });
+      refetch();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDeactivate = async (admin: any, note: string) => {
+    setBusyId(admin.id);
+    try {
+      const body: any = { isActive: false };
+      const trimmed = note.trim();
+      if (trimmed) body.note = trimmed;
+      const res = await adminFetch(`/api/admin/admins/${admin.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update admin'); }
+      toast({ title: 'Admin deactivated' });
+      setDeactivateAdmin(null);
       refetch();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
@@ -231,6 +283,15 @@ export function AdminAdminsPage() {
           admin={editAdmin}
           onClose={() => setEditAdmin(null)}
           onSaved={() => { refetch(); setEditAdmin(null); }}
+        />
+      )}
+
+      {deactivateAdmin && (
+        <DeactivateAdminModal
+          admin={deactivateAdmin}
+          busy={busyId === deactivateAdmin.id}
+          onClose={() => setDeactivateAdmin(null)}
+          onConfirm={(note) => handleDeactivate(deactivateAdmin, note)}
         />
       )}
 
@@ -317,7 +378,7 @@ export function AdminAdminsPage() {
                   {!isSelf && (
                     deactivated ? (
                       <button
-                        onClick={() => handleToggleActive(admin)}
+                        onClick={() => handleReactivate(admin)}
                         disabled={busyId === admin.id}
                         title="Reactivate admin"
                         className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors disabled:opacity-50"
@@ -326,7 +387,7 @@ export function AdminAdminsPage() {
                       </button>
                     ) : (
                       <button
-                        onClick={() => handleToggleActive(admin)}
+                        onClick={() => setDeactivateAdmin(admin)}
                         disabled={busyId === admin.id}
                         title="Deactivate admin"
                         className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors disabled:opacity-50"

@@ -1300,6 +1300,8 @@ export async function sendAdminDeactivationEmail(opts: {
   to: string;
   firstName?: string | null;
   reason: "inactivity" | "manual";
+  /** Optional free-text note from the acting admin (manual deactivations only). */
+  note?: string | null;
   supportEmail: string;
 }): Promise<void> {
   const name = (opts.firstName || "there").trim();
@@ -1307,18 +1309,27 @@ export async function sendAdminDeactivationEmail(opts: {
     opts.reason === "inactivity"
       ? "due to a period of inactivity on your account"
       : "by a platform administrator";
+  const note = (opts.note || "").trim();
 
   const paragraphs = [
     `Hi ${escapeHtml(name)},`,
     `Your GreenSynk platform-admin access has been disabled ${cause}. You will no longer be able to sign in to the platform admin console until your access is restored.`,
+  ];
+  if (note) {
+    paragraphs.push(
+      `Note from the administrator: <span style="display:block;margin-top:8px;padding:12px 16px;border-left:3px solid ${GREENSYNK_ACCENT};background:#f3f4f6;color:#374151;border-radius:4px;">${escapeHtml(note)}</span>`,
+    );
+  }
+  paragraphs.push(
     `If you believe this was a mistake, or you'd like your access reinstated, please contact a GreenSynk platform administrator at <a href="mailto:${escapeHtml(opts.supportEmail)}" style="color:${GREENSYNK_ACCENT};">${escapeHtml(opts.supportEmail)}</a>.`,
     `If you no longer need access, no action is required.`,
-  ];
+  );
 
   const body = [
     `Hi ${name},`,
     ``,
     `Your GreenSynk platform-admin access has been disabled ${cause}. You will no longer be able to sign in to the platform admin console until your access is restored.`,
+    ...(note ? [``, `Note from the administrator: ${note}`] : []),
     ``,
     `If you believe this was a mistake, or you'd like your access reinstated, please contact a GreenSynk platform administrator at ${opts.supportEmail}.`,
     ``,

@@ -612,6 +612,10 @@ const updateAdminSchema = z.object({
   password: z.string().min(8).optional(),
   role: z.enum(["admin", "superadmin"]).optional(),
   isActive: z.boolean().optional(),
+  // Optional free-text note the acting admin can include when deactivating
+  // another admin. Surfaced in the deactivation email and stored on the
+  // activity log for auditing. Ignored for any non-deactivation update.
+  note: z.string().trim().max(500).optional(),
 });
 
 router.put("/admins/:id", async (req: any, res) => {
@@ -622,7 +626,7 @@ router.put("/admins/:id", async (req: any, res) => {
   if (id === req.admin.adminId && parsed.data.isActive === false) {
     return res.status(400).json({ error: "CannotDeactivateSelf", message: "You cannot deactivate your own account" });
   }
-  const { password, ...rest } = parsed.data;
+  const { password, note, ...rest } = parsed.data;
   const fields: Record<string, any> = { ...rest, updatedAt: new Date() };
   if (password) fields.passwordHash = await hashPassword(password);
   if (Object.keys(fields).length === 1) return res.status(400).json({ error: "NoFields", message: "No fields to update" });
@@ -630,7 +634,16 @@ router.put("/admins/:id", async (req: any, res) => {
   const action = "isActive" in rest
     ? (rest.isActive ? "admin.admin_reactivated" : "admin.admin_deactivated")
     : "admin.admin_updated";
-  await logActivity({ adminId: req.admin.adminId, action, entityType: "admin", entityId: id });
+  // The optional note only applies to a manual deactivation; record it on the
+  // audit entry so reviewers can see why access was disabled.
+  const deactivatingWithNote = rest.isActive === false && !!note;
+  await logActivity({
+    adminId: req.admin.adminId,
+    action,
+    entityType: "admin",
+    entityId: id,
+    metadata: deactivatingWithNote ? { note } : undefined,
+  });
 
   // Give the affected admin a heads-up that their access changed. Best-effort:
   // sendEmail swallows its own errors, so this never blocks the response.
@@ -640,6 +653,7 @@ router.put("/admins/:id", async (req: any, res) => {
         to: updated.email,
         firstName: updated.firstName,
         reason: "manual",
+        note: note || undefined,
         supportEmail: resolveAdminSupportEmail(),
       });
     } else if (rest.isActive === true) {
