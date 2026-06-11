@@ -33,18 +33,25 @@ tables; activity_logs (no FK to companies) is cleared first for the doomed set.
 **Why these two guards, not just id>snapshot:** id>snapshot alone would delete a
 genuine signup created during the validation window — the @example.com marker is
 the safety net against deleting live tenant data on the prod DB.
-3. **Disjoint owner-email namespaces per runner (CRITICAL for concurrency).** The
-   permissions and access CI harnesses are separate processes that the validation
-   gate runs CONCURRENTLY against the same DB. A global "delete every @example.com
-   company above my snapshot" makes each runner delete the OTHER runner's
-   still-in-use companies mid-test — symptom: access suite gets random 404s and
-   `customers_company_id_companies_id_fk` FK violations while permissions passes.
-   Fix: permissions runner creates only `lead_*`/`perm_*` owners and purges ONLY
-   those; access runner creates everything else and purges everything EXCEPT
-   `lead_%`/`perm_%`. The two delete sets are then provably disjoint. The shared
-   pattern list lives in db-cleanup.mjs (PERMISSIONS_OWNER_PATTERNS) as the single
-   source of truth. **Why:** snapshot+marker is NOT enough under concurrency —
-   isolation also requires that no two concurrent runners share a delete namespace.
+3. **Per-RUN namespace token (CRITICAL for concurrency).** Every runner mints a
+   unique token at startup via `makeRunNamespace(label)` in db-cleanup.mjs (e.g.
+   `accmq90x7e704d594ae`), passes it to its suites as the `TEST_RUN_NS` env var,
+   and the suites prepend it to the OWNER email of every company they register
+   (`<token>_…@example.com`). Cleanup then purges ONLY `<token>%@example.com`.
+   Because the token is unique per run, ANY two runs — concurrent or back-to-back,
+   same harness or different — provision and purge provably-disjoint sets.
+   **Why this replaced the old per-runner-TYPE split (`lead_%`/`perm_%` vs the
+   rest):** that split only isolated permissions-vs-access. Two runs of the SAME
+   harness (e.g. a manual `staff-access` plus the workflow) shared one namespace,
+   so one run's cleanup deleted the other's in-flight rows — symptom: rotating
+   flaky failures like "could not create invoice 500" (FK violation on
+   invoice_line_items) or "could not create staff 403", a different suite failing
+   almost every run so the gate showed 9/10 though each suite passed in isolation.
+   **How to apply:** any NEW suite that registers a company MUST embed
+   `process.env.TEST_RUN_NS` in its owner email, or cleanup will both miss it
+   (pollution) AND a concurrent run can clobber it. Cleanup keys off the OWNER
+   email only (the purge `EXISTS` subquery), so staff/customer emails need not
+   carry the token — the company delete cascades to them.
 **Why not a separate test DB:** full isolation via sandbox $DATABASE_URL was
 rejected — that DB has a stale/partial schema (ongoing sync burden). Snapshot +
 marker purge keeps NEON clean with no schema-sync work.

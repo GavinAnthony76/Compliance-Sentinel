@@ -15,7 +15,7 @@
 - [RBAC dual-surface](rbac-dual-surface.md) — managerOnly nav flag is cosmetic; matching backend route MUST have requireRole or staff are UI-blocked but API-open; sidebar must show user not company name.
 - [Tenant URL SSRF in PDFs](tenant-url-ssrf.md) — server-side fetch of tenant-supplied URLs (company.logoUrl in PDF gen) is an SSRF vector; route through fetchImageBufferSafe (https-only, block private IPs, no redirects).
 - [Role-gating drift](role-gating-drift.md) — frontend hides 10 manager-only pages; all manager-only routers (incl. follow-ups/reporting/leads GETs) now enforce requireRole. Verify: `pnpm run test:permissions`.
-- [Test suites pollute NEON](test-suites-pollute-neon.md) — access-control e2e suites self-provision companies via dev server into the SHARED NEON prod DB; no cleanup; purge only after churn stops.
+- [Test suites pollute NEON](test-suites-pollute-neon.md) — access/perm e2e self-provision into SHARED NEON; cleanup keys off a per-run TEST_RUN_NS token (unique per run) so concurrent/back-to-back runs can't clobber each other.
 - [Concurrent test-build collision](concurrent-test-build-collision.md) — lead-access + staff-access both rebuild api-server dist; concurrent run flakes with esbuild "Unexpected end of input". Verify in isolation.
 - [Stripe webhook config](stripe-webhook-config.md) — one live endpoint; URL must be the deployed domain; repoint (not recreate) to keep STRIPE_WEBHOOK_SECRET; handler must catch invoice.payment_succeeded.
 - [Billing activity dedup](billing-activity-dedup.md) — checkout updates company row BEFORE subscription.updated reads it; that ordering (not a dedup table) is what stops plan_changed+subscription_updated double-logging. Logic in src/lib/billing-activity.ts.

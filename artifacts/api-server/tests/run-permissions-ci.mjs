@@ -25,7 +25,7 @@ import { fileURLToPath } from "node:url";
 import {
   snapshotMaxCompanyId,
   purgeTestDataAbove,
-  PERMISSIONS_OWNER_PATTERNS,
+  makeRunNamespace,
 } from "./db-cleanup.mjs";
 
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,6 +137,13 @@ async function main() {
     process.exit(1);
   }
 
+  // Mint a per-run namespace token. Every suite embeds it in the OWNER email of
+  // each company it provisions (via TEST_RUN_NS), and cleanup purges ONLY this
+  // token's companies — so this run never collides with a concurrent or
+  // back-to-back run (its own or the access harness's).
+  const runNs = makeRunNamespace("perm");
+  console.log(`• Run namespace: ${runNs}`);
+
   // --- Run the suites -------------------------------------------------------
   const suites = [
     "tests/lead-ownership.test.mjs",
@@ -150,7 +157,7 @@ async function main() {
     for (const suite of suites) {
       console.log(`\n=== ${suite} ===`);
       const code = await run("node", [suite], {
-        env: { ...process.env, API_BASE: BASE },
+        env: { ...process.env, API_BASE: BASE, TEST_RUN_NS: runNs },
       });
       if (code !== 0) failed++;
     }
@@ -158,10 +165,11 @@ async function main() {
     // Always purge, even if a suite threw, so failures don't leave residue.
     // A purge failure is itself a run failure so leftover pollution is visible.
     try {
-      // Purge ONLY this runner's namespace (lead_*/perm_*), so a concurrently-
-      // running access suite isn't deleted mid-test.
+      // Purge ONLY companies this run provisioned, identified by its unique
+      // namespace token. Any concurrent run uses a different token, so its
+      // in-flight rows are provably outside this delete set.
       await purgeTestDataAbove(dbSnapshot, {
-        ownerPatterns: PERMISSIONS_OWNER_PATTERNS,
+        ownerPatterns: [`${runNs}%@example.com`],
       });
     } catch (err) {
       cleanupFailed = true;

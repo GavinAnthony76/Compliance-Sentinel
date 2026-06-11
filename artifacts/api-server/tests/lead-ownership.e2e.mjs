@@ -27,7 +27,8 @@ const BASE =
 
 const PASSWORD = "TestPass123!";
 const stamp = Date.now();
-const ownerEmail = `lead_owner_${stamp}@example.com`;
+const nsPrefix = process.env.TEST_RUN_NS ? `${process.env.TEST_RUN_NS}_` : "";
+const ownerEmail = `${nsPrefix}lead_owner_${stamp}@example.com`;
 const staffAEmail = `lead_staff_a_${stamp}@example.com`;
 const staffBEmail = `lead_staff_b_${stamp}@example.com`;
 

@@ -24,7 +24,8 @@ const BASE =
 
 const PASSWORD = "TestPass123!";
 const stamp = Date.now();
-const ownerEmail = `perm_owner_${stamp}@example.com`;
+const nsPrefix = process.env.TEST_RUN_NS ? `${process.env.TEST_RUN_NS}_` : "";
+const ownerEmail = `${nsPrefix}perm_owner_${stamp}@example.com`;
 const staffEmail = `perm_staff_${stamp}@example.com`;
 
 let failures = 0;

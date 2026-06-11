@@ -16,14 +16,15 @@
  *      (email ends in "@example.com" — every e2e suite registers its owner with
  *      such an address). A genuine signup that happens to land during the brief
  *      test window uses a real email and is therefore preserved.
- *   3. Scope each CI runner to its OWN owner-email namespace. The two CI
- *      harnesses (permissions vs access) run as separate processes that may
- *      execute CONCURRENTLY against the same database. A global "delete every
- *      @example.com company above my snapshot" makes each runner delete the
- *      OTHER runner's still-in-use companies mid-test (observed as 404s / FK
- *      violations). The permissions runner only ever creates `lead_*`/`perm_*`
- *      owners; the access runner creates everything else. By having each runner
- *      purge only its own namespace, the two delete sets are provably disjoint.
+ *   3. Scope each RUN to its OWN per-run namespace token (see makeRunNamespace).
+ *      Every runner mints a unique token at startup, hands it to its suites via
+ *      the TEST_RUN_NS env var, and the suites embed it in every company's OWNER
+ *      email (`<token>_…@example.com`). Cleanup then purges ONLY companies whose
+ *      owner email starts with that token. Because the token is unique per run,
+ *      ANY two runs — concurrent OR back-to-back, same harness or different —
+ *      provision and purge provably-disjoint sets, so no run can ever delete
+ *      another run's in-flight rows (previously observed as 404s / FK violations
+ *      when two runs of the SAME harness overlapped and shared a namespace).
  *
  * Company deletes cascade to all company-scoped child tables; activity_logs is
  * the only relevant table with no FK to companies, so its rows for the doomed
@@ -35,15 +36,26 @@
  * ignored).
  */
 import pg from "pg";
+import { randomBytes } from "node:crypto";
 
 /**
- * Owner-email patterns (SQL LIKE) created by the PERMISSIONS CI runner's suites
- * (lead-ownership + permissions e2e). This is the single source of truth for the
- * namespace split: the permissions runner purges these, the access runner purges
- * everything else under @example.com EXCEPT these. Keep in sync if a permissions
- * suite ever introduces a new owner-email prefix.
+ * Build a process-unique, email-safe namespace token for a single CI run.
+ *
+ * Every company a run provisions embeds this token at the START of its OWNER
+ * email (`<token>_…@example.com`), and the run purges ONLY companies whose owner
+ * email starts with it. Because the token is unique per run, two runs (whether
+ * concurrent or back-to-back, same harness or different) provision and purge
+ * provably-disjoint sets — neither can delete the other's in-flight rows.
+ *
+ * The token is strictly alphanumeric (no SQL LIKE wildcards), so the cleanup
+ * pattern `<token>%@example.com` is an exact-prefix match.
+ *
+ * @param {string} [label]  short human-readable hint (e.g. "acc", "perm").
  */
-export const PERMISSIONS_OWNER_PATTERNS = ["lead_%@example.com", "perm_%@example.com"];
+export function makeRunNamespace(label = "run") {
+  const safeLabel = String(label).replace(/[^a-z0-9]/gi, "").toLowerCase() || "run";
+  return `${safeLabel}${Date.now().toString(36)}${randomBytes(4).toString("hex")}`;
+}
 
 const ALL_TEST_OWNER_PATTERN = "%@example.com";
 

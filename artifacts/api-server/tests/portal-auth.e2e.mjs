@@ -67,7 +67,8 @@ async function req(method, path, { token, body } = {}) {
 }
 
 async function registerCompany(label) {
-  const ownerEmail = `portal_${label}_owner_${stamp}@example.com`;
+  const nsPrefix = process.env.TEST_RUN_NS ? `${process.env.TEST_RUN_NS}_` : "";
+  const ownerEmail = `${nsPrefix}portal_${label}_owner_${stamp}@example.com`;
   const reg = await req("POST", "/auth/register", {
     body: {
       firstName: "Olive",
