@@ -16,7 +16,7 @@ const NOINDEX_PATTERNS: RegExp[] = [
   /^\/portal\/[^/]+(\/forgot-password|\/login|\/invoices|\/appointments|\/estimates)?$/,
   /^\/estimates\/[^/]+\/sign$/,
   /^\/review\/[^/]+$/,
-  /^\/(dashboard|calendar|customers|properties|services|appointments|invoices|recurring|routes|reviews|automations|follow-ups|team|reporting|settings|billing|leads|tech)(\/.*)?$/,
+  /^\/(dashboard|calendar|customers|properties|services|appointments|invoices|recurring|routes|reviews|automations|follow-ups|team|reporting|settings|billing|activity|leads|tech)(\/.*)?$/,
 ];
 
 const CANONICAL_BASE = "https://greensynk.com";
@@ -107,6 +107,7 @@ const TeamPage = lazy(() => import("@/pages/team").then(m => ({ default: m.TeamP
 const ReportingPage = lazy(() => import("@/pages/reporting").then(m => ({ default: m.ReportingPage })));
 const SettingsPage = lazy(() => import("@/pages/settings").then(m => ({ default: m.SettingsPage })));
 const BillingPage = lazy(() => import("@/pages/billing").then(m => ({ default: m.BillingPage })));
+const ActivityPage = lazy(() => import("@/pages/activity").then(m => ({ default: m.ActivityPage })));
 
 // Admin pages — lazy loaded
 const AdminDashboardPage = lazy(() => import("@/pages/admin-dashboard").then(m => ({ default: m.AdminDashboardPage })));
@@ -298,6 +299,7 @@ function Router() {
           <Route path="/reporting"><ProtectedRoute component={ReportingPage} managerOnly /></Route>
           <Route path="/settings"><ProtectedRoute component={SettingsPage} /></Route>
           <Route path="/billing"><ProtectedRoute component={BillingPage} managerOnly /></Route>
+          <Route path="/activity"><ProtectedRoute component={ActivityPage} /></Route>
 
           {/* Admin routes — lazy loaded */}
           <Route path="/admin/dashboard"><ProtectedRoute component={AdminDashboardPage} adminOnly /></Route>

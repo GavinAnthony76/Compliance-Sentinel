@@ -116,7 +116,7 @@ function ActivityBell({ unread, onSeen }: { unread: number; onSeen: () => void }
         <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <span className="font-semibold text-sm">Activity</span>
-            <Link href="/dashboard" onClick={() => setOpen(false)} className="text-xs text-primary hover:underline">View all</Link>
+            <Link href="/activity" onClick={() => setOpen(false)} className="text-xs text-primary hover:underline">View all</Link>
           </div>
           <div className="max-h-80 overflow-y-auto">
             {loading ? (

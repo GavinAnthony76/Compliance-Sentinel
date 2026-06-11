@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, activityLogsTable, usersTable } from "@workspace/db";
-import { eq, and, sql, desc, inArray, gt, ne, or, isNull } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, gt, ne, or, isNull, like } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 
 const router = Router();
@@ -11,10 +11,17 @@ router.get("/", async (req: any, res) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 50;
   const offset = (page - 1) * limit;
+  // Optional filter: only return actions in a given category (action prefix,
+  // e.g. ?category=billing matches billing.plan_changed, billing.subscription_canceled, …).
+  const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
+
+  const conditions = [eq(activityLogsTable.companyId, companyId)];
+  if (category) conditions.push(like(activityLogsTable.action, `${category}.%`));
+  const whereClause = and(...conditions);
 
   const [logs, total] = await Promise.all([
-    db.select().from(activityLogsTable).where(eq(activityLogsTable.companyId, companyId)).orderBy(desc(activityLogsTable.createdAt)).limit(limit).offset(offset),
-    db.select({ count: sql<number>`count(*)` }).from(activityLogsTable).where(eq(activityLogsTable.companyId, companyId)),
+    db.select().from(activityLogsTable).where(whereClause).orderBy(desc(activityLogsTable.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(activityLogsTable).where(whereClause),
   ]);
 
   const userIds = [...new Set(logs.map(l => l.userId).filter(Boolean))] as number[];
