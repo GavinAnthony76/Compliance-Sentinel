@@ -11,6 +11,7 @@
     "start:local": "node --env-file=.env --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:billing": "node tests/billing-activity.test.mjs",
+    "test:billing-emails": "node --experimental-test-module-mocks tests/billing-status-email.test.mjs",
     "test:permissions": "node tests/lead-ownership.test.mjs && node tests/permissions.e2e.mjs && node tests/lead-ownership.e2e.mjs",
     "test:permissions:ci": "node tests/run-permissions-ci.mjs",
     "test:access": "node tests/invoice-billing-access.e2e.mjs && node tests/appointment-customer-access.e2e.mjs && node tests/property-service-access.e2e.mjs && node tests/estimate-recurring-plan-access.e2e.mjs && node tests/shared-screen-access.e2e.mjs && node tests/manager-screen-access.e2e.mjs && node tests/billing-access.e2e.mjs && node tests/portal-auth.e2e.mjs",
