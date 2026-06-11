@@ -138,7 +138,7 @@ router.post("/auth/send-invite", async (req: any, res) => {
   const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
   const sentTo: string[] = [];
   if (customer.email) {
-    await sendPortalAccessEmail({ to: customer.email, customerName, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
+    await sendPortalAccessEmail({ to: customer.email, customerName, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days", logoUrl: company.logoUrl, primaryColor: company.primaryColor });
     sentTo.push(customer.email);
   }
   if (customer.phone && hasFeature(businessCompany?.subscriptionPlan, "sms_notifications")) {
@@ -167,7 +167,7 @@ router.post("/auth/request-link", async (req, res) => {
       const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
       const loginUrl = `${baseUrl}/portal/${company.slug}/login?token=${rawLoginToken}`;
       const { sendPortalAccessEmail } = await import("../lib/notifications");
-      await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl, intent: "login", expiresLabel: "in 1 hour" });
+      await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl, intent: "login", expiresLabel: "in 1 hour", logoUrl: company.logoUrl, primaryColor: company.primaryColor });
     }
   }
   return res.json({ success: true, message: "If that email has portal access, a login link has been sent." });

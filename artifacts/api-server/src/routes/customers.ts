@@ -96,7 +96,7 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
         // Invite link takes customers to the set-password page so they create a password on first access.
         portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
         if (customer.email) {
-          await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
+          await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days", logoUrl: company.logoUrl, primaryColor: company.primaryColor });
         }
         if (customer.phone && hasFeature(company.subscriptionPlan, "sms_notifications")) {
           await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Create your password here: ${portalUrl}` });
