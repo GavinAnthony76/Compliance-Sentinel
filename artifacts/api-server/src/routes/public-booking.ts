@@ -173,6 +173,8 @@ router.post("/book/:slug/submit", async (req, res) => {
           serviceName,
           preferredDate: data.preferredDate ? scheduledStart : null,
           address,
+          logoUrl: company.logoUrl,
+          primaryColor: company.primaryColor,
         });
       }
     } catch (err) {

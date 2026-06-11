@@ -313,12 +313,48 @@ export async function sendBookingConfirmationEmail(opts: {
   serviceName?: string | null;
   preferredDate?: Date | null;
   address?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }): Promise<void> {
   const dateStr = opts.preferredDate
     ? new Date(opts.preferredDate).toLocaleDateString("en-US", {
         weekday: "long", year: "numeric", month: "long", day: "numeric",
       })
     : "your preferred date (we'll confirm a time with you)";
+
+  const serviceName = opts.serviceName || "Lawn care";
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.customerName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Thanks for your booking request with ${escapeHtml(opts.companyName)}! We've received it and will reach out shortly to confirm the details.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.04em;">What you requested</p>
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Service:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(serviceName)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Preferred date:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(dateStr)}</td>
+                  </tr>
+                  ${opts.address ? `<tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Address:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(opts.address)}</td>
+                  </tr>` : ""}
+                </table>
+              </td></tr>
+            </table>
+            <p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">If anything looks off or you need to make a change, just reply to this email${opts.companyPhone ? ` or call us at ${escapeHtml(opts.companyPhone)}` : ""}.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: `We received your booking request — ${opts.companyName}`,
+    companyName: opts.companyName,
+    bodyHtml,
+    footerHtml: `Thank you,<br /><strong>${escapeHtml(opts.companyName)}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
 
   await sendEmail({
     to: opts.to,
@@ -329,7 +365,7 @@ export async function sendBookingConfirmationEmail(opts: {
       `Thanks for your booking request with ${opts.companyName}! We've received it and will reach out shortly to confirm the details.`,
       ``,
       `Here's what you requested:`,
-      `  Service: ${opts.serviceName || "Lawn care"}`,
+      `  Service: ${serviceName}`,
       `  Preferred date: ${dateStr}`,
       ...(opts.address ? [`  Address: ${opts.address}`] : []),
       ``,
@@ -338,6 +374,7 @@ export async function sendBookingConfirmationEmail(opts: {
       `Thank you,`,
       opts.companyName,
     ].join("\n"),
+    html,
     replyTo: opts.companyEmail,
   });
 }
@@ -678,7 +715,28 @@ export async function sendCustomerWelcomeBookingEmail(opts: {
   companyEmail?: string;
   companyPhone?: string | null;
   bookingUrl: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }): Promise<void> {
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.customerName)},</p>
+            <p style="margin:0 0 8px;font-size:15px;color:#374151;line-height:1.5;">Thanks for being a customer of ${escapeHtml(opts.companyName)}! You can request and schedule appointments online any time using the button below.</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Just choose a service and your preferred date, and we'll take it from there.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: `Welcome to ${opts.companyName} — book your next appointment`,
+    companyName: opts.companyName,
+    bodyHtml,
+    cta: { label: "Book an Appointment", url: opts.bookingUrl },
+    footerHtml: `${
+      opts.companyPhone
+        ? `Questions? Call us at ${escapeHtml(opts.companyPhone)} or reply to this email.`
+        : `Questions? Just reply to this email.`
+    }<br /><br />Thank you,<br /><strong>${escapeHtml(opts.companyName)}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+
   await sendEmail({
     to: opts.to,
     subject: `Welcome to ${opts.companyName} — book your next appointment`,
@@ -698,6 +756,7 @@ export async function sendCustomerWelcomeBookingEmail(opts: {
       `Thank you,`,
       opts.companyName,
     ].join("\n"),
+    html,
     replyTo: opts.companyEmail,
   });
 }

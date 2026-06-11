@@ -110,6 +110,8 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
           companyEmail: company.email ?? undefined,
           companyPhone: company.phone ?? null,
           bookingUrl,
+          logoUrl: company.logoUrl,
+          primaryColor: company.primaryColor,
         });
       }
     }
