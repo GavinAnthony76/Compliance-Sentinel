@@ -3,10 +3,11 @@
  *
  * The black-box e2e suites self-provision real companies (with users,
  * customers, invoices, etc.) over HTTP against whatever database the api-server
- * is pointed at — which in this project is the production Neon database
- * (NEON_DATABASE_URL). Left unchecked, every validation run permanently
- * pollutes production with hundreds of throwaway "Test" companies, which then
- * show up in the owner/admin dashboards.
+ * is pointed at. The CI harnesses now redirect the server and these helpers
+ * onto the LOCAL throwaway DATABASE_URL (see test-db-guard.mjs), so production
+ * is never touched. This cleanup remains a defense-in-depth safety net: it keeps
+ * the local test DB tidy and still guards correctly should anything ever run
+ * these helpers against a shared database again.
  *
  * Strategy (independent guards so we never touch real tenant data and never
  * delete a *concurrent* runner's in-flight data):

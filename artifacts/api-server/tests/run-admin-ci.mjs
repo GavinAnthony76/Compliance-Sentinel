@@ -23,6 +23,13 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { useLocalTestDatabase } from "./test-db-guard.mjs";
+
+// Force the suite onto the local throwaway DB so a validation run can never
+// touch real data (even if the suite's own restore step fails). This also
+// aborts if DATABASE_URL looks like production, since the harness below
+// force-pushes schema to it. See test-db-guard.mjs.
+useLocalTestDatabase();
 
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Build into a harness-specific dir so concurrent CI runs never race on a shared
@@ -73,6 +80,16 @@ async function main() {
   if (buildCode !== 0) {
     console.error("Build failed; aborting admin-deactivation validation.");
     process.exit(buildCode);
+  }
+
+  // --- Sync schema to the local test database -------------------------------
+  // The suite runs against the local throwaway DATABASE_URL (NEON_DATABASE_URL
+  // was cleared above), so make sure its schema matches the code before we start.
+  console.log("• Syncing schema to local test database…");
+  const pushCode = await run("pnpm", ["--filter", "db", "push-force"]);
+  if (pushCode !== 0) {
+    console.error("Schema push to local test DB failed; aborting.");
+    process.exit(pushCode);
   }
 
   // --- Start server ---------------------------------------------------------

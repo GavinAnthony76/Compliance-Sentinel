@@ -20,10 +20,26 @@ Test rows have recognizable names: "Pay Test", "Portal Test", "Billing Test",
 **Why it matters:** you cannot keep the prod DB clean for launch while these
 suites run, and real customer data will be intermixed with test fixtures.
 
-## CURRENT FIX (in place)
-Both CI harnesses (tests/run-access-ci.mjs and tests/run-permissions-ci.mjs)
-self-clean via tests/db-cleanup.mjs, using TWO independent guards so real tenant
-data is never touched:
+## CURRENT FIX (primary): harnesses run against the LOCAL DB, not NEON
+All three CI harnesses (run-permissions-ci.mjs, run-access-ci.mjs,
+run-admin-ci.mjs) call `useLocalTestDatabase()` (tests/test-db-guard.mjs) at
+module top-level, which `delete`s `process.env.NEON_DATABASE_URL` so the spawned
+server AND every direct-DB helper fall through to the local throwaway
+`DATABASE_URL` (lib/db, db-cleanup.mjs, admin seeder all use
+`NEON_DATABASE_URL || DATABASE_URL`, ssl only when NEON set; sandbox URL is
+sslmode=disable). The guard ABORTS if DATABASE_URL is unset, shares a host with
+NEON, or ends in `.neon.tech` — because each harness then runs
+`pnpm --filter db push-force` (destructive schema sync) against DATABASE_URL to
+keep the local test DB schema current. **Why this matters:** env reads are lazy
+(call-time, not import-time) and child processes inherit the mutated env, so the
+single top-level delete covers server + suites + cleanup. Proof it works:
+cleanup logs `company id > 9` (local snapshot) while NEON MAX(id) stays 381.
+**Why local DB now (the old "stale schema" objection is gone):** the harness
+push-forces the schema before tests, so no manual sync burden.
+
+## Defense-in-depth: cleanup still runs (was the old primary fix)
+db-cleanup.mjs still self-cleans via TWO independent guards so real tenant data
+is never touched even if anything ever points these helpers at a shared DB:
 1. Snapshot MAX(companies.id) before the suites run; only consider `id > snapshot`.
 2. Of those, only delete companies whose OWNER email LIKE '%@example.com' (every
    e2e suite registers its owner with an @example.com address). A real signup that
