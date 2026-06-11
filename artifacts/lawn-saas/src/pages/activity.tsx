@@ -2,8 +2,23 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout';
 import { Card } from '@/components/ui';
-import { Activity as ActivityIcon, Filter, Search } from 'lucide-react';
+import { Activity as ActivityIcon, Filter, Search, Download } from 'lucide-react';
 import { format } from 'date-fns';
+
+function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
+  fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
+    .then(r => {
+      if (!r.ok) throw new Error(`Export failed (${r.status})`);
+      return r.blob();
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(err => onError(err.message || 'Export failed'));
+}
 
 const PAGE_SIZE = 50;
 
@@ -80,6 +95,7 @@ export function ActivityPage() {
   const [category, setCategory] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [exportError, setExportError] = useState('');
   const { data, isLoading } = useActivity(page, category, search);
 
   // Debounce the search input so we reset to page 1 and query once the user pauses typing.
@@ -106,7 +122,7 @@ export function ActivityPage() {
         {data && <span className="text-sm text-muted-foreground shrink-0">{data.total} {data.total === 1 ? 'event' : 'events'}</span>}
       </div>
 
-      <div className="mb-6 flex flex-col sm:flex-row gap-3">
+      <div className="mb-6 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3">
         <div className="relative flex-1 sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <input
@@ -129,6 +145,24 @@ export function ActivityPage() {
             ))}
           </select>
         </div>
+        <button
+          onClick={() => {
+            setExportError('');
+            const params = new URLSearchParams();
+            if (category) params.set('category', category);
+            const qs = params.toString();
+            downloadExport(
+              `/api/activity/export${qs ? `?${qs}` : ''}`,
+              `activity-${category || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`,
+              msg => { setExportError(msg); },
+            );
+          }}
+          disabled={!data || data.total === 0}
+          className="h-11 inline-flex items-center gap-2 px-4 rounded-xl bg-card border border-border text-sm font-medium text-foreground hover:bg-accent/60 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download className="w-4 h-4" />Export CSV
+        </button>
+        {exportError && <span className="text-sm text-destructive">{exportError}</span>}
       </div>
 
       {isLoading ? (

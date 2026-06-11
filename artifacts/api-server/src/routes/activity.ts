@@ -57,6 +57,64 @@ router.get("/", async (req: any, res) => {
   return res.json({ logs: logs.map(l => ({ ...l, userName: l.userId ? userMap[l.userId] ?? null : null })), total: Number(total[0].count), page, limit });
 });
 
+function toCSV(headers: string[], rows: (string | number | null | undefined)[][]): string {
+  const escape = (v: string | number | null | undefined): string => {
+    let s = v == null ? "" : String(v);
+    // Defense-in-depth against spreadsheet formula injection: neutralize cells
+    // that a spreadsheet would interpret as a formula by prefixing a single quote.
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return s.includes(",") || s.includes('"') || s.includes("\n")
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+  return [headers.join(","), ...rows.map(row => row.map(escape).join(","))].join("\n");
+}
+
+function formatAction(action: string): string {
+  return action.replace(/[._]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// GET /activity/export — download the full activity log as CSV, respecting the
+// optional category filter. Covers all matching rows, not just one page.
+router.get("/export", async (req: any, res) => {
+  const { companyId } = req.user;
+  const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
+
+  const conditions = [eq(activityLogsTable.companyId, companyId)];
+  if (category) conditions.push(like(activityLogsTable.action, `${category}.%`));
+  const whereClause = and(...conditions);
+
+  const logs = await db
+    .select()
+    .from(activityLogsTable)
+    .where(whereClause)
+    .orderBy(desc(activityLogsTable.createdAt));
+
+  const userIds = [...new Set(logs.map(l => l.userId).filter(Boolean))] as number[];
+  const users = userIds.length > 0 ? await db.select().from(usersTable).where(inArray(usersTable.id, userIds)) : [];
+  const userMap = Object.fromEntries(users.map(u => [u.id, `${u.firstName} ${u.lastName}`]));
+
+  const actorOf = (l: typeof logs[number]): string => {
+    if (l.userId && userMap[l.userId]) return userMap[l.userId];
+    const meta = l.metadataJson as { actor?: string } | null;
+    if (meta?.actor) return meta.actor;
+    return "Stripe / automated";
+  };
+  const entityOf = (l: typeof logs[number]): string => {
+    if (!l.entityType) return "";
+    return l.entityId ? `${l.entityType} #${l.entityId}` : l.entityType;
+  };
+
+  const csv = toCSV(
+    ["Action", "Actor", "Entity", "Timestamp"],
+    logs.map(l => [formatAction(l.action), actorOf(l), entityOf(l), l.createdAt?.toISOString()])
+  );
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="activity-${new Date().toISOString().slice(0, 10)}.csv"`);
+  return res.send(csv);
+});
+
 // GET /activity/unread-count — number of activity items created since the user
 // last marked the activity feed as seen, excluding their own actions.
 router.get("/unread-count", async (req: any, res) => {
