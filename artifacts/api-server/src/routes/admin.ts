@@ -604,19 +604,50 @@ const updateAdminSchema = z.object({
   email: z.string().email().optional(),
   password: z.string().min(8).optional(),
   role: z.enum(["admin", "superadmin"]).optional(),
+  isActive: z.boolean().optional(),
 });
 
 router.put("/admins/:id", async (req: any, res) => {
   const id = Number(req.params.id);
   const parsed = updateAdminSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  // Guard against an admin locking themselves out by deactivating their own account.
+  if (id === req.admin.adminId && parsed.data.isActive === false) {
+    return res.status(400).json({ error: "CannotDeactivateSelf", message: "You cannot deactivate your own account" });
+  }
   const { password, ...rest } = parsed.data;
   const fields: Record<string, any> = { ...rest, updatedAt: new Date() };
   if (password) fields.passwordHash = await hashPassword(password);
   if (Object.keys(fields).length === 1) return res.status(400).json({ error: "NoFields", message: "No fields to update" });
   const [updated] = await db.update(platformAdminsTable).set(fields).where(eq(platformAdminsTable.id, id)).returning();
-  await logActivity({ adminId: req.admin.adminId, action: "admin.admin_updated", entityType: "admin", entityId: id });
-  return res.json({ id: updated.id, email: updated.email, firstName: updated.firstName, lastName: updated.lastName, role: updated.role });
+  const action = "isActive" in rest
+    ? (rest.isActive ? "admin.admin_reactivated" : "admin.admin_deactivated")
+    : "admin.admin_updated";
+  await logActivity({ adminId: req.admin.adminId, action, entityType: "admin", entityId: id });
+  return res.json({ id: updated.id, email: updated.email, firstName: updated.firstName, lastName: updated.lastName, role: updated.role, isActive: updated.isActive });
+});
+
+// Bulk-deactivate every admin that has gone dormant (no sign-in for STALE_DAYS, or
+// never signed in). The acting admin is always excluded so they can't lock themselves out.
+const STALE_ADMIN_DAYS = 90;
+router.post("/admins/deactivate-stale", async (req: any, res) => {
+  const cutoff = new Date(Date.now() - STALE_ADMIN_DAYS * 24 * 60 * 60 * 1000);
+  const stale = await db.update(platformAdminsTable)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(
+      eq(platformAdminsTable.isActive, true),
+      sql`${platformAdminsTable.id} <> ${req.admin.adminId}`,
+      or(
+        sql`${platformAdminsTable.lastLoginAt} is null`,
+        sql`${platformAdminsTable.lastLoginAt} < ${cutoff}`,
+      ),
+    ))
+    .returning({ id: platformAdminsTable.id });
+  const deactivatedIds = stale.map(s => s.id);
+  if (deactivatedIds.length > 0) {
+    await logActivity({ adminId: req.admin.adminId, action: "admin.admins_bulk_deactivated", entityType: "admin", metadata: { count: deactivatedIds.length, ids: deactivatedIds, thresholdDays: STALE_ADMIN_DAYS } });
+  }
+  return res.json({ success: true, deactivatedCount: deactivatedIds.length, deactivatedIds });
 });
 
 router.delete("/admins/:id", async (req: any, res) => {

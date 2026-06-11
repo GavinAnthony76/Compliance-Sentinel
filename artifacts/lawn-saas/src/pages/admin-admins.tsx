@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { useAdminListAdmins, useAdminCreateAdmin } from '@workspace/api-client-react';
+import { useAdminListAdmins, useAdminCreateAdmin, useAdminGetMe } from '@workspace/api-client-react';
 import { AdminLayout } from './admin-dashboard';
 import { Button, Input } from '@/components/ui';
-import { Plus, Shield, Mail, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Plus, Shield, Mail, Pencil, Trash2, X, AlertTriangle, Ban, RotateCcw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAdminListAdminsQueryKey } from '@workspace/api-client-react';
@@ -96,17 +96,25 @@ function EditAdminModal({ admin, onClose, onSaved }: { admin: any; onClose: () =
 
 export function AdminAdminsPage() {
   const { data, isLoading, refetch } = useAdminListAdmins();
+  const { data: me } = useAdminGetMe();
   const [showNew, setShowNew] = useState(false);
   const [editAdmin, setEditAdmin] = useState<any | null>(null);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: 'admin' as 'admin' | 'superadmin' });
   const [staleOnly, setStaleOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'created'>('created');
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useAdminCreateAdmin();
 
   const admins = (data?.admins ?? []) as any[];
+  const myId = (me as any)?.id;
   const staleCount = useMemo(() => admins.filter(a => getLoginStatus(a.lastLoginAt).stale).length, [admins]);
+  const deactivatableStaleCount = useMemo(
+    () => admins.filter(a => getLoginStatus(a.lastLoginAt).stale && a.isActive !== false && a.id !== myId).length,
+    [admins, myId],
+  );
   const visibleAdmins = useMemo(() => {
     let list = staleOnly ? admins.filter(a => getLoginStatus(a.lastLoginAt).stale) : [...admins];
     if (sortBy === 'created') return list;
@@ -137,6 +145,40 @@ export function AdminAdminsPage() {
       refetch();
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleToggleActive = async (admin: any) => {
+    const deactivating = admin.isActive !== false;
+    const name = `${admin.firstName} ${admin.lastName}`;
+    if (deactivating && !confirm(`Deactivate admin "${name}"? They will be blocked from signing in until reactivated.`)) return;
+    setBusyId(admin.id);
+    try {
+      const res = await adminFetch(`/api/admin/admins/${admin.id}`, { method: 'PUT', body: JSON.stringify({ isActive: !deactivating }) });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update admin'); }
+      toast({ title: deactivating ? 'Admin deactivated' : 'Admin reactivated' });
+      refetch();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDeactivateStale = async () => {
+    if (deactivatableStaleCount === 0) return;
+    if (!confirm(`Deactivate ${deactivatableStaleCount} admin${deactivatableStaleCount === 1 ? '' : 's'} inactive for ${STALE_DAYS}+ days? They will be blocked from signing in until reactivated. Your own account is never affected.`)) return;
+    setBulkBusy(true);
+    try {
+      const res = await adminFetch(`/api/admin/admins/deactivate-stale`, { method: 'POST' });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to deactivate admins'); }
+      const result = await res.json();
+      toast({ title: `${result.deactivatedCount} admin${result.deactivatedCount === 1 ? '' : 's'} deactivated` });
+      refetch();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -211,6 +253,16 @@ export function AdminAdminsPage() {
           >
             {staleOnly ? 'Showing inactive only' : 'Show inactive only'}
           </button>
+          {deactivatableStaleCount > 0 && (
+            <button
+              onClick={handleDeactivateStale}
+              disabled={bulkBusy}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+            >
+              <Ban className="w-4 h-4" />
+              {bulkBusy ? 'Deactivating…' : `Deactivate ${deactivatableStaleCount} inactive`}
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <label className="text-xs text-slate-400">Sort by</label>
             <select
@@ -233,19 +285,25 @@ export function AdminAdminsPage() {
           <div className="divide-y divide-slate-800">
             {visibleAdmins.map((admin: any) => {
               const status = getLoginStatus(admin.lastLoginAt);
+              const deactivated = admin.isActive === false;
+              const isSelf = admin.id === myId;
               return (
-              <div key={admin.id} className={`flex items-center justify-between p-5 transition-colors ${status.stale ? 'bg-amber-400/[0.04] hover:bg-amber-400/[0.08]' : 'hover:bg-slate-800/50'}`}>
+              <div key={admin.id} className={`flex items-center justify-between p-5 transition-colors ${deactivated ? 'bg-slate-800/40 opacity-70 hover:opacity-100' : status.stale ? 'bg-amber-400/[0.04] hover:bg-amber-400/[0.08]' : 'hover:bg-slate-800/50'}`}>
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${deactivated ? 'bg-slate-700 text-slate-400' : 'bg-primary/20 text-primary'}`}>
                     {admin.firstName[0]}{admin.lastName[0]}
                   </div>
                   <div>
-                    <p className="font-medium text-white">{admin.firstName} {admin.lastName}</p>
+                    <p className={`font-medium ${deactivated ? 'text-slate-400' : 'text-white'}`}>{admin.firstName} {admin.lastName}</p>
                     <p className="text-sm text-slate-400 flex items-center gap-1"><Mail className="w-3 h-3" />{admin.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {status.stale && (
+                  {deactivated ? (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-500/10 text-red-400" title="This admin is deactivated and cannot sign in">
+                      <Ban className="w-3 h-3" />Deactivated
+                    </span>
+                  ) : status.stale && (
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-400/10 text-amber-400" title={status.never ? 'This admin has never signed in' : `No sign-in for ${status.days} days`}>
                       <AlertTriangle className="w-3 h-3" />{status.never ? 'Never signed in' : 'Inactive'}
                     </span>
@@ -256,6 +314,27 @@ export function AdminAdminsPage() {
                   <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${admin.role === 'superadmin' ? 'bg-purple-400/10 text-purple-400' : 'bg-blue-400/10 text-blue-400'}`}>
                     <Shield className="w-3 h-3" />{admin.role}
                   </span>
+                  {!isSelf && (
+                    deactivated ? (
+                      <button
+                        onClick={() => handleToggleActive(admin)}
+                        disabled={busyId === admin.id}
+                        title="Reactivate admin"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleToggleActive(admin)}
+                        disabled={busyId === admin.id}
+                        title="Deactivate admin"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-700 transition-colors disabled:opacity-50"
+                      >
+                        <Ban className="w-4 h-4" />
+                      </button>
+                    )
+                  )}
                   <button
                     onClick={() => setEditAdmin(admin)}
                     title="Edit admin"
