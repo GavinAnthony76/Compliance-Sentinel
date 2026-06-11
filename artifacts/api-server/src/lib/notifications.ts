@@ -1,4 +1,4 @@
-import { db, invoicesTable, customersTable, companiesTable } from "@workspace/db";
+import { db, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveEmailCredentials } from "./resend";
@@ -650,6 +650,7 @@ export async function sendPaymentReceiptEmail(opts: {
   amountPaid: number;
   paymentDate: Date;
   portalUrl?: string;
+  attachments?: { filename: string; content: Buffer }[];
 }): Promise<void> {
   const paymentDateStr = new Date(opts.paymentDate).toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric",
@@ -675,6 +676,7 @@ export async function sendPaymentReceiptEmail(opts: {
     subject: `Payment Received for Invoice ${opts.invoiceNumber} — Thank You!`,
     body,
     replyTo: opts.companyEmail,
+    ...(opts.attachments && opts.attachments.length > 0 ? { attachments: opts.attachments } : {}),
   });
 }
 
@@ -690,6 +692,27 @@ export async function dispatchPaymentReceiptEmail(invoiceId: number, companyId: 
     const baseUrl = resolveBaseUrl();
     const portalUrl = companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : undefined;
     const customerName = `${customer.firstName} ${customer.lastName}`.trim() || customer.email;
+
+    // Generate a paid-invoice receipt PDF to attach, mirroring the invoice email.
+    // Graceful fallback: if PDF generation fails, still send the receipt email.
+    let attachments: { filename: string; content: Buffer }[] | undefined;
+    try {
+      const lineItems = await db.select().from(invoiceLineItemsTable)
+        .where(eq(invoiceLineItemsTable.invoiceId, invoiceId))
+        .orderBy(invoiceLineItemsTable.sortOrder);
+      const { buildInvoicePdf } = await import("./invoice-pdf");
+      const pdfBuffer = await buildInvoicePdf({
+        invoice: inv,
+        customer,
+        company,
+        lineItems,
+        documentType: "receipt",
+      });
+      attachments = [{ filename: `receipt-${inv.invoiceNumber}.pdf`, content: pdfBuffer }];
+    } catch (pdfErr) {
+      logger.error({ err: pdfErr, invoiceId, companyId }, "Failed to generate receipt PDF for payment receipt email; sending without attachment");
+    }
+
     await sendPaymentReceiptEmail({
       customerEmail: customer.email,
       customerName,
@@ -699,6 +722,7 @@ export async function dispatchPaymentReceiptEmail(invoiceId: number, companyId: 
       amountPaid: Number(inv.total),
       paymentDate: inv.paidAt ? new Date(inv.paidAt) : new Date(),
       portalUrl,
+      attachments,
     });
   } catch (err) {
     logger.error({ err, invoiceId, companyId }, "Failed to dispatch payment receipt email");
