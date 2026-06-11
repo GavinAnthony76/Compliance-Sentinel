@@ -25,6 +25,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Build into a harness-specific dir so concurrent CI runs never race on a shared
+// `dist/` (which can flake esbuild with "Unexpected end of input").
+const DIST = "dist-admin";
 const PORT = process.env.ADMIN_CI_PORT || "5097";
 const BASE = `http://127.0.0.1:${PORT}/api`;
 const READY_TIMEOUT_MS = 60_000;
@@ -63,8 +66,10 @@ async function waitForServer() {
 
 async function main() {
   // --- Build ----------------------------------------------------------------
-  console.log("• Building api-server…");
-  const buildCode = await run("node", ["build.mjs"]);
+  console.log(`• Building api-server into ${DIST}…`);
+  const buildCode = await run("node", ["build.mjs"], {
+    env: { ...process.env, BUILD_OUTDIR: DIST },
+  });
   if (buildCode !== 0) {
     console.error("Build failed; aborting admin-deactivation validation.");
     process.exit(buildCode);
@@ -81,7 +86,7 @@ async function main() {
   delete serverEnv.RESEND_FROM_EMAIL;
 
   console.log(`• Starting api-server on port ${PORT} (email delivery disabled)…`);
-  const server = spawn("node", ["--enable-source-maps", "dist/index.mjs"], {
+  const server = spawn("node", ["--enable-source-maps", `${DIST}/index.mjs`], {
     cwd: artifactDir,
     stdio: "inherit",
     env: serverEnv,

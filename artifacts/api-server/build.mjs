@@ -10,8 +10,13 @@ globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
+// The output directory is configurable so concurrent build invocations (e.g. the
+// CI harnesses) can each target an isolated dir instead of racing on a shared
+// `dist/`. Defaults to "dist" for the normal dev/start flow.
+const outDirName = process.env.BUILD_OUTDIR || "dist";
+
 async function buildAll() {
-  const distDir = path.resolve(artifactDir, "dist");
+  const distDir = path.resolve(artifactDir, outDirName);
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({

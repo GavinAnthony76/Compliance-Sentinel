@@ -36,6 +36,9 @@ import {
 } from "./db-cleanup.mjs";
 
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// Build into a harness-specific dir so concurrent CI runs never race on a shared
+// `dist/` (which can flake esbuild with "Unexpected end of input").
+const DIST = "dist-access";
 const PORT = process.env.ACCESS_CI_PORT || "5098";
 const BASE = `http://127.0.0.1:${PORT}/api`;
 const READY_TIMEOUT_MS = 60_000;
@@ -74,8 +77,10 @@ async function waitForServer() {
 
 async function main() {
   // --- Build ----------------------------------------------------------------
-  console.log("• Building api-server…");
-  const buildCode = await run("node", ["build.mjs"]);
+  console.log(`• Building api-server into ${DIST}…`);
+  const buildCode = await run("node", ["build.mjs"], {
+    env: { ...process.env, BUILD_OUTDIR: DIST },
+  });
   if (buildCode !== 0) {
     console.error("Build failed; aborting access validation.");
     process.exit(buildCode);
@@ -83,7 +88,7 @@ async function main() {
 
   // --- Start server ---------------------------------------------------------
   console.log(`• Starting api-server on port ${PORT}…`);
-  const server = spawn("node", ["--enable-source-maps", "dist/index.mjs"], {
+  const server = spawn("node", ["--enable-source-maps", `${DIST}/index.mjs`], {
     cwd: artifactDir,
     stdio: "inherit",
     env: { ...process.env, PORT, NODE_ENV: process.env.NODE_ENV || "test" },
