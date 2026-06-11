@@ -40,7 +40,26 @@ const app: Express = express();
 // Security headers
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: false,
+  // Restrictive CSP — allows our own origin, Stripe.js, and the Resend pixel.
+  // Inline styles are needed by Tailwind/shadcn; inline scripts are NOT allowed.
+  // Update script-src if additional third-party scripts are ever added.
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://js.stripe.com"],
+      scriptSrcElem: ["'self'", "https://js.stripe.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "https://api.stripe.com"],
+      frameSrc: ["https://js.stripe.com", "https://hooks.stripe.com"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
 }));
 
 app.use(
@@ -70,7 +89,9 @@ if (process.env.REPL_SLUG) allowedOrigins.push(`https://${process.env.REPL_SLUG}
 allowedOrigins.push(/https?:\/\/.*\.(replit\.dev|riker\.replit\.dev|repl\.co)(:\d+)?$/);
 
 app.use(cors({
-  origin: allowedOrigins.length > 1 ? allowedOrigins : true,
+  // Never fall back to wildcard — if no specific origin is configured the
+  // server refuses cross-origin credentialed requests rather than open the door.
+  origin: allowedOrigins.length > 0 ? allowedOrigins : false,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 }));

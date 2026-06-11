@@ -117,11 +117,14 @@ router.post("/auth/send-invite", async (req: any, res) => {
     return res.status(400).json({ error: "NoContact", message: "Customer has no email or phone number. Add one first." });
   }
 
-  const inviteToken = crypto.randomBytes(32).toString("hex");
+  const rawInviteToken = crypto.randomBytes(32).toString("hex");
+  // Store SHA-256 hash — not the raw token — so a DB read cannot be used to
+  // immediately consume the invite link.
+  const inviteTokenHash = crypto.createHash("sha256").update(rawInviteToken).digest("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
   await db.update(customersTable).set({
-    portalInviteToken: inviteToken,
+    portalInviteToken: inviteTokenHash,
     portalInviteExpiresAt: expiresAt,
     updatedAt: new Date(),
   }).where(eq(customersTable.id, customer.id));
@@ -129,7 +132,7 @@ router.post("/auth/send-invite", async (req: any, res) => {
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, businessCompanyId)).limit(1);
   const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
   // Invite link takes customers to the set-password page so they create a password on first access.
-  const portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
+  const portalUrl = `${baseUrl}/portal/set-password?token=${rawInviteToken}&slug=${company.slug}`;
   const customerName = customer.firstName || customer.email || "there";
 
   const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
@@ -157,11 +160,12 @@ router.post("/auth/request-link", async (req, res) => {
   if (company) {
     const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.email, email))).limit(1);
     if (customer && customer.email) {
-      const loginToken = crypto.randomBytes(32).toString("hex");
+      const rawLoginToken = crypto.randomBytes(32).toString("hex");
+      const loginTokenHash = crypto.createHash("sha256").update(rawLoginToken).digest("hex");
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-      await db.update(customersTable).set({ portalInviteToken: loginToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+      await db.update(customersTable).set({ portalInviteToken: loginTokenHash, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
       const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
-      const loginUrl = `${baseUrl}/portal/${company.slug}/login?token=${loginToken}`;
+      const loginUrl = `${baseUrl}/portal/${company.slug}/login?token=${rawLoginToken}`;
       const { sendPortalAccessEmail } = await import("../lib/notifications");
       await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl, intent: "login", expiresLabel: "in 1 hour" });
     }
@@ -178,7 +182,9 @@ router.post("/auth/verify-link", async (req, res) => {
   const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound", message: "Company not found" });
 
-  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.portalInviteToken, token))).limit(1);
+  // Hash incoming raw token before DB lookup — tokens are stored as SHA-256 hashes.
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.portalInviteToken, tokenHash))).limit(1);
   if (!customer) return res.status(400).json({ error: "InvalidToken", message: "This login link is invalid or has already been used" });
   if (customer.portalInviteExpiresAt && customer.portalInviteExpiresAt < new Date()) {
     return res.status(400).json({ error: "ExpiredToken", message: "This login link has expired. Please request a new one." });
@@ -205,7 +211,9 @@ router.post("/auth/set-password", async (req, res) => {
   const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound", message: "Company not found" });
 
-  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.portalInviteToken, token))).limit(1);
+  // Hash the raw token before lookup — tokens are stored as SHA-256 hashes.
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.portalInviteToken, tokenHash))).limit(1);
   if (!customer) return res.status(400).json({ error: "InvalidToken", message: "Invalid or expired invite link" });
   if (customer.portalInviteExpiresAt && customer.portalInviteExpiresAt < new Date()) {
     return res.status(400).json({ error: "ExpiredToken", message: "This invite link has expired" });
@@ -239,12 +247,13 @@ router.post("/auth/forgot-password", async (req, res) => {
   const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.email, email))).limit(1);
 
   if (customer && customer.portalPasswordHash) {
-    const resetToken = crypto.randomBytes(32).toString("hex");
+    const rawResetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenHash = crypto.createHash("sha256").update(rawResetToken).digest("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await db.update(customersTable).set({ portalInviteToken: resetToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+    await db.update(customersTable).set({ portalInviteToken: resetTokenHash, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
 
     const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
-    const resetUrl = `${baseUrl}/portal/set-password?token=${resetToken}&slug=${companySlug}`;
+    const resetUrl = `${baseUrl}/portal/set-password?token=${rawResetToken}&slug=${companySlug}`;
     const { sendEmail } = await import("../lib/notifications");
     await sendEmail({
       to: customer.email!,

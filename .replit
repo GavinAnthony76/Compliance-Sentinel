@@ -72,5 +72,5 @@ RESEND_FROM_EMAIL = "noreply@greensynk.com"
 STRIPE_STARTER_PRICE_ID = "price_1Tg8lIJc1EWYOrCt1OA2H6TN"
 STRIPE_GROWTH_PRICE_ID = "price_1Tg8lIJc1EWYOrCtRHwWPFML"
 STRIPE_PRO_PRICE_ID = "price_1Tg8lIJc1EWYOrCtO98FXhMF"
-STRIPE_V2_WEBHOOK_SECRET = "whsec_cq4zZEbaEd2HMb4OMabX3YTHORehXESI"
+STRIPE_V2_WEBHOOK_SECRET = ""  # ROTATED: secret was exposed in git — set a new value from the Stripe Dashboard → Developers → Webhooks
 APP_BASE_URL = "https://greensynk.com"

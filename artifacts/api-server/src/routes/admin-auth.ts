@@ -90,12 +90,15 @@ router.post("/forgot-password", async (req, res) => {
   const [admin] = await db.select().from(platformAdminsTable).where(eq(platformAdminsTable.email, parsed.data.email)).limit(1);
 
   if (admin && admin.isActive) {
-    const token = crypto.randomBytes(32).toString("hex");
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    // Store a SHA-256 hash — not the raw token — so a DB read cannot be used
+    // to immediately consume the link.
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await db.update(platformAdminsTable).set({ passwordResetToken: token, passwordResetExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(platformAdminsTable.id, admin.id));
+    await db.update(platformAdminsTable).set({ passwordResetToken: tokenHash, passwordResetExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(platformAdminsTable.id, admin.id));
 
     const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
-    const resetUrl = `${baseUrl}/admin/reset-password?token=${token}`;
+    const resetUrl = `${baseUrl}/admin/reset-password?token=${rawToken}`;
     await sendEmail({
       to: admin.email,
       subject: "Reset your GreenSynk admin password",
@@ -111,7 +114,9 @@ router.post("/reset-password", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
   const { token, password } = parsed.data;
-  const [admin] = await db.select().from(platformAdminsTable).where(eq(platformAdminsTable.passwordResetToken, token)).limit(1);
+  // Hash the incoming raw token before DB lookup — tokens are stored hashed.
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const [admin] = await db.select().from(platformAdminsTable).where(eq(platformAdminsTable.passwordResetToken, tokenHash)).limit(1);
   if (!admin) return res.status(400).json({ error: "InvalidToken", message: "Invalid or expired reset link" });
   if (!admin.passwordResetExpiresAt || admin.passwordResetExpiresAt < new Date()) {
     return res.status(400).json({ error: "ExpiredToken", message: "This reset link has expired. Please request a new one." });

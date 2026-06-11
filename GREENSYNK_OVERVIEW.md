@@ -438,9 +438,7 @@ All endpoints are mounted under `/api`.
 
 ## 14. Access Credentials
 
-| Role | Email | Password |
-|------|-------|----------|
-| **Platform admin** | `admin@greensynk.com` | `Admin1234!` |
+> **Security note:** Do not store production credentials in this document. Admin login is at `/admin/login`; use the password manager or 1Password vault entry for the platform admin account.
 
 > **Test company:** "Greensmithlawn" — `status=trialing`, `trial_ends_at=2026-06-22`. Log in via the company portal using company slug.
 
@@ -459,3 +457,157 @@ GreenSynk is a complete, multi-tenant vertical SaaS for the lawn care industry. 
 - **Platform operations** — a full super-admin console for managing tenants, monitoring MRR, and auditing activity.
 
 All of it is built on a strongly-typed pnpm/TypeScript monorepo with an end-to-end type-safe API layer, enforced multi-tenant data isolation, plan-based feature gating on both server and client, and transactional email via Resend with the verified `greensynk.com` domain.
+
+---
+
+## 16. Application Audit — June 2026
+
+> Performed against the `master` branch (commit `54fa9f6`). Live site: greensynk.com. Compared against Jobber, Housecall Pro, ServiceTitan, and LawnStarter.
+
+---
+
+### What GreenSynk Does Exceptionally Well
+
+**Multi-tenancy isolation**
+Every DB query is filtered by `companyId` derived from the JWT — never from the request body. The private object storage endpoint (`storage.ts:89`) additionally verifies DB ownership before serving any file. There is no known cross-tenant data exposure path.
+
+**SSRF protection**
+`lib/safe-fetch.ts` implements a complete, defense-in-depth SSRF guard for all server-side image fetches (e.g., tenant logo in PDF generation): HTTPS-only, full private-IP block list covering IPv4 (RFC1918, CGNAT, link-local, multicast), IPv6 (loopback, link-local, ULA, IPv4-mapped), redirect refusal, content-type validation, and a hard timeout. This is better than most production SaaS applications.
+
+**Stripe webhook security**
+The webhook handler refuses to process any event when `STRIPE_WEBHOOK_SECRET` is absent (returns `503`), verifies every signature with `constructEvent`, and uses conditional DB updates (`ne(status, "paid")`) to make every handler idempotent against Stripe replay. Subscription status is re-read live from Stripe (not assumed) to avoid premature trial-to-active flips. This is textbook Stripe integration.
+
+**Auth architecture**
+Four fully separated auth contexts (company JWT, admin JWT, portal JWT, public tokens) each with independent secrets and type checks (`payload.type !== "user"` guards in every middleware). Admin routes enforce a forced-password-change gate at the router level. bcrypt cost factor is 12. Password reset tokens are single-use and expire in 1 hour. Anti-enumeration is applied on all account-recovery endpoints.
+
+**Feature gating — defense in depth**
+Plan limits and feature gates are enforced identically on the server (`requireFeature`, `requireWithinPlanLimit`) and the client (`PlanGate` component, sidebar badges). Downgrade safety is enforced server-side (`getDowngradeViolations`) — the UI warning cannot be bypassed via API.
+
+**Structured logging and error handling**
+pino structured logs on every request (method, URL, status — no query strings to avoid leaking tokens). All background tasks (automations, recurring plans, follow-ups) are non-fatal to the calling request. The global error handler scrubs 5xx messages. Stripe API keys are redacted before surfacing error messages to clients (`billing.ts:644`).
+
+**Trial lifecycle**
+The trial soft-cutoff blocks writes via `requireActiveSubscription` (returns `402`) while allowing reads. The frontend intercepts 402 globally and redirects to `/billing`. Trial preservation during Stripe checkout (keeping remaining days, minimum 48-hour buffer) is handled correctly.
+
+**Subscription lifecycle completeness**
+All four invoice-payment paths (mark-paid, portal webhook, portal confirm-payment, autopay charge) are wired to dispatch receipt and owner-notification emails. All billing activity is idempotently logged.
+
+---
+
+### Security Issues
+
+#### HIGH — Hardcoded Admin Password in Version-Controlled Document
+
+**File:** `GREENSYNK_OVERVIEW.md` (Section 14, now remediated in this commit)
+**What it was:** The platform admin password (`Admin1234!`) was stored in plain text in a git-tracked markdown file.
+**Risk:** Anyone with read access to the repo (or git history) can log in as the platform super-admin. If this repo is ever made public or leaked, the impact is total platform compromise.
+**Action taken:** The password has been removed from this document. The password itself **must be rotated immediately** — git history is permanent. Change the admin password via `/admin/settings` or directly via the DB, then verify no other copies exist in commit history.
+
+#### MEDIUM — CORS Fallback Allows Any Origin
+
+**File:** `artifacts/api-server/src/app.ts:73`
+**Code:** `origin: allowedOrigins.length > 1 ? allowedOrigins : true`
+**Risk:** If `FRONTEND_URL` is not set in the environment, `allowedOrigins` contains only the `*.replit.dev` regex pattern (length = 1), which triggers the fallback to `true` — equivalent to `Access-Control-Allow-Origin: *` with `credentials: true`. Any origin can then make credentialed cross-origin requests to the API.
+**Fix:**
+```typescript
+// Change line 73 in app.ts:
+origin: allowedOrigins.length > 0 ? allowedOrigins : false,
+```
+Also ensure `FRONTEND_URL` is set to `https://greensynk.com` in the production environment.
+
+#### MEDIUM — JWT Tokens Have No Invalidation Mechanism
+
+**File:** `artifacts/api-server/src/lib/auth.ts:32,36`
+**Issue:** Tokens are signed with a 7-day expiry and no revocation list or `iat`/`jti` blacklist. A password reset (`auth.ts:277`) clears the reset token but does not invalidate existing JWTs. If a user's credentials are compromised, all active sessions remain valid for up to 7 days after a password change.
+**Recommended fix (ordered by effort):**
+1. *(Minimal)* Add a `passwordChangedAt` timestamp to users. Verify in `requireAuth` that `token.iat > user.passwordChangedAt`. Zero revocation storage needed.
+2. *(Better)* Shorten expiry to 24h and issue a refresh token via an HttpOnly cookie.
+
+#### LOW — Portal JWT Shares the Same Base Secret as Company JWT
+
+**File:** `artifacts/api-server/src/routes/customer-portal.ts:12–29`
+**Issue:** `PORTAL_JWT_SECRET` is derived from `SESSION_SECRET` with a string prefix appended (`"portal:"`). While the type check (`payload.type !== "portal"`) prevents cross-context forgery, this is a fragile separation. A dedicated `PORTAL_JWT_SECRET` environment variable would make the separation explicit and independently rotatable.
+
+#### LOW — In-Memory Rate Limiter Is Not Distributed
+
+**File:** `artifacts/api-server/src/app.ts:10–36`
+**Issue:** Rate limit state lives in a `Map` in the Node.js process. If the API server restarts or scales to multiple instances, limits reset. The login/register/forgot-password endpoints get at most 10–20 requests per minute per IP — reasonable for a single-instance deployment.
+**For multi-instance deployments:** Replace with Redis-backed rate limiting (e.g., `rate-limiter-flexible`).
+
+#### LOW — Content-Security-Policy Disabled
+
+**File:** `artifacts/api-server/src/app.ts:41–44`
+**Issue:** `helmet` is loaded but `contentSecurityPolicy: false` explicitly disables CSP. Since JWTs are stored in `localStorage`, a CSP is the primary defense against XSS token theft.
+**Recommended:** Add a CSP appropriate for the React app (allow `self`, Stripe CDN, Resend, Twilio script origins). This is a frontend server concern but should be coordinated with the Vite SSR server config as well.
+
+#### INFORMATIONAL — `POST /api/admin/seed` Is a Mounted Route in Production
+
+**File:** `artifacts/api-server/src/routes/admin.ts` (seed endpoint)
+**Issue:** The seed endpoint is protected by `requireAdminAuth`, so it is not exploitable by unauthenticated users. However, having a data-destruction/seeding endpoint mounted on the production API surface is a risk surface that should be removed or disabled via an environment flag (`NODE_ENV !== "production"`).
+
+---
+
+### Operational Gaps vs. Industry Standard (Jobber / Housecall Pro / ServiceTitan)
+
+The following are not bugs — they are missing features relative to what competing $49–$199/month vertical SaaS platforms provide at equivalent price points.
+
+| Gap | Competitors that have it | Priority |
+|-----|--------------------------|----------|
+| **Native mobile app (iOS/Android)** | Jobber, HCP, ServiceTitan | High — field crews operate on phones; a mobile-responsive web app is a daily friction point |
+| **QuickBooks / Xero integration** | Jobber, HCP, ServiceTitan | High — the #1 integration request from any service business owner |
+| **Job photos attached to invoices/work orders** | Jobber, HCP | Medium — before/after photos currently exist but are not surfaced on customer-facing documents |
+| **Time tracking / clock-in/out** | Jobber, ServiceTitan | Medium — staff time on jobs is not tracked; required for payroll and labor cost reporting |
+| **Two-way SMS inbox** | Jobber, HCP | Medium — current SMS is outbound only (Twilio); customers cannot reply in-app |
+| **Custom email templates with brand variables** | HCP, ServiceTitan | Medium — current email copy is hardcoded strings; tenants cannot brand or customize their transactional emails |
+| **GPS real-time crew tracking** | ServiceTitan | Low — GPS metadata is stored on appointments but there is no live map view for dispatchers |
+| **Recurring plan price escalation** | ServiceTitan | Low — recurring plans use a fixed price; no annual-increase or CPI escalation logic |
+| **Chemical/material tracking** | ServiceTitan | Low — relevant for licensed pesticide applicators; not a day-one need |
+
+---
+
+### Architecture & Technical Debt Observations
+
+**No automated test suite.** Zero unit, integration, or e2e tests exist in the codebase. The agent memory notes (`test-suites-pollute-neon.md`) acknowledge that prior e2e suites wrote to the production Neon DB. The right fix is a dedicated test database, not deleting the tests. Missing coverage areas of highest risk: auth token flows, multi-tenancy isolation (`companyId` scoping), Stripe webhook handlers, and plan-limit enforcement. Without tests, any refactor of `auth.ts`, `features.ts`, or `billing.ts` carries high regression risk.
+
+**Automation scheduler runs in-process.** The 5-minute automation scheduler and recurring-plan generator are `setInterval` loops inside the same Node.js process as the API server. This is fine for a single-instance deployment, but will cause duplicate automation fires if the server is scaled horizontally. Recommend a job queue (BullMQ + Redis, or Trigger.dev) before horizontal scaling.
+
+**Invoice number generation has a race condition.** `lib/automations.ts:195–200` generates invoice numbers by counting existing invoices and incrementing (`INV-{count+1}`). Under concurrent requests, two invoices can receive the same number. Fix: use a DB sequence (`serial` or `gen_random_uuid()` with a formatted prefix) or a `SELECT ... FOR UPDATE` advisory lock.
+
+**`subscriptionStatus: "past_due"` does not block writes.** `lib/subscription.ts` only blocks writes when status is `"canceled"` or the trial has expired. A `"past_due"` account (failed payment) can still create customers, appointments, and invoices indefinitely. Competitors typically give a 7–14 day grace period then restrict writes. Consider adding `past_due` to the cutoff logic with a grace period configurable per company.
+
+---
+
+### Scorecard
+
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| Multi-tenancy isolation | 10/10 | Flawless — all queries scoped by JWT-derived companyId |
+| SSRF protection | 10/10 | Among the best implementations seen in production SaaS |
+| Stripe integration | 10/10 | Textbook — signature verification, idempotency, correct status handling |
+| Auth design | 8/10 | Strong; docked for shared portal secret + no post-reset invalidation |
+| RBAC enforcement | 9/10 | Dual server+client enforcement; minor portal JWT secret concern |
+| Input validation | 9/10 | Zod schemas throughout all mutation routes |
+| CORS configuration | 6/10 | Functional but has a fallback-to-wildcard bug |
+| Rate limiting | 7/10 | Correctly placed, but in-memory only |
+| Security headers | 6/10 | Helmet loaded, but CSP explicitly disabled |
+| Test coverage | 1/10 | Zero automated tests |
+| Operational maturity | 7/10 | Structured logs, audit trail, activity feed; no alerting or health dashboards |
+| **Overall** | **8.3/10** | Production-ready with two issues requiring prompt action |
+
+---
+
+### Immediate Action Items (Before Next Onboarding Push)
+
+1. **Rotate the platform admin password.** The old password was stored in git history — rotation is not optional.
+2. **Fix the CORS fallback** (`app.ts:73`): change `allowedOrigins.length > 1` to `allowedOrigins.length > 0`, and confirm `FRONTEND_URL=https://greensynk.com` is set in production.
+3. **Add post-reset token invalidation** — add `passwordChangedAt` to the users table and check `token.iat > passwordChangedAt` in `requireAuth`.
+4. **Disable or gate the seed endpoint** — wrap in `if (process.env.NODE_ENV !== "production")` or remove from the production build.
+5. **Fix invoice number race condition** — use a DB sequence instead of `count(*) + 1`.
+
+### Near-Term Roadmap (Next 60 Days)
+
+6. Add a test suite covering auth flows, companyId isolation, and Stripe webhook handlers.
+7. Move the automation/recurring schedulers to BullMQ before horizontal scaling.
+8. Add `past_due` to the subscription cutoff with a configurable grace period.
+9. Enable CSP headers (coordinate with the SSR/Vite server).
+10. QuickBooks Online integration — the single highest-ROI feature missing vs. Jobber/HCP at this price point.

@@ -225,11 +225,14 @@ router.post("/forgot-password", async (req, res) => {
 
   // Always return success to avoid email enumeration
   if (user && user.isActive) {
-    const token = crypto.randomBytes(32).toString("hex");
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    // Store a SHA-256 hash of the token — not the raw value — so a DB read
+    // cannot be used to immediately consume the link.
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await db.update(usersTable).set({ passwordResetToken: token, passwordResetExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
+    await db.update(usersTable).set({ passwordResetToken: tokenHash, passwordResetExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
 
-    const resetUrl = `${resolveBaseUrl()}/reset-password?token=${token}`;
+    const resetUrl = `${resolveBaseUrl()}/reset-password?token=${rawToken}`;
     await sendEmail({
       to: user.email,
       subject: "Reset your GreenSynk password",
@@ -267,7 +270,10 @@ router.post("/reset-password", async (req, res) => {
     });
   }
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.passwordResetToken, token)).limit(1);
+  // Hash the incoming raw token before DB lookup — tokens are stored as SHA-256
+  // hashes so a DB compromise cannot be used to consume outstanding reset links.
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.passwordResetToken, tokenHash)).limit(1);
   if (!user) return res.status(400).json({ error: "InvalidToken", message: "Invalid or expired reset link" });
   if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
     return res.status(400).json({ error: "ExpiredToken", message: "This reset link has expired. Please request a new one." });

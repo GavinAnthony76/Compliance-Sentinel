@@ -162,8 +162,15 @@ router.get("/estimates/:token", async (req, res) => {
 router.post("/estimates/:token/sign", async (req, res) => {
   const { token } = req.params;
   const parsed = z.object({
-    signerName: z.string().min(1),
-    signatureData: z.string().min(1), // base64 PNG from canvas
+    // 200 chars is generous for a full name; prevents DB bloat from crafted payloads.
+    signerName: z.string().min(1).max(200).trim(),
+    // base64 PNG from canvas. A typical 400×150 signature canvas is ~15–40 KB
+    // base64-encoded (~20–55 KB text). 200 KB is a safe ceiling that blocks
+    // oversized payloads while comfortably fitting any real signature image.
+    signatureData: z.string().min(1).max(204_800).refine(
+      (v) => v.startsWith("data:image/png;base64,") || v.startsWith("data:image/jpeg;base64,"),
+      { message: "signatureData must be a base64-encoded PNG or JPEG data URL" },
+    ),
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
