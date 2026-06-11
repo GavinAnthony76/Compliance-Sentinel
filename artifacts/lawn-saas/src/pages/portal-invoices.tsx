@@ -3,7 +3,7 @@ import { useParams, Link, useLocation } from 'wouter';
 import { usePortalAuth } from '@/hooks/use-portal-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { ArrowLeft, CreditCard, CheckCircle, Leaf, ChevronRight } from 'lucide-react';
+import { ArrowLeft, CreditCard, CheckCircle, Leaf, ChevronRight, Download } from 'lucide-react';
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
@@ -28,6 +28,7 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -48,6 +49,27 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
       toast({ title: 'Payment failed', description: err.message, variant: 'destructive' });
     } finally {
       setPaying(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    setDownloading(true);
+    try {
+      const res = await portalFetch(`/api/portal/invoices/${invoice.id}/pdf`);
+      if (!res.ok) throw new Error('Could not generate PDF');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `invoice-${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: 'Download failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -72,7 +94,12 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
                   <CardTitle className="text-xl">{invoice.invoiceNumber}</CardTitle>
                   {detail?.companyName && <p className="text-sm text-muted-foreground mt-0.5">From {detail.companyName}</p>}
                 </div>
-                <StatusBadge status={invoice.status} />
+                <div className="flex items-center gap-3 shrink-0">
+                  <StatusBadge status={invoice.status} />
+                  <Button variant="outline" size="sm" onClick={handleDownloadPdf} isLoading={downloading}>
+                    <Download className="w-4 h-4 mr-1.5" />PDF
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
