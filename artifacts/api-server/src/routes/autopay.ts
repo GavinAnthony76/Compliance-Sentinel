@@ -4,12 +4,12 @@
  */
 import { Router } from "express";
 import { db, customersTable, invoicesTable, recurringPlansTable } from "@workspace/db";
-import { eq, and, lt, isNull, or, sql } from "drizzle-orm";
+import { eq, and, ne, lt, isNull, or, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
-import { sendEmail, sendSMS } from "../lib/notifications";
+import { sendEmail, sendSMS, dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from "../lib/notifications";
 
 const router = Router();
 router.use(requireAuth);
@@ -176,15 +176,21 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
     });
 
     if (paymentIntent.status === "succeeded") {
-      await db.update(invoicesTable).set({
+      // Transition-guarded update: only notify when this request actually flips
+      // status -> paid, so concurrent charges can't double-send emails.
+      const transitioned = await db.update(invoicesTable).set({
         status: "paid",
         paidAt: new Date(),
         paymentMethod: "card",
         stripePaymentIntentId: paymentIntent.id,
         updatedAt: new Date(),
-      }).where(eq(invoicesTable.id, invoiceId));
+      }).where(and(eq(invoicesTable.id, invoiceId), ne(invoicesTable.status, "paid"))).returning({ id: invoicesTable.id });
 
       await logActivity({ companyId, userId, action: "invoice.autopay_charged", entityType: "invoice", entityId: invoiceId });
+      if (transitioned.length > 0) {
+        dispatchPaymentReceiptEmail(invoiceId, companyId);
+        dispatchOwnerPaymentNotification(invoiceId, companyId);
+      }
       return res.json({ success: true, status: "paid" });
     }
 

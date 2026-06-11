@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable, companiesTable } from "@workspace/db";
-import { eq, and, sql, desc, inArray } from "drizzle-orm";
+import { eq, and, ne, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { fireAutomations } from "../lib/automations";
-import { dispatchPaymentReceiptEmail } from "../lib/notifications";
+import { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from "../lib/notifications";
 import { dispatchInvoiceEmail } from "../lib/invoice-email";
 import { logger } from "../lib/logger";
 import { fetchImageBufferSafe } from "../lib/safe-fetch";
@@ -441,10 +441,18 @@ router.post("/:id/mark-paid", async (req: any, res) => {
   const updateData: any = { status: "paid", paidAt: new Date(), updatedAt: new Date() };
   if (req.body.paymentMethod) updateData.paymentMethod = req.body.paymentMethod;
   if (req.body.paymentMethodNote) updateData.paymentMethodNote = req.body.paymentMethodNote;
-  const [updated] = await db.update(invoicesTable).set(updateData).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
+  // Transition-guarded update: only the request that actually flips status ->
+  // paid notifies, so concurrent mark-paid calls can't double-send emails.
+  const [transitioned] = await db.update(invoicesTable).set(updateData)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId), ne(invoicesTable.status, "paid")))
+    .returning();
+  const [updated] = transitioned
+    ? [transitioned]
+    : await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
   await logActivity({ companyId, userId, action: "invoice.paid", entityType: "invoice", entityId: id, metadata: { paymentMethod: req.body.paymentMethod } });
-  if (existing.status !== "paid") {
+  if (transitioned) {
     dispatchPaymentReceiptEmail(id, companyId);
+    dispatchOwnerPaymentNotification(id, companyId);
   }
   const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
   return res.json(fmt(updated, undefined, lineItems.map(fmtLineItem)));

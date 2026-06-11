@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, customersTable, invoicesTable, invoiceLineItemsTable, appointmentsTable, estimatesTable, companiesTable, servicesTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, ne, desc } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { hasFeature, getRequiredPlanForFeature } from "../lib/features";
@@ -566,11 +566,21 @@ router.post("/invoices/:id/confirm-payment", requirePortalAuth, async (req: any,
     return res.status(402).json({ error: "NotPaid", message: "Payment not yet confirmed by Stripe." });
   }
 
-  await db.update(invoicesTable).set({
+  // Transition-guarded update: the webhook (billing.ts) may mark this invoice
+  // paid concurrently between the pre-read guard above and here, so only the
+  // request that actually flips status -> paid sends notifications. Prevents
+  // duplicate receipt + owner emails in the webhook/fallback race.
+  const transitioned = await db.update(invoicesTable).set({
     status: "paid",
     paidAt: new Date(),
     updatedAt: new Date(),
-  }).where(eq(invoicesTable.id, id));
+  }).where(and(eq(invoicesTable.id, id), ne(invoicesTable.status, "paid"))).returning({ id: invoicesTable.id });
+
+  if (transitioned.length > 0) {
+    const { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } = await import("../lib/notifications");
+    dispatchPaymentReceiptEmail(id, companyId);
+    dispatchOwnerPaymentNotification(id, companyId);
+  }
 
   return res.json({ confirmed: true });
 });

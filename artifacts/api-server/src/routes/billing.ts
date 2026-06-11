@@ -1,6 +1,6 @@
 import { Router, type Request } from "express";
 import { db, companiesTable, invoicesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { getPlanUsageSummary, getDowngradeViolations } from "../lib/features";
 import { getUncachableStripeClient, getStripePublishableKey, getStripePriceId } from "../lib/stripe";
@@ -83,17 +83,21 @@ router.post("/webhook", async (req: Request, res) => {
             const paymentIntentId = typeof session.payment_intent === "string"
               ? session.payment_intent
               : session.id;
-            await db.update(invoicesTable).set({
+            // Conditional update so Stripe retries/replays of the same event
+            // don't fire duplicate receipt + owner notification emails: only
+            // rows transitioning out of "paid" are updated and notified.
+            const transitioned = await db.update(invoicesTable).set({
               status: "paid",
               paidAt: new Date(),
               paymentMethod: "card",
               stripePaymentIntentId: paymentIntentId,
               updatedAt: new Date(),
-            }).where(eq(invoicesTable.id, invoiceId));
-            logger.info({ invoiceId, sessionId: session.id }, "Invoice marked paid via portal checkout");
-            if (companyId) {
-              const { dispatchPaymentReceiptEmail } = await import("../lib/notifications");
+            }).where(and(eq(invoicesTable.id, invoiceId), ne(invoicesTable.status, "paid"))).returning({ id: invoicesTable.id });
+            logger.info({ invoiceId, sessionId: session.id, transitioned: transitioned.length > 0 }, "Invoice marked paid via portal checkout");
+            if (companyId && transitioned.length > 0) {
+              const { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } = await import("../lib/notifications");
               dispatchPaymentReceiptEmail(invoiceId, companyId);
+              dispatchOwnerPaymentNotification(invoiceId, companyId);
             }
           }
           break;

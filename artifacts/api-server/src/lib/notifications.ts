@@ -483,6 +483,79 @@ export async function dispatchPaymentReceiptEmail(invoiceId: number, companyId: 
   }
 }
 
+// Customer-facing welcome email with a link to book appointments online. Sent
+// on customer creation for plans without the customer portal (e.g. Starter), so
+// every customer still gets a way to self-schedule via the public booking page.
+export async function sendCustomerWelcomeBookingEmail(opts: {
+  to: string;
+  customerName: string;
+  companyName: string;
+  companyEmail?: string;
+  companyPhone?: string | null;
+  bookingUrl: string;
+}): Promise<void> {
+  await sendEmail({
+    to: opts.to,
+    subject: `Welcome to ${opts.companyName} — book your next appointment`,
+    body: [
+      `Hi ${opts.customerName},`,
+      ``,
+      `Thanks for being a customer of ${opts.companyName}! You can request and schedule appointments online any time using the link below:`,
+      ``,
+      opts.bookingUrl,
+      ``,
+      `Just choose a service and your preferred date, and we'll take it from there.`,
+      ``,
+      opts.companyPhone
+        ? `Questions? Call us at ${opts.companyPhone} or reply to this email.`
+        : `Questions? Just reply to this email.`,
+      ``,
+      `Thank you,`,
+      opts.companyName,
+    ].join("\n"),
+    replyTo: opts.companyEmail,
+  });
+}
+
+// Owner/company-facing notification that a customer has paid an invoice.
+// Mirrors dispatchPaymentReceiptEmail (which notifies the customer) so the
+// business owner is alerted the moment money comes in, on any payment path.
+export async function dispatchOwnerPaymentNotification(invoiceId: number, companyId: number): Promise<void> {
+  try {
+    const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.companyId, companyId))).limit(1);
+    if (!inv) return;
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    if (!company?.email) return;
+    const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.id, inv.customerId), eq(customersTable.companyId, companyId))).limit(1);
+    const customerName = customer
+      ? (`${customer.firstName} ${customer.lastName}`.trim() || customer.email || "A customer")
+      : "A customer";
+    const paymentDate = inv.paidAt ? new Date(inv.paidAt) : new Date();
+    const paymentDateStr = paymentDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    const baseUrl = resolveBaseUrl();
+    await sendEmail({
+      to: company.email,
+      subject: `Payment received: ${customerName} paid invoice ${inv.invoiceNumber} — $${Number(inv.total).toFixed(2)}`,
+      body: [
+        `Good news — you've been paid!`,
+        ``,
+        `${customerName} has paid invoice ${inv.invoiceNumber}.`,
+        ``,
+        `Amount: $${Number(inv.total).toFixed(2)}`,
+        `Payment date: ${paymentDateStr}`,
+        ...(inv.paymentMethod ? [`Method: ${inv.paymentMethod}`] : []),
+        ``,
+        `View it in your dashboard:`,
+        `${baseUrl}/invoices`,
+        ``,
+        `— GreenSynk`,
+      ].join("\n"),
+    });
+  } catch (err) {
+    logger.error({ err, invoiceId, companyId }, "Failed to dispatch owner payment notification");
+  }
+}
+
 export async function sendWelcomeEmail(opts: {
   to: string;
   firstName: string;

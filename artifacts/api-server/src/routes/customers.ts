@@ -80,26 +80,40 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
   // Fire customer_created automations (non-blocking)
   fireAutomations(companyId, "customer_created", { customerId: customer.id, userId });
 
-  // Auto-send portal invite (Growth+ feature — customer portal is not part of Starter)
+  // Welcome the new customer. Growth+ gets a customer-portal invite; plans
+  // without the portal (e.g. Starter) still get a self-scheduling link to the
+  // public booking page so the customer can book appointments online.
   let portalUrl: string | undefined;
   try {
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
-    if (company && hasFeature(company.subscriptionPlan, "customer_portal") && (customer.email || customer.phone)) {
-      const inviteToken = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+    if (company) {
       const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-      // Invite link takes customers to the set-password page so they create a password on first access.
-      portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
-      const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
-      if (customer.email) {
-        await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
-      }
-      if (customer.phone && hasFeature(company.subscriptionPlan, "sms_notifications")) {
-        await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Create your password here: ${portalUrl}` });
+      const { sendSMS, sendPortalAccessEmail, sendCustomerWelcomeBookingEmail } = await import("../lib/notifications");
+      if (hasFeature(company.subscriptionPlan, "customer_portal") && (customer.email || customer.phone)) {
+        const inviteToken = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+        await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+        // Invite link takes customers to the set-password page so they create a password on first access.
+        portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
+        if (customer.email) {
+          await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days" });
+        }
+        if (customer.phone && hasFeature(company.subscriptionPlan, "sms_notifications")) {
+          await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Create your password here: ${portalUrl}` });
+        }
+      } else if (customer.email && company.slug && hasFeature(company.subscriptionPlan, "public_booking")) {
+        const bookingUrl = `${baseUrl}/book/${company.slug}`;
+        await sendCustomerWelcomeBookingEmail({
+          to: customer.email,
+          customerName: customer.firstName || customer.email,
+          companyName: company.name,
+          companyEmail: company.email ?? undefined,
+          companyPhone: company.phone ?? null,
+          bookingUrl,
+        });
       }
     }
-  } catch { /* non-fatal — invite can be re-sent from customer detail */ }
+  } catch { /* non-fatal — invite/booking link can be re-sent from customer detail */ }
 
   return res.status(201).json({ ...customer, portalUrl });
 });
