@@ -87,6 +87,7 @@ export * from "./inviteTeamMemberRequestRole";
 export * from "./invoice";
 export * from "./invoiceListResponse";
 export * from "./invoiceStatus";
+export * from "./invoiceSummary";
 export * from "./listActivityParams";
 export * from "./listAppointmentsParams";
 export * from "./listCustomersParams";

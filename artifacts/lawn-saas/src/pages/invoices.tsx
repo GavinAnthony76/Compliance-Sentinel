@@ -527,14 +527,11 @@ export function InvoicesPage() {
     }
   };
 
-  const totalUnpaid = data?.invoices.filter(i => ['sent', 'overdue'].includes(i.status)).reduce((sum, i) => sum + Number(i.total), 0) ?? 0;
-  const paidInvoices = data?.invoices.filter(i => i.status === 'paid') ?? [];
-  const totalPaid = paidInvoices.reduce((sum, i) => sum + Number(i.total), 0);
-  // "Online" = paid via Stripe card; everything else recorded manually is "offline".
-  const isOnlinePayment = (i: typeof paidInvoices[number]) =>
-    i.paymentMethod === 'card' || (!i.paymentMethod && !!i.stripePaymentIntentId);
-  const paidOnline = paidInvoices.filter(isOnlinePayment).reduce((sum, i) => sum + Number(i.total), 0);
-  const paidOffline = totalPaid - paidOnline;
+  // Totals are aggregated server-side across the FULL filtered set, not just the current page.
+  const totalUnpaid = data?.summary.outstanding ?? 0;
+  const totalPaid = data?.summary.paidTotal ?? 0;
+  const paidOnline = data?.summary.paidOnline ?? 0;
+  const paidOffline = data?.summary.paidOffline ?? 0;
 
   return (
     <AppLayout>

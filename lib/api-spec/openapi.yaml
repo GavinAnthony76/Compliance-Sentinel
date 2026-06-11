@@ -2673,6 +2673,24 @@ components:
           format: date-time
       required: [id, companyId, customerId, invoiceNumber, subtotal, tax, total, status, createdAt]
 
+    InvoiceSummary:
+      type: object
+      description: Aggregate totals computed server-side over the full filtered set of invoices (not just the current page).
+      properties:
+        outstanding:
+          type: number
+          description: Sum of totals for invoices with status sent or overdue.
+        paidTotal:
+          type: number
+          description: Sum of totals for paid invoices.
+        paidOnline:
+          type: number
+          description: Sum of paid totals collected online (card, or legacy null method with a Stripe payment intent).
+        paidOffline:
+          type: number
+          description: Sum of paid totals collected offline (paidTotal minus paidOnline).
+      required: [outstanding, paidTotal, paidOnline, paidOffline]
+
     InvoiceListResponse:
       type: object
       properties:
@@ -2680,13 +2698,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Invoice"
+        summary:
+          $ref: "#/components/schemas/InvoiceSummary"
         total:
           type: integer
         page:
           type: integer
         limit:
           type: integer
-      required: [invoices, total, page, limit]
+      required: [invoices, summary, total, page, limit]
 
     CreateInvoiceLineItemRequest:
       type: object

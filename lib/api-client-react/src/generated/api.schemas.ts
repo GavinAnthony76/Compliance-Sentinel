@@ -444,8 +444,23 @@ export interface CreateRecurringPlanRequest {
   price?: number;
 }
 
+/**
+ * Aggregate totals computed server-side over the full filtered set of invoices (not just the current page).
+ */
+export interface InvoiceSummary {
+  /** Sum of totals for invoices with status sent or overdue. */
+  outstanding: number;
+  /** Sum of totals for paid invoices. */
+  paidTotal: number;
+  /** Sum of paid totals collected online (card, or legacy null method with a Stripe payment intent). */
+  paidOnline: number;
+  /** Sum of paid totals collected offline (paidTotal minus paidOnline). */
+  paidOffline: number;
+}
+
 export interface InvoiceListResponse {
   invoices: Invoice[];
+  summary: InvoiceSummary;
   total: number;
   page: number;
   limit: number;

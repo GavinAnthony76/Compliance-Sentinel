@@ -997,6 +997,26 @@ export const ListInvoicesResponse = zod.object({
       createdAt: zod.date(),
     }),
   ),
+  summary: zod
+    .object({
+      outstanding: zod
+        .number()
+        .describe("Sum of totals for invoices with status sent or overdue."),
+      paidTotal: zod.number().describe("Sum of totals for paid invoices."),
+      paidOnline: zod
+        .number()
+        .describe(
+          "Sum of paid totals collected online (card, or legacy null method with a Stripe payment intent).",
+        ),
+      paidOffline: zod
+        .number()
+        .describe(
+          "Sum of paid totals collected offline (paidTotal minus paidOnline).",
+        ),
+    })
+    .describe(
+      "Aggregate totals computed server-side over the full filtered set of invoices (not just the current page).",
+    ),
   total: zod.number(),
   page: zod.number(),
   limit: zod.number(),

@@ -6,9 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { Invoice } from "./invoice";
+import type { InvoiceSummary } from "./invoiceSummary";
 
 export interface InvoiceListResponse {
   invoices: Invoice[];
+  summary: InvoiceSummary;
   total: number;
   page: number;
   limit: number;

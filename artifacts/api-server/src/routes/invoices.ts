@@ -79,16 +79,34 @@ router.get("/", async (req: any, res) => {
   if (req.query.paymentMethod) conditions.push(eq(invoicesTable.paymentMethod, req.query.paymentMethod as string));
   if (req.query.customerId) conditions.push(eq(invoicesTable.customerId, Number(req.query.customerId)));
 
-  const [invoices, total] = await Promise.all([
+  // Aggregate payment-method totals across the FULL filtered set (not just the current page).
+  // Online = paymentMethod 'card', or legacy null method with a Stripe payment intent; everything else is offline.
+  const onlineExpr = sql`(${invoicesTable.paymentMethod} = 'card' OR (${invoicesTable.paymentMethod} IS NULL AND ${invoicesTable.stripePaymentIntentId} IS NOT NULL))`;
+  const [invoices, total, summaryRows] = await Promise.all([
     db.select().from(invoicesTable).where(and(...conditions)).orderBy(desc(invoicesTable.createdAt)).limit(limit).offset(offset),
     db.select({ count: sql<number>`count(*)` }).from(invoicesTable).where(and(...conditions)),
+    db.select({
+      outstanding: sql<string>`coalesce(sum(${invoicesTable.total}) filter (where ${invoicesTable.status} in ('sent', 'overdue')), 0)`,
+      paidTotal: sql<string>`coalesce(sum(${invoicesTable.total}) filter (where ${invoicesTable.status} = 'paid'), 0)`,
+      paidOnline: sql<string>`coalesce(sum(${invoicesTable.total}) filter (where ${invoicesTable.status} = 'paid' and ${onlineExpr}), 0)`,
+    }).from(invoicesTable).where(and(...conditions)),
   ]);
+
+  const outstanding = Number(summaryRows[0].outstanding);
+  const paidTotal = Number(summaryRows[0].paidTotal);
+  const paidOnline = Number(summaryRows[0].paidOnline);
+  const summary = {
+    outstanding,
+    paidTotal,
+    paidOnline,
+    paidOffline: Number((paidTotal - paidOnline).toFixed(2)),
+  };
 
   const customerIds = [...new Set(invoices.map(i => i.customerId))];
   const customers = customerIds.length > 0 ? await db.select().from(customersTable).where(inArray(customersTable.id, customerIds)) : [];
   const customerMap = Object.fromEntries(customers.map(c => [c.id, c.firstName || c.phone ? `${c.firstName} ${c.lastName}`.trim() || c.phone : "Customer"]));
 
-  return res.json({ invoices: invoices.map(i => fmt(i, customerMap[i.customerId] ?? undefined)), total: Number(total[0].count), page, limit });
+  return res.json({ invoices: invoices.map(i => fmt(i, customerMap[i.customerId] ?? undefined)), summary, total: Number(total[0].count), page, limit });
 });
 
 // Shared handler for GET and POST /invoices/from-appointment/:appointmentId
