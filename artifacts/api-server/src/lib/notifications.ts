@@ -166,6 +166,63 @@ export async function sendReminder(opts: {
   }
 }
 
+export async function sendAppointmentConfirmationEmail(opts: {
+  customerName: string;
+  customerEmail: string;
+  scheduledStart: Date;
+  serviceName?: string;
+  companyName?: string;
+  companyEmail?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): Promise<void> {
+  const dateStr = opts.scheduledStart.toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const timeStr = opts.scheduledStart.toLocaleTimeString("en-US", {
+    hour: "2-digit", minute: "2-digit",
+  });
+  const serviceName = opts.serviceName || "Lawn Care";
+  const companyName = opts.companyName || "Your Service Provider";
+
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.customerName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Good news! Your appointment with ${escapeHtml(companyName)} has been confirmed.</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Service:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(serviceName)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Date:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(dateStr)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Time:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(timeStr)}</td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>`;
+  const html = buildBrandedEmailHtml({
+    title: `Appointment Confirmed — ${serviceName}`,
+    companyName,
+    bodyHtml,
+    footerHtml: `Thank you,<br /><strong>${escapeHtml(companyName)}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+  await sendEmail({
+    to: opts.customerEmail,
+    subject: `Appointment Confirmed — ${serviceName} on ${dateStr}`,
+    body: `Hi ${opts.customerName},\n\nYour ${serviceName} appointment with ${companyName} has been confirmed!\n\nDate: ${dateStr}\nTime: ${timeStr}\n\nThank you!`,
+    html,
+    replyTo: opts.companyEmail,
+  });
+}
+
 export async function sendReviewRequestNotification(opts: {
   customerName: string;
   customerEmail?: string;

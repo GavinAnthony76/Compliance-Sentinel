@@ -7,7 +7,7 @@ import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
-import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail } from "../lib/notifications";
+import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail } from "../lib/notifications";
 import { fireAutomations } from "../lib/automations";
 
 // ─── GPS job-tracking helpers ────────────────────────────────────────────────
@@ -75,11 +75,15 @@ async function sendAppointmentNotification(appt: any, companyId: number, channel
     if (channel === 'confirmation') {
       const msg = `Hi ${customer.firstName}! Your ${serviceName} appointment with ${companyName} is confirmed for ${dateStr} at ${timeStr}. Reply STOP to opt out.`;
       if (customer.phone && smsAllowed) await sendSMS({ to: customer.phone, body: msg });
-      if (customer.email) await sendEmail({
-        to: customer.email,
-        subject: `Appointment Confirmed — ${serviceName} on ${dateStr}`,
-        body: `Hi ${customer.firstName},\n\nYour ${serviceName} appointment with ${companyName} has been confirmed!\n\nDate: ${dateStr}\nTime: ${timeStr}\n\nThank you!`,
-        replyTo: company?.email || undefined,
+      if (customer.email) await sendAppointmentConfirmationEmail({
+        customerName: customer.firstName,
+        customerEmail: customer.email,
+        scheduledStart: new Date(appt.scheduledStart),
+        serviceName,
+        companyName,
+        companyEmail: company?.email || undefined,
+        logoUrl: company?.logoUrl ?? null,
+        primaryColor: company?.primaryColor ?? null,
       });
     } else {
       const useSms = customer.phone && smsAllowed;
