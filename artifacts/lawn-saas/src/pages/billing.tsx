@@ -12,6 +12,7 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
 import { Check, CreditCard, ArrowRight, Shield, AlertCircle, AlertTriangle } from 'lucide-react';
+import { getPlanViolations, type PlanViolation } from '@/lib/plan-usage';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Link } from 'wouter';
@@ -42,41 +43,6 @@ const USAGE_METER_CONFIG: Array<{ key: 'customers' | 'users' | 'appointments' | 
   { key: 'estimates', limitKey: 'maxEstimatesPerMonth', label: 'Estimates this month', noun: 'estimates' },
   { key: 'invoices', limitKey: 'maxInvoicesPerMonth', label: 'Invoices this month', noun: 'invoices' },
 ];
-
-type PlanViolation = { limitType: string; noun: string; currentUsage: number; limit: number };
-
-const LIMIT_NOUNS: Record<string, string> = {
-  maxCustomers: 'customers',
-  maxUsers: 'users',
-  maxAppointmentsPerMonth: 'appointments',
-  maxEstimatesPerMonth: 'estimates',
-  maxInvoicesPerMonth: 'invoices',
-};
-
-const USAGE_KEY_FOR_LIMIT: Record<string, 'customers' | 'users' | 'appointments' | 'estimates' | 'invoices'> = {
-  maxCustomers: 'customers',
-  maxUsers: 'users',
-  maxAppointmentsPerMonth: 'appointments',
-  maxEstimatesPerMonth: 'estimates',
-  maxInvoicesPerMonth: 'invoices',
-};
-
-// Mirrors the server's getDowngradeViolations: compare the company's current
-// usage against a target plan's limits and return every resource that's over.
-// An empty array means the plan comfortably fits the account.
-function getPlanViolations(usage: any, planLimits: any): PlanViolation[] {
-  if (!usage?.usage || !planLimits) return [];
-  const violations: PlanViolation[] = [];
-  for (const limitKey of Object.keys(LIMIT_NOUNS)) {
-    const limit = planLimits[limitKey];
-    if (limit === null || limit === undefined) continue; // unlimited on this plan
-    const currentUsage = usage.usage[USAGE_KEY_FOR_LIMIT[limitKey]] ?? 0;
-    if (currentUsage > limit) {
-      violations.push({ limitType: limitKey, noun: LIMIT_NOUNS[limitKey], currentUsage, limit });
-    }
-  }
-  return violations;
-}
 
 function UsageMeters({ usage }: { usage: any }) {
   if (!usage) return null;

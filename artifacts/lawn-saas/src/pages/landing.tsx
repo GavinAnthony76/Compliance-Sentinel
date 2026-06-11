@@ -3,8 +3,10 @@ import { Link } from 'wouter';
 import { Button } from '@/components/ui';
 import { Logo } from '@/components/logo';
 import { usePageMeta } from '@/hooks/use-page-meta';
-import { useGetPublicPlans } from '@workspace/api-client-react';
-import { CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield, Calendar, Navigation, FileText, Contact, ClipboardList, Zap, Clock, Fuel, Bell, Eye, PenLine, BadgeCheck, RefreshCw, Mail, Repeat, MessageSquare, ChevronRight } from 'lucide-react';
+import { useGetPublicPlans, useGetBillingPlans, useGetBillingUsage, getGetBillingUsageQueryKey, getGetBillingPlansQueryKey } from '@workspace/api-client-react';
+import { useAuthState } from '@/hooks/use-auth-state';
+import { getPlanViolations } from '@/lib/plan-usage';
+import { CheckCircle2, CreditCard, Users, Settings, TrendingUp, RotateCw, Check, MapPin, DollarSign, Phone, Home, Star, ArrowUpRight, Shield, Calendar, Navigation, FileText, Contact, ClipboardList, Zap, Clock, Fuel, Bell, Eye, PenLine, BadgeCheck, RefreshCw, Mail, Repeat, MessageSquare, ChevronRight, AlertTriangle, AlertCircle } from 'lucide-react';
 
 const TAB_DATA = [
   {
@@ -352,6 +354,20 @@ export function LandingPage() {
   const pricingPlans: PricingPlan[] = plansData?.plans?.length
     ? (plansData.plans as PricingPlan[])
     : PRICING_FALLBACK;
+
+  // For logged-in managers browsing this pricing page, surface the same inline
+  // "your usage exceeds this plan" notes the billing page shows. Usage and plan
+  // limits both require auth, so these queries only run for owners/admins; the
+  // public, logged-out pricing page stays clean.
+  const { user, isAuthenticated } = useAuthState();
+  const role = (user as any)?.role as string | undefined;
+  const isManager = isAuthenticated && (role === 'owner' || role === 'admin');
+  const { data: billingUsage } = useGetBillingUsage({ query: { queryKey: getGetBillingUsageQueryKey(), enabled: !!isManager, retry: false } });
+  const { data: billingPlansData } = useGetBillingPlans({ query: { queryKey: getGetBillingPlansQueryKey(), enabled: !!isManager, retry: false } });
+  const planLimitsById: Record<string, any> = {};
+  for (const p of billingPlansData?.plans ?? []) {
+    planLimitsById[(p as any).id] = (p as any).limits;
+  }
   const [activeTab, setActiveTab] = useState(0);
   const [animating, setAnimating] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
@@ -941,6 +957,10 @@ export function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {pricingPlans.map((plan) => {
               const popular = plan.isPopular === true;
+              const isCurrentPlan = billingUsage?.plan === plan.id;
+              const planViolations = isManager && !isCurrentPlan
+                ? getPlanViolations(billingUsage, planLimitsById[plan.id])
+                : [];
               return (
                 <div
                   key={plan.id}
@@ -967,6 +987,22 @@ export function LandingPage() {
                       </li>
                     ))}
                   </ul>
+                  {planViolations.length > 0 && (
+                    <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-3 text-left">
+                      <p className="text-sm font-medium text-amber-800 flex items-center gap-1.5 mb-1.5">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        Your usage exceeds this plan
+                      </p>
+                      <ul className="space-y-1">
+                        {planViolations.map((v) => (
+                          <li key={v.limitType} className="text-xs text-amber-700 flex items-start gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <span>Your {v.currentUsage} {v.noun} exceed this plan's {v.limit} limit</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <Link href="/register">
                     <Button
                       className={popular ? 'w-full rounded-xl bg-white text-primary hover:bg-white/90' : 'w-full rounded-xl'}
