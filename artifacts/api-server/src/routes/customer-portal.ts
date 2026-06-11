@@ -451,6 +451,31 @@ router.get("/invoices/:id/pdf", requirePortalAuth, async (req: any, res) => {
   return res.send(pdfBuffer);
 });
 
+// GET /portal/invoices/:id/receipt-pdf — download a proof-of-payment receipt for a paid invoice
+router.get("/invoices/:id/receipt-pdf", requirePortalAuth, async (req: any, res) => {
+  const { customerId, companyId } = req.portal;
+  const id = Number(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: "ValidationError", message: "Invalid invoice ID" });
+
+  const [invoice] = await db.select().from(invoicesTable)
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.customerId, customerId), eq(invoicesTable.companyId, companyId)))
+    .limit(1);
+  if (!invoice) return res.status(404).json({ error: "NotFound" });
+  if (invoice.status !== "paid") return res.status(400).json({ error: "NotPaid", message: "A receipt is only available for paid invoices." });
+
+  const [customer, company, lineItems] = await Promise.all([
+    db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1).then(r => r[0]),
+    db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1).then(r => r[0]),
+    db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder),
+  ]);
+
+  const { buildInvoicePdf } = await import("../lib/invoice-pdf");
+  const pdfBuffer = await buildInvoicePdf({ invoice, customer, company, lineItems, documentType: "receipt" });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="receipt-${invoice.invoiceNumber}.pdf"`);
+  return res.send(pdfBuffer);
+});
+
 // GET /portal/estimates
 router.get("/estimates", requirePortalAuth, async (req: any, res) => {
   const { customerId, companyId } = req.portal;

@@ -39,6 +39,9 @@ interface PdfInvoice {
   tax: number | string;
   total: number | string;
   dueDate?: Date | string | null;
+  paidAt?: Date | string | null;
+  paymentMethod?: string | null;
+  paymentMethodNote?: string | null;
   notes?: string | null;
 }
 
@@ -47,6 +50,23 @@ interface BuildInvoicePdfInput {
   customer?: PdfCustomer | null;
   company?: PdfCompany | null;
   lineItems: PdfLineItem[];
+  /** "invoice" (default) renders a standard invoice; "receipt" renders a proof-of-payment receipt. */
+  documentType?: "invoice" | "receipt";
+}
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  check: "Check",
+  zelle: "Zelle",
+  venmo: "Venmo",
+  cashapp: "Cash App",
+  bank_transfer: "Bank Transfer",
+  card: "Card (online)",
+  other: "Other",
+};
+
+function formatPaymentMethod(method?: string | null): string {
+  return method ? (PAYMENT_METHOD_LABELS[method] ?? method) : "—";
 }
 
 function isValidHex(hex: string): boolean {
@@ -65,6 +85,7 @@ function hexToRgb(hex: string): [number, number, number] {
  */
 export async function buildInvoicePdf(input: BuildInvoicePdfInput): Promise<Buffer> {
   const { invoice: inv, customer, company, lineItems } = input;
+  const isReceipt = input.documentType === "receipt";
 
   const customerName = customer
     ? (`${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || customer.phone || "Customer")
@@ -120,8 +141,8 @@ export async function buildInvoicePdf(input: BuildInvoicePdfInput): Promise<Buff
         doc.font("Helvetica").fontSize(9).fillColor("#ffffff").text(contactLines.join("  ·  "), margin, contactY, { width: contentWidth * 0.65 });
       }
 
-      // INVOICE label top-right
-      doc.font("Helvetica-Bold").fontSize(28).fillColor("#ffffff").text("INVOICE", margin + contentWidth * 0.6, 22, { width: contentWidth * 0.4, align: "right" });
+      // Document label top-right (INVOICE or RECEIPT)
+      doc.font("Helvetica-Bold").fontSize(28).fillColor("#ffffff").text(isReceipt ? "RECEIPT" : "INVOICE", margin + contentWidth * 0.6, 22, { width: contentWidth * 0.4, align: "right" });
       doc.font("Helvetica").fontSize(10).fillColor("#ffffffcc").text(inv.invoiceNumber, margin + contentWidth * 0.6, 56, { width: contentWidth * 0.4, align: "right" });
 
       // Below header: bill to + invoice meta
@@ -145,10 +166,21 @@ export async function buildInvoicePdf(input: BuildInvoicePdfInput): Promise<Buff
       }
 
       metaRow("Invoice #", inv.invoiceNumber, infoY);
-      if (inv.dueDate) {
-        metaRow("Due Date", new Date(inv.dueDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }), infoY + 18);
+      let metaY = infoY + 18;
+      if (isReceipt) {
+        const paidDate = inv.paidAt ? new Date(inv.paidAt) : new Date();
+        metaRow("Date Paid", paidDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }), metaY);
+        metaY += 18;
+        metaRow("Method", formatPaymentMethod(inv.paymentMethod), metaY);
+        metaY += 18;
+        metaRow("Status", "Paid", metaY);
+      } else {
+        if (inv.dueDate) {
+          metaRow("Due Date", new Date(inv.dueDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }), metaY);
+          metaY += 18;
+        }
+        metaRow("Status", inv.status.charAt(0).toUpperCase() + inv.status.slice(1), metaY);
       }
-      metaRow("Status", inv.status.charAt(0).toUpperCase() + inv.status.slice(1), infoY + (inv.dueDate ? 36 : 18));
 
       // Line items table
       const tableY = infoY + 90;
@@ -200,7 +232,7 @@ export async function buildInvoicePdf(input: BuildInvoicePdfInput): Promise<Buff
       doc.moveTo(totalsX, rowY).lineTo(totalsX + totalsW, rowY).strokeColor("#e5e7eb").lineWidth(1).stroke();
       rowY += 6;
 
-      doc.font("Helvetica-Bold").fontSize(13).fillColor(`rgb(${pr},${pg},${pb})`).text("Total Due", totalsX, rowY, { width: totalsW * 0.55 });
+      doc.font("Helvetica-Bold").fontSize(13).fillColor(`rgb(${pr},${pg},${pb})`).text(isReceipt ? "Amount Paid" : "Total Due", totalsX, rowY, { width: totalsW * 0.55 });
       doc.font("Helvetica-Bold").fontSize(13).fillColor(`rgb(${pr},${pg},${pb})`).text(`$${Number(inv.total).toFixed(2)}`, totalsX + totalsW * 0.55, rowY, { width: totalsW * 0.45, align: "right" });
 
       // Notes
@@ -210,13 +242,15 @@ export async function buildInvoicePdf(input: BuildInvoicePdfInput): Promise<Buff
         doc.font("Helvetica").fontSize(10).fillColor("#333333").text(inv.notes, margin, rowY + 14, { width: contentWidth * 0.55 });
       }
 
-      // Payment instructions
+      // Payment instructions (omitted on receipts — invoice is already paid)
       const paymentLines: string[] = [];
-      if (company?.paymentInstructions) paymentLines.push(company.paymentInstructions);
-      if (company?.checkPayableTo) paymentLines.push(`Check payable to: ${company.checkPayableTo}`);
-      if (company?.zelleInfo) paymentLines.push(`Zelle: ${company.zelleInfo}`);
-      if (company?.venmoHandle) paymentLines.push(`Venmo: ${company.venmoHandle}`);
-      if (company?.cashAppTag) paymentLines.push(`Cash App: ${company.cashAppTag}`);
+      if (!isReceipt) {
+        if (company?.paymentInstructions) paymentLines.push(company.paymentInstructions);
+        if (company?.checkPayableTo) paymentLines.push(`Check payable to: ${company.checkPayableTo}`);
+        if (company?.zelleInfo) paymentLines.push(`Zelle: ${company.zelleInfo}`);
+        if (company?.venmoHandle) paymentLines.push(`Venmo: ${company.venmoHandle}`);
+        if (company?.cashAppTag) paymentLines.push(`Cash App: ${company.cashAppTag}`);
+      }
 
       if (paymentLines.length > 0) {
         const payY = inv.notes ? rowY + 70 : rowY + 50;

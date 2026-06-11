@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'wouter';
 import { Button, Card, CardContent } from '@/components/ui';
-import { CheckCircle, Leaf, Printer, ArrowLeft, FileText } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { CheckCircle, Leaf, Printer, ArrowLeft, FileText, Download } from 'lucide-react';
 
 export function PortalReceiptView({
   invoiceId,
@@ -21,6 +22,8 @@ export function PortalReceiptView({
   const [invoice, setInvoice] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (!invoiceId) {
@@ -50,6 +53,29 @@ export function PortalReceiptView({
 
   const paidDate = invoice?.paidAt ? new Date(invoice.paidAt) : new Date();
   const company = invoice?.companyName || companyName || 'Your provider';
+  const isPaid = invoice?.status === 'paid';
+
+  const handleDownloadReceipt = async () => {
+    if (!invoiceId) return;
+    setDownloading(true);
+    try {
+      const res = await portalFetch(`/api/portal/invoices/${invoiceId}/receipt-pdf`);
+      if (!res.ok) throw new Error('Could not generate receipt');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt-${invoice?.invoiceNumber ?? invoiceId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: 'Download failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -147,6 +173,11 @@ export function PortalReceiptView({
             </Card>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-6 receipt-no-print">
+              {isPaid && (
+                <Button variant="outline" className="flex-1" onClick={handleDownloadReceipt} isLoading={downloading}>
+                  <Download className="w-4 h-4 mr-2" /> Download Receipt
+                </Button>
+              )}
               <Button variant="outline" className="flex-1" onClick={() => window.print()}>
                 <Printer className="w-4 h-4 mr-2" /> Print receipt
               </Button>

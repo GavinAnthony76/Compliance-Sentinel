@@ -29,6 +29,7 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -70,6 +71,27 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
       toast({ title: 'Download failed', description: err.message, variant: 'destructive' });
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleDownloadReceipt = async () => {
+    setDownloadingReceipt(true);
+    try {
+      const res = await portalFetch(`/api/portal/invoices/${invoice.id}/receipt-pdf`);
+      if (!res.ok) throw new Error('Could not generate receipt');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt-${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: 'Download failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setDownloadingReceipt(false);
     }
   };
 
@@ -212,12 +234,15 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
           )}
 
           {isPaid && (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl bg-green-50 border border-green-200">
               <CheckCircle className="w-6 h-6 text-green-600 shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="font-semibold text-green-800">Payment Received</p>
                 <p className="text-sm text-green-700">This invoice has been paid. Thank you!</p>
               </div>
+              <Button variant="outline" size="sm" className="shrink-0 bg-white" onClick={handleDownloadReceipt} isLoading={downloadingReceipt}>
+                <Download className="w-4 h-4 mr-1.5" />Download Receipt
+              </Button>
             </div>
           )}
         </div>
