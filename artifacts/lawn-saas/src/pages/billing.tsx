@@ -43,6 +43,41 @@ const USAGE_METER_CONFIG: Array<{ key: 'customers' | 'users' | 'appointments' | 
   { key: 'invoices', limitKey: 'maxInvoicesPerMonth', label: 'Invoices this month', noun: 'invoices' },
 ];
 
+type PlanViolation = { limitType: string; noun: string; currentUsage: number; limit: number };
+
+const LIMIT_NOUNS: Record<string, string> = {
+  maxCustomers: 'customers',
+  maxUsers: 'users',
+  maxAppointmentsPerMonth: 'appointments',
+  maxEstimatesPerMonth: 'estimates',
+  maxInvoicesPerMonth: 'invoices',
+};
+
+const USAGE_KEY_FOR_LIMIT: Record<string, 'customers' | 'users' | 'appointments' | 'estimates' | 'invoices'> = {
+  maxCustomers: 'customers',
+  maxUsers: 'users',
+  maxAppointmentsPerMonth: 'appointments',
+  maxEstimatesPerMonth: 'estimates',
+  maxInvoicesPerMonth: 'invoices',
+};
+
+// Mirrors the server's getDowngradeViolations: compare the company's current
+// usage against a target plan's limits and return every resource that's over.
+// An empty array means the plan comfortably fits the account.
+function getPlanViolations(usage: any, planLimits: any): PlanViolation[] {
+  if (!usage?.usage || !planLimits) return [];
+  const violations: PlanViolation[] = [];
+  for (const limitKey of Object.keys(LIMIT_NOUNS)) {
+    const limit = planLimits[limitKey];
+    if (limit === null || limit === undefined) continue; // unlimited on this plan
+    const currentUsage = usage.usage[USAGE_KEY_FOR_LIMIT[limitKey]] ?? 0;
+    if (currentUsage > limit) {
+      violations.push({ limitType: limitKey, noun: LIMIT_NOUNS[limitKey], currentUsage, limit });
+    }
+  }
+  return violations;
+}
+
 function UsageMeters({ usage }: { usage: any }) {
   if (!usage) return null;
   const planLabel = PLAN_LABELS[usage.plan] || usage.plan;
@@ -244,6 +279,7 @@ export function BillingPage() {
             {plansData?.plans.map((plan: any) => {
               const isCurrent = status?.plan === plan.id;
               const isPopular = plan.id === 'growth';
+              const planViolations = isCurrent ? [] : getPlanViolations(usage, plan.limits);
               return (
                 <div key={plan.id} className={`relative rounded-2xl border-2 p-6 flex flex-col ${isCurrent ? 'border-primary bg-primary/5' : isPopular ? 'border-primary/50' : 'border-border bg-card'}`}>
                   {isPopular && !isCurrent && (
@@ -265,6 +301,22 @@ export function BillingPage() {
                       </li>
                     ))}
                   </ul>
+                  {planViolations.length > 0 && (
+                    <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-sm font-medium text-amber-800 flex items-center gap-1.5 mb-1.5">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        Your usage exceeds this plan
+                      </p>
+                      <ul className="space-y-1">
+                        {planViolations.map((v) => (
+                          <li key={v.limitType} className="text-xs text-amber-700 flex items-start gap-1.5">
+                            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <span>Your {v.currentUsage} {v.noun} exceed this plan's {v.limit} limit</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {isCurrent ? (
                     status?.hasBillingAccount ? (
                       <Button variant="outline" onClick={handlePortal} className="w-full">

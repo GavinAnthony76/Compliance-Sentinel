@@ -5,6 +5,7 @@
  * GreenSynk Outdoor Service SaaS API
  * OpenAPI spec version: 1.0.0
  */
+import type { BillingPlanLimits } from "./billingPlanLimits";
 
 export interface BillingPlan {
   id: string;
@@ -16,4 +17,5 @@ export interface BillingPlan {
   isPopular?: boolean;
   sortOrder?: number;
   stripePriceId?: string | null;
+  limits?: BillingPlanLimits;
 }

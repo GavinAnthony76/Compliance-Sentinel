@@ -774,6 +774,14 @@ export interface UpdateTeamMemberRequest {
   isActive?: boolean;
 }
 
+export type BillingPlanLimits = {
+  maxUsers?: number | null;
+  maxCustomers?: number | null;
+  maxAppointmentsPerMonth?: number | null;
+  maxEstimatesPerMonth?: number | null;
+  maxInvoicesPerMonth?: number | null;
+};
+
 export interface BillingPlan {
   id: string;
   name: string;
@@ -784,6 +792,7 @@ export interface BillingPlan {
   isPopular?: boolean;
   sortOrder?: number;
   stripePriceId?: string | null;
+  limits?: BillingPlanLimits;
 }
 
 export interface BillingPlansResponse {

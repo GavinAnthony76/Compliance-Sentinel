@@ -1776,6 +1776,15 @@ export const GetPublicPlansResponse = zod.object({
       isPopular: zod.boolean().optional(),
       sortOrder: zod.number().optional(),
       stripePriceId: zod.string().nullish(),
+      limits: zod
+        .object({
+          maxUsers: zod.number().nullish(),
+          maxCustomers: zod.number().nullish(),
+          maxAppointmentsPerMonth: zod.number().nullish(),
+          maxEstimatesPerMonth: zod.number().nullish(),
+          maxInvoicesPerMonth: zod.number().nullish(),
+        })
+        .optional(),
     }),
   ),
 });
@@ -1795,6 +1804,15 @@ export const GetBillingPlansResponse = zod.object({
       isPopular: zod.boolean().optional(),
       sortOrder: zod.number().optional(),
       stripePriceId: zod.string().nullish(),
+      limits: zod
+        .object({
+          maxUsers: zod.number().nullish(),
+          maxCustomers: zod.number().nullish(),
+          maxAppointmentsPerMonth: zod.number().nullish(),
+          maxEstimatesPerMonth: zod.number().nullish(),
+          maxInvoicesPerMonth: zod.number().nullish(),
+        })
+        .optional(),
     }),
   ),
 });

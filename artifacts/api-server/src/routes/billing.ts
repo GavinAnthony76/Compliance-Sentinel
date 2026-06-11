@@ -314,6 +314,7 @@ router.get("/plans", async (_req, res) => {
       features: p.features,
       isPopular: p.isPopular,
       sortOrder: p.sortOrder,
+      limits: p.limits,
     })),
     publishableKey,
   });

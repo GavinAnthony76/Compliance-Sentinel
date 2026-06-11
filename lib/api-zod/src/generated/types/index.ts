@@ -37,6 +37,7 @@ export * from "./automation";
 export * from "./automationConfigJson";
 export * from "./automationListResponse";
 export * from "./billingPlan";
+export * from "./billingPlanLimits";
 export * from "./billingPlansResponse";
 export * from "./billingStatus";
 export * from "./billingUsage";

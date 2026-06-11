@@ -3199,6 +3199,24 @@ components:
         stripePriceId:
           type: string
           nullable: true
+        limits:
+          type: object
+          properties:
+            maxUsers:
+              type: integer
+              nullable: true
+            maxCustomers:
+              type: integer
+              nullable: true
+            maxAppointmentsPerMonth:
+              type: integer
+              nullable: true
+            maxEstimatesPerMonth:
+              type: integer
+              nullable: true
+            maxInvoicesPerMonth:
+              type: integer
+              nullable: true
       required: [id, name, price, interval, features]
 
     BillingPlansResponse:
