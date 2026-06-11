@@ -155,4 +155,11 @@ import("./lib/recurring").then(({ generateDueRecurringAppointments }) => {
   setInterval(() => { generateDueRecurringAppointments().catch(() => {}); }, 60 * 60 * 1000);
 });
 
+// Release invoices stuck mid-payment if an autopay charge was interrupted
+// (e.g. server crash/restart). Reconciles with Stripe first (runs every 5 min).
+import("./lib/stuck-invoices").then(({ releaseStuckProcessingInvoices }) => {
+  releaseStuckProcessingInvoices().catch(() => {});
+  setInterval(() => { releaseStuckProcessingInvoices().catch(() => {}); }, 5 * 60 * 1000);
+});
+
 export default app;

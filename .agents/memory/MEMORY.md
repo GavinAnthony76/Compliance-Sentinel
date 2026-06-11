@@ -19,3 +19,4 @@
 - [Concurrent test-build collision](concurrent-test-build-collision.md) — lead-access + staff-access both rebuild api-server dist; concurrent run flakes with esbuild "Unexpected end of input". Verify in isolation.
 - [Stripe webhook config](stripe-webhook-config.md) — one live endpoint; URL must be the deployed domain; repoint (not recreate) to keep STRIPE_WEBHOOK_SECRET; handler must catch invoice.payment_succeeded.
 - [Billing activity dedup](billing-activity-dedup.md) — checkout updates company row BEFORE subscription.updated reads it; that ordering (not a dedup table) is what stops plan_changed+subscription_updated double-logging. Logic in src/lib/billing-activity.ts.
+- [Stuck processing invoice sweep](stuck-invoice-sweep.md) — autopay "processing" claim is in-memory-only; a crash strands invoices. Sweep in lib/stuck-invoices.ts reconciles Stripe-first before reverting.
