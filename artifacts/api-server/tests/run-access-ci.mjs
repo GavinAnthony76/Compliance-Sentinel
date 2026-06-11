@@ -29,6 +29,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { snapshotMaxCompanyId, purgeTestDataAbove } from "./db-cleanup.mjs";
 
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = process.env.ACCESS_CI_PORT || "5098";
@@ -121,6 +122,19 @@ async function main() {
   }
   console.log(`• api-server ready at ${BASE}\n`);
 
+  // Snapshot the DB so every company the suites create can be purged afterwards,
+  // keeping the production database free of test pollution. This is a hard
+  // precondition: if we can't snapshot, we can't clean up, so abort rather than
+  // run suites that would permanently pollute the database.
+  let dbSnapshot;
+  try {
+    dbSnapshot = await snapshotMaxCompanyId();
+  } catch (err) {
+    console.error(`Could not snapshot DB before tests; aborting to avoid un-cleanable pollution: ${err.message}`);
+    shutdown();
+    process.exit(1);
+  }
+
   // --- Run the suites -------------------------------------------------------
   const suites = [
     "tests/billing-activity.test.mjs",
@@ -136,17 +150,29 @@ async function main() {
   ];
 
   let failed = 0;
-  for (const suite of suites) {
-    console.log(`\n=== ${suite} ===`);
-    const code = await run("node", [suite], {
-      env: { ...process.env, API_BASE: BASE },
-    });
-    if (code !== 0) failed++;
+  let cleanupFailed = false;
+  try {
+    for (const suite of suites) {
+      console.log(`\n=== ${suite} ===`);
+      const code = await run("node", [suite], {
+        env: { ...process.env, API_BASE: BASE },
+      });
+      if (code !== 0) failed++;
+    }
+  } finally {
+    // Always purge, even if a suite threw, so failures don't leave residue.
+    // A purge failure is itself a run failure so leftover pollution is visible.
+    try {
+      await purgeTestDataAbove(dbSnapshot);
+    } catch (err) {
+      cleanupFailed = true;
+      console.error(`[db-cleanup] CRITICAL: cleanup failed, test data may remain: ${err.message}`);
+    }
+    shutdown();
   }
 
-  shutdown();
   console.log(`\nAccess validation: ${suites.length - failed}/${suites.length} suites passed.`);
-  process.exit(failed === 0 ? 0 : 1);
+  process.exit(failed === 0 && !cleanupFailed ? 0 : 1);
 }
 
 main().catch((err) => {
