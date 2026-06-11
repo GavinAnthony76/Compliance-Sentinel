@@ -6,6 +6,11 @@ import { getPlanUsageSummary, getDowngradeViolations } from "../lib/features";
 import { getUncachableStripeClient, getStripePublishableKey, getStripePriceId } from "../lib/stripe";
 import { getCatalog } from "../lib/plan-catalog";
 import { logActivity } from "../lib/activity";
+import {
+  buildPlanChangedLog,
+  buildSubscriptionUpdatedLog,
+  buildSubscriptionCanceledLog,
+} from "../lib/billing-activity";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -122,19 +127,15 @@ router.post("/webhook", async (req: Request, res) => {
           // user id was stamped into the session metadata). Webhooks arrive
           // without a session, so this is the only reliable way to know "who".
           const actingUserId = Number(session.metadata?.userId) || undefined;
-          await logActivity({
-            companyId,
-            userId: actingUserId,
-            action: "billing.plan_changed",
-            entityType: "company",
-            entityId: companyId,
-            metadata: {
+          await logActivity(
+            buildPlanChangedLog({
+              companyId,
               plan,
               previousPlan,
               status: subscription.status,
-              actor: actingUserId ? undefined : "Stripe / automated",
-            },
-          });
+              actingUserId,
+            }),
+          );
         }
         break;
       }
@@ -159,24 +160,9 @@ router.post("/webhook", async (req: Request, res) => {
           // billing.plan_changed), so without this guard we'd duplicate it.
           // These changes come straight from Stripe (e.g. the customer portal
           // or a status flip), so there is no acting user to attribute.
-          const planChanged = nextPlan !== before.subscriptionPlan;
-          const statusChanged = sub.status !== before.subscriptionStatus;
-          const cancelScheduleChanged = !!sub.cancel_at_period_end !== !!before.cancelAtPeriodEnd;
-          if (planChanged || statusChanged || cancelScheduleChanged) {
-            await logActivity({
-              companyId: before.id,
-              action: "billing.subscription_updated",
-              entityType: "company",
-              entityId: before.id,
-              metadata: {
-                plan: nextPlan,
-                previousPlan: planChanged ? before.subscriptionPlan : undefined,
-                status: sub.status,
-                previousStatus: statusChanged ? before.subscriptionStatus : undefined,
-                cancelAtPeriodEnd: sub.cancel_at_period_end,
-                actor: "Stripe / automated",
-              },
-            });
+          const updatedLog = buildSubscriptionUpdatedLog({ before, sub });
+          if (updatedLog) {
+            await logActivity(updatedLog);
           }
         }
         break;
@@ -189,17 +175,7 @@ router.post("/webhook", async (req: Request, res) => {
           updatedAt: new Date(),
         }).where(eq(companiesTable.stripeSubscriptionId, sub.id));
         if (companies.length > 0) {
-          await logActivity({
-            companyId: companies[0].id,
-            action: "billing.subscription_canceled",
-            entityType: "company",
-            entityId: companies[0].id,
-            metadata: {
-              plan: companies[0].subscriptionPlan,
-              previousStatus: companies[0].subscriptionStatus,
-              actor: "Stripe / automated",
-            },
-          });
+          await logActivity(buildSubscriptionCanceledLog({ company: companies[0] }));
         }
         break;
       }

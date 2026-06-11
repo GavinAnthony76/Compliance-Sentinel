@@ -10,6 +10,7 @@
  *   2. Start it on an isolated port with the current environment.
  *   3. Wait until it answers HTTP.
  *   4. Run, in order:
+ *        - tests/billing-activity.test.mjs            (pure unit test, no server needed — billing activity-feed logging)
  *        - tests/invoice-billing-access.e2e.mjs       (invoices + billing access)
  *        - tests/appointment-customer-access.e2e.mjs  (appointments + customers access)
  *        - tests/property-service-access.e2e.mjs      (properties + services access)
@@ -122,6 +123,7 @@ async function main() {
 
   // --- Run the suites -------------------------------------------------------
   const suites = [
+    "tests/billing-activity.test.mjs",
     "tests/invoice-billing-access.e2e.mjs",
     "tests/appointment-customer-access.e2e.mjs",
     "tests/property-service-access.e2e.mjs",
