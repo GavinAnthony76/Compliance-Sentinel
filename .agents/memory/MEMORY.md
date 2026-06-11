@@ -23,3 +23,4 @@
 - [Platform-admin deactivation tests](admin-deactivation-tests.md) — seed admins via pg (no HTTP create); deactivate-stale is GLOBAL on shared Neon, so restore non-seeded swept admins or you lock out real operators.
 - [Autopay charge vs Connect & test keys](autopay-charge-vs-connect.md) — autopay charge bills PLATFORM account (no Connect); portal pay needs Connect. Workspace has LIVE Stripe key, so money-moving e2e must gate on sk_test_ and skip.
 - [Post-merge drizzle destructive hang](post-merge-drizzle-destructive.md) — post-merge `db push` stalls on data-loss prompts (orphan tables from unmerged tasks); never use --force, wrap non-fatal so merges aren't blocked.
+- [Platform settings singleton](platform-settings-singleton.md) — admin-configurable settings live in a one-row platform_settings table (id=1, lazily created); stale-admin lockout days/sweep-enabled read from it.

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from './admin-dashboard';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { useToast } from '@/hooks/use-toast';
-import { User, Lock, Save } from 'lucide-react';
+import { User, Lock, Save, ShieldAlert } from 'lucide-react';
 
 function adminFetch(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem('greensync_admin_token');
@@ -25,6 +25,54 @@ export function AdminSettingsPage() {
     newPassword: '',
     confirmPassword: '',
   });
+
+  const [lockout, setLockout] = useState({ staleAdminDays: 90, staleAdminSweepEnabled: true });
+  const [lockoutBounds, setLockoutBounds] = useState({ minStaleAdminDays: 1, maxStaleAdminDays: 3650 });
+  const [lockoutLoaded, setLockoutLoaded] = useState(false);
+  const [lockoutSaving, setLockoutSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch('/api/admin/settings');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setLockout({ staleAdminDays: data.staleAdminDays, staleAdminSweepEnabled: data.staleAdminSweepEnabled });
+        if (data.bounds) setLockoutBounds(data.bounds);
+      } catch {
+        /* best effort */
+      } finally {
+        if (!cancelled) setLockoutLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleLockoutSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const days = Number(lockout.staleAdminDays);
+    if (!Number.isFinite(days) || days < lockoutBounds.minStaleAdminDays || days > lockoutBounds.maxStaleAdminDays) {
+      toast({ title: `Days must be between ${lockoutBounds.minStaleAdminDays} and ${lockoutBounds.maxStaleAdminDays}`, variant: 'destructive' });
+      return;
+    }
+    setLockoutSaving(true);
+    try {
+      const res = await adminFetch('/api/admin/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ staleAdminDays: days, staleAdminSweepEnabled: lockout.staleAdminSweepEnabled }),
+      });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update lockout policy'); }
+      const data = await res.json();
+      setLockout({ staleAdminDays: data.staleAdminDays, staleAdminSweepEnabled: data.staleAdminSweepEnabled });
+      toast({ title: 'Lockout policy updated' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setLockoutSaving(false);
+    }
+  };
 
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,6 +218,63 @@ export function AdminSettingsPage() {
               >
                 <Lock className="w-4 h-4" />
                 {passwordLoading ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Inactivity lockout policy */}
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-lg bg-red-400/10 flex items-center justify-center">
+              <ShieldAlert className="w-5 h-5 text-red-400" />
+            </div>
+            <div>
+              <h2 className="font-bold text-white">Inactivity Lockout</h2>
+              <p className="text-slate-400 text-xs">Control how long an admin can stay signed-out before being locked out</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleLockoutSave} className="space-y-4">
+            <div>
+              <label className={labelClass}>Lock out after (days of inactivity)</label>
+              <input
+                type="number"
+                className={inputClass}
+                value={lockout.staleAdminDays}
+                min={lockoutBounds.minStaleAdminDays}
+                max={lockoutBounds.maxStaleAdminDays}
+                disabled={!lockoutLoaded}
+                onChange={e => setLockout(l => ({ ...l, staleAdminDays: Number(e.target.value) }))}
+                required
+              />
+              <p className="mt-1.5 text-xs text-slate-500">
+                Admins with no sign-in for this many days (or who have never signed in) become eligible for lockout. Allowed range: {lockoutBounds.minStaleAdminDays}–{lockoutBounds.maxStaleAdminDays} days.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5 w-4 h-4 rounded border-slate-600 bg-slate-800 text-primary focus:ring-primary"
+                checked={lockout.staleAdminSweepEnabled}
+                disabled={!lockoutLoaded}
+                onChange={e => setLockout(l => ({ ...l, staleAdminSweepEnabled: e.target.checked }))}
+              />
+              <span className="text-sm text-slate-300">
+                Run the automatic daily lockout sweep
+                <span className="block text-xs text-slate-500">When off, inactive admins are only locked out when you click the manual button. The threshold above still applies.</span>
+              </span>
+            </label>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                disabled={lockoutSaving || !lockoutLoaded}
+                className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-60"
+              >
+                <Save className="w-4 h-4" />
+                {lockoutSaving ? 'Saving...' : 'Save Lockout Policy'}
               </button>
             </div>
           </form>

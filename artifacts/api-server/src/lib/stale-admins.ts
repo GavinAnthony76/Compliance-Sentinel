@@ -1,11 +1,12 @@
-import { db, platformAdminsTable } from "@workspace/db";
+import { db, platformAdminsTable, DEFAULT_STALE_ADMIN_DAYS } from "@workspace/db";
 import { and, eq, or, sql } from "drizzle-orm";
 import { logActivity } from "./activity";
 import { sendAdminDeactivationEmail } from "./notifications";
+import { getPlatformSettings } from "./platform-settings";
 
-// A platform admin is considered dormant once they have gone this many days
-// without signing in (or have never signed in at all).
-export const STALE_ADMIN_DAYS = 90;
+// Fallback dormancy threshold (days) used when no platform settings row exists
+// yet. The live threshold is configurable via platform settings.
+export const STALE_ADMIN_DAYS = DEFAULT_STALE_ADMIN_DAYS;
 
 // Contact address surfaced to a deactivated admin so they know who to reach to
 // restore access. Falls back to a sensible default when no override is set.
@@ -16,6 +17,11 @@ function resolveAdminSupportEmail(): string {
 export interface DeactivateStaleResult {
   deactivatedCount: number;
   deactivatedIds: number[];
+  // True when a scheduled run was skipped because the automated sweep is
+  // disabled in platform settings.
+  skipped?: boolean;
+  // The inactivity threshold (days) the run actually applied.
+  thresholdDays: number;
 }
 
 /**
@@ -41,7 +47,16 @@ export async function deactivateStaleAdmins(opts: {
   actorAdminId?: number;
   trigger: "manual" | "scheduled";
 }): Promise<DeactivateStaleResult> {
-  const cutoff = new Date(Date.now() - STALE_ADMIN_DAYS * 24 * 60 * 60 * 1000);
+  const settings = await getPlatformSettings();
+  const thresholdDays = settings.staleAdminDays;
+
+  // The automated daily sweep can be turned off entirely from platform
+  // settings. A manual run (admin clicked the button) always proceeds.
+  if (opts.trigger === "scheduled" && !settings.staleAdminSweepEnabled) {
+    return { deactivatedCount: 0, deactivatedIds: [], skipped: true, thresholdDays };
+  }
+
+  const cutoff = new Date(Date.now() - thresholdDays * 24 * 60 * 60 * 1000);
 
   const conditions = [
     eq(platformAdminsTable.isActive, true),
@@ -65,7 +80,7 @@ export async function deactivateStaleAdmins(opts: {
       adminId: opts.actorAdminId,
       action: opts.trigger === "scheduled" ? "admin.admins_auto_deactivated" : "admin.admins_bulk_deactivated",
       entityType: "admin",
-      metadata: { count: deactivatedIds.length, ids: deactivatedIds, thresholdDays: STALE_ADMIN_DAYS, trigger: opts.trigger },
+      metadata: { count: deactivatedIds.length, ids: deactivatedIds, thresholdDays, trigger: opts.trigger },
     });
   }
 
@@ -85,5 +100,5 @@ export async function deactivateStaleAdmins(opts: {
     );
   }
 
-  return { deactivatedCount: deactivatedIds.length, deactivatedIds };
+  return { deactivatedCount: deactivatedIds.length, deactivatedIds, thresholdDays };
 }

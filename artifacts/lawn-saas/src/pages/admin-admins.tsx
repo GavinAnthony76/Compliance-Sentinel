@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAdminListAdmins, useAdminCreateAdmin, useAdminGetMe } from '@workspace/api-client-react';
 import { AdminLayout } from './admin-dashboard';
 import { Button, Input } from '@/components/ui';
@@ -8,13 +8,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getAdminListAdminsQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 
-const STALE_DAYS = 90;
+const DEFAULT_STALE_DAYS = 90;
 const DAY_MS = 1000 * 60 * 60 * 24;
 
-function getLoginStatus(lastLoginAt: string | null | undefined): { stale: boolean; never: boolean; days: number | null } {
+function getLoginStatus(lastLoginAt: string | null | undefined, staleDays: number): { stale: boolean; never: boolean; days: number | null } {
   if (!lastLoginAt) return { stale: true, never: true, days: null };
   const days = Math.floor((Date.now() - new Date(lastLoginAt).getTime()) / DAY_MS);
-  return { stale: days >= STALE_DAYS, never: false, days };
+  return { stale: days >= staleDays, never: false, days };
 }
 
 function adminFetch(path: string, opts: RequestInit = {}) {
@@ -141,24 +141,40 @@ export function AdminAdminsPage() {
   const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'created'>('created');
   const [busyId, setBusyId] = useState<number | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [staleDays, setStaleDays] = useState(DEFAULT_STALE_DAYS);
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useAdminCreateAdmin();
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch('/api/admin/settings');
+        if (!res.ok) return;
+        const settings = await res.json();
+        if (!cancelled && typeof settings.staleAdminDays === 'number') setStaleDays(settings.staleAdminDays);
+      } catch {
+        /* fall back to default threshold */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const admins = (data?.admins ?? []) as any[];
   const myId = (me as any)?.id;
-  const staleCount = useMemo(() => admins.filter(a => getLoginStatus(a.lastLoginAt).stale).length, [admins]);
+  const staleCount = useMemo(() => admins.filter(a => getLoginStatus(a.lastLoginAt, staleDays).stale).length, [admins, staleDays]);
   const deactivatableStaleCount = useMemo(
-    () => admins.filter(a => getLoginStatus(a.lastLoginAt).stale && a.isActive !== false && a.id !== myId).length,
-    [admins, myId],
+    () => admins.filter(a => getLoginStatus(a.lastLoginAt, staleDays).stale && a.isActive !== false && a.id !== myId).length,
+    [admins, myId, staleDays],
   );
   const visibleAdmins = useMemo(() => {
-    let list = staleOnly ? admins.filter(a => getLoginStatus(a.lastLoginAt).stale) : [...admins];
+    let list = staleOnly ? admins.filter(a => getLoginStatus(a.lastLoginAt, staleDays).stale) : [...admins];
     if (sortBy === 'created') return list;
     const ts = (a: any) => (a.lastLoginAt ? new Date(a.lastLoginAt).getTime() : 0);
     list = [...list].sort((a, b) => sortBy === 'recent' ? ts(b) - ts(a) : ts(a) - ts(b));
     return list;
-  }, [admins, staleOnly, sortBy]);
+  }, [admins, staleOnly, sortBy, staleDays]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,7 +235,7 @@ export function AdminAdminsPage() {
 
   const handleDeactivateStale = async () => {
     if (deactivatableStaleCount === 0) return;
-    if (!confirm(`Deactivate ${deactivatableStaleCount} admin${deactivatableStaleCount === 1 ? '' : 's'} inactive for ${STALE_DAYS}+ days? They will be blocked from signing in until reactivated. Your own account is never affected.`)) return;
+    if (!confirm(`Deactivate ${deactivatableStaleCount} admin${deactivatableStaleCount === 1 ? '' : 's'} inactive for ${staleDays}+ days? They will be blocked from signing in until reactivated. Your own account is never affected.`)) return;
     setBulkBusy(true);
     try {
       const res = await adminFetch(`/api/admin/admins/deactivate-stale`, { method: 'POST' });
@@ -305,7 +321,7 @@ export function AdminAdminsPage() {
           {staleCount > 0 && (
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-400/10 text-amber-400 text-sm font-medium">
               <AlertTriangle className="w-4 h-4" />
-              {staleCount} admin{staleCount === 1 ? '' : 's'} inactive {STALE_DAYS}+ days
+              {staleCount} admin{staleCount === 1 ? '' : 's'} inactive {staleDays}+ days
             </div>
           )}
           <button
@@ -345,7 +361,7 @@ export function AdminAdminsPage() {
         <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
           <div className="divide-y divide-slate-800">
             {visibleAdmins.map((admin: any) => {
-              const status = getLoginStatus(admin.lastLoginAt);
+              const status = getLoginStatus(admin.lastLoginAt, staleDays);
               const deactivated = admin.isActive === false;
               const isSelf = admin.id === myId;
               return (

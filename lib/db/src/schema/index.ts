@@ -1,6 +1,7 @@
 export * from "./companies";
 export * from "./users";
 export * from "./platform-admins";
+export * from "./platform-settings";
 export * from "./customers";
 export * from "./properties";
 export * from "./services";

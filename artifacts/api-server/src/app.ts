@@ -164,10 +164,12 @@ import("./lib/stuck-invoices").then(({ releaseStuckProcessingInvoices }) => {
 
 // Automatically lock out dormant platform admins on a daily cadence so the
 // dormancy sweep acts as a real security control instead of waiting for an
-// admin to click the button. Each run records an activity-log entry and emails
-// any newly deactivated admin. We deliberately do NOT run on startup — the sweep
-// is destructive (deactivates + emails), so we let the 24h interval drive it
-// rather than firing on every server restart.
+// admin to click the button. The inactivity threshold (days) and whether this
+// automated sweep runs at all are both configurable via platform settings, read
+// fresh on each run inside deactivateStaleAdmins. Each run records an
+// activity-log entry and emails any newly deactivated admin. We deliberately do
+// NOT run on startup — the sweep is destructive (deactivates + emails), so we
+// let the 24h interval drive it rather than firing on every server restart.
 import("./lib/stale-admins").then(({ deactivateStaleAdmins }) => {
   setInterval(() => {
     deactivateStaleAdmins({ trigger: "scheduled" }).catch(() => {});

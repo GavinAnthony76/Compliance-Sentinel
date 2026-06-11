@@ -9,6 +9,7 @@ import { isEmailConfigured } from "../lib/resend";
 import { sendAdminDeactivationEmail, sendAdminReactivationEmail, resolveBaseUrl } from "../lib/notifications";
 import { getCatalog } from "../lib/plan-catalog";
 import { deactivateStaleAdmins } from "../lib/stale-admins";
+import { getPlatformSettings, updatePlatformSettings, MIN_STALE_ADMIN_DAYS, MAX_STALE_ADMIN_DAYS } from "../lib/platform-settings";
 import { z } from "zod";
 
 // MRR-per-plan (in cents) and labels are derived from the DB-backed plan
@@ -670,16 +671,65 @@ router.put("/admins/:id", async (req: any, res) => {
   return res.json({ id: updated.id, email: updated.email, firstName: updated.firstName, lastName: updated.lastName, role: updated.role, isActive: updated.isActive });
 });
 
-// Bulk-deactivate every admin that has gone dormant (no sign-in for STALE_ADMIN_DAYS,
-// or never signed in). The acting admin is always excluded so they can't lock
-// themselves out. Shares its dormancy logic with the recurring background sweep.
+// ─── Platform settings ────────────────────────────────────────────────────────
+// Read the platform-wide settings (currently the dormant-admin lockout policy).
+router.get("/settings", async (_req: any, res) => {
+  const settings = await getPlatformSettings();
+  return res.json({
+    staleAdminDays: settings.staleAdminDays,
+    staleAdminSweepEnabled: settings.staleAdminSweepEnabled,
+    bounds: { minStaleAdminDays: MIN_STALE_ADMIN_DAYS, maxStaleAdminDays: MAX_STALE_ADMIN_DAYS },
+  });
+});
+
+const updatePlatformSettingsSchema = z.object({
+  staleAdminDays: z.coerce.number().int().min(MIN_STALE_ADMIN_DAYS).max(MAX_STALE_ADMIN_DAYS).optional(),
+  staleAdminSweepEnabled: z.boolean().optional(),
+});
+
+// Update the platform settings. Records an activity-log entry so the change is
+// auditable alongside other admin actions.
+router.put("/settings", async (req: any, res) => {
+  const parsed = updatePlatformSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "ValidationError", message: "Invalid settings", details: parsed.error.flatten() });
+  }
+  const before = await getPlatformSettings();
+  const updated = await updatePlatformSettings(parsed.data);
+
+  const changed =
+    before.staleAdminDays !== updated.staleAdminDays ||
+    before.staleAdminSweepEnabled !== updated.staleAdminSweepEnabled;
+  if (changed) {
+    await logActivity({
+      adminId: req.admin.adminId,
+      action: "admin.platform_settings_updated",
+      entityType: "settings",
+      metadata: {
+        staleAdminDays: { from: before.staleAdminDays, to: updated.staleAdminDays },
+        staleAdminSweepEnabled: { from: before.staleAdminSweepEnabled, to: updated.staleAdminSweepEnabled },
+      },
+    });
+  }
+
+  return res.json({
+    staleAdminDays: updated.staleAdminDays,
+    staleAdminSweepEnabled: updated.staleAdminSweepEnabled,
+    bounds: { minStaleAdminDays: MIN_STALE_ADMIN_DAYS, maxStaleAdminDays: MAX_STALE_ADMIN_DAYS },
+  });
+});
+
+// Bulk-deactivate every admin that has gone dormant (no sign-in for the
+// configured inactivity threshold, or never signed in). The acting admin is
+// always excluded so they can't lock themselves out. Shares its dormancy logic
+// with the recurring background sweep.
 router.post("/admins/deactivate-stale", async (req: any, res) => {
-  const { deactivatedCount, deactivatedIds } = await deactivateStaleAdmins({
+  const { deactivatedCount, deactivatedIds, thresholdDays } = await deactivateStaleAdmins({
     excludeAdminId: req.admin.adminId,
     actorAdminId: req.admin.adminId,
     trigger: "manual",
   });
-  return res.json({ success: true, deactivatedCount, deactivatedIds });
+  return res.json({ success: true, deactivatedCount, deactivatedIds, thresholdDays });
 });
 
 router.delete("/admins/:id", async (req: any, res) => {
