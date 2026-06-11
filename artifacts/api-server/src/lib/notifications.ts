@@ -671,6 +671,89 @@ export async function sendAppointmentStatusEmail(opts: {
   });
 }
 
+function buildLeadAssignmentEmailHtml(opts: {
+  staffName: string;
+  companyName: string;
+  leadName: string;
+  details: Array<{ label: string; value: string }>;
+  leadsUrl?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): string {
+  const accent = opts.primaryColor && /^#[0-9a-fA-F]{3,8}$/.test(opts.primaryColor) ? opts.primaryColor : "#16a34a";
+  const companyName = escapeHtml(opts.companyName);
+  const staffName = escapeHtml(opts.staffName);
+  const leadName = escapeHtml(opts.leadName);
+  const leadsUrl = opts.leadsUrl ? escapeHtml(opts.leadsUrl) : null;
+
+  const header = opts.logoUrl
+    ? `<img src="${escapeHtml(opts.logoUrl)}" alt="${companyName}" style="max-height:56px;max-width:200px;display:block;" />`
+    : `<span style="font-size:22px;font-weight:700;color:#ffffff;">${companyName}</span>`;
+
+  const detailRows = opts.details.length
+    ? opts.details
+        .map(
+          d => `
+              <tr>
+                <td style="font-size:14px;color:#6b7280;padding:4px 12px 4px 0;white-space:nowrap;vertical-align:top;">${escapeHtml(d.label)}</td>
+                <td style="font-size:14px;color:#111827;font-weight:600;padding:4px 0;">${escapeHtml(d.value)}</td>
+              </tr>`
+        )
+        .join("")
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>New lead assigned</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr>
+          <td style="background-color:${accent};padding:24px 32px;">${header}</td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${staffName},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">A lead has been assigned to you: <strong>${leadName}</strong>.</p>
+            ${detailRows
+              ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">${detailRows}</table>
+              </td></tr>
+            </table>`
+              : ""}
+            ${leadsUrl
+              ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+              <tr>
+                <td style="border-radius:6px;background-color:${accent};">
+                  <a href="${leadsUrl}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">View in Pipeline</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 24px;font-size:13px;color:#6b7280;line-height:1.5;">If the button doesn't work, copy and paste this link into your browser:<br /><a href="${leadsUrl}" style="color:${accent};word-break:break-all;">${leadsUrl}</a></p>`
+              : ""}
+            <p style="margin:0;font-size:14px;color:#374151;line-height:1.5;">Reach out promptly so this lead doesn't go cold.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 32px;border-top:1px solid #e5e7eb;">
+            <p style="margin:0;font-size:14px;color:#374151;">Thank you,<br /><strong>${companyName}</strong></p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+}
+
 // Staff-facing notification when a lead is assigned (or reassigned) to them.
 export async function sendLeadAssignmentEmail(opts: {
   to: string;
@@ -684,6 +767,8 @@ export async function sendLeadAssignmentEmail(opts: {
   leadPhone?: string | null;
   leadEmail?: string | null;
   leadsUrl?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }): Promise<void> {
   const body = [
     `Hi ${opts.staffName},`,
@@ -703,10 +788,29 @@ export async function sendLeadAssignmentEmail(opts: {
     opts.companyName,
   ].join("\n");
 
+  const details: Array<{ label: string; value: string }> = [
+    ...(opts.leadStatus ? [{ label: "Status:", value: opts.leadStatus }] : []),
+    ...(opts.leadSource ? [{ label: "Source:", value: opts.leadSource }] : []),
+    ...(opts.estimatedValue ? [{ label: "Estimated value:", value: `$${opts.estimatedValue}` }] : []),
+    ...(opts.leadPhone ? [{ label: "Phone:", value: opts.leadPhone }] : []),
+    ...(opts.leadEmail ? [{ label: "Email:", value: opts.leadEmail }] : []),
+  ];
+
+  const html = buildLeadAssignmentEmailHtml({
+    staffName: opts.staffName,
+    companyName: opts.companyName,
+    leadName: opts.leadName,
+    details,
+    leadsUrl: opts.leadsUrl,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+
   await sendEmail({
     to: opts.to,
     subject: `New lead assigned to you: ${opts.leadName}`,
     body,
+    html,
     replyTo: opts.companyEmail,
   });
 }

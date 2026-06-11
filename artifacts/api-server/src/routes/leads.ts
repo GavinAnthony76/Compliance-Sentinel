@@ -81,6 +81,8 @@ async function dispatchLeadAssignmentEmail(
       leadPhone: lead.phone,
       leadEmail: lead.email,
       leadsUrl,
+      logoUrl: company?.logoUrl ?? null,
+      primaryColor: company?.primaryColor ?? null,
     });
   } catch (err) {
     logger.error({ err, companyId, assignedUserId, leadId: lead.id }, "Failed to send lead assignment email");
