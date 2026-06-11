@@ -837,6 +837,27 @@ export async function dispatchOwnerPaymentNotification(invoiceId: number, compan
       primaryColor: company.primaryColor,
     });
 
+    // Attach the same paid-invoice receipt PDF the customer receives, giving the
+    // owner a clean document for their records. Graceful fallback: if PDF
+    // generation fails, still send the owner notification without the attachment.
+    let attachments: { filename: string; content: Buffer }[] | undefined;
+    try {
+      const lineItems = await db.select().from(invoiceLineItemsTable)
+        .where(eq(invoiceLineItemsTable.invoiceId, invoiceId))
+        .orderBy(invoiceLineItemsTable.sortOrder);
+      const { buildInvoicePdf } = await import("./invoice-pdf");
+      const pdfBuffer = await buildInvoicePdf({
+        invoice: inv,
+        customer,
+        company,
+        lineItems,
+        documentType: "receipt",
+      });
+      attachments = [{ filename: `receipt-${inv.invoiceNumber}.pdf`, content: pdfBuffer }];
+    } catch (pdfErr) {
+      logger.error({ err: pdfErr, invoiceId, companyId }, "Failed to generate receipt PDF for owner payment notification; sending without attachment");
+    }
+
     await sendEmail({
       to: company.email,
       subject: `Payment received: ${customerName} paid invoice ${inv.invoiceNumber} — ${amountStr}`,
@@ -855,6 +876,7 @@ export async function dispatchOwnerPaymentNotification(invoiceId: number, compan
         `— GreenSynk`,
       ].join("\n"),
       html,
+      attachments,
     });
   } catch (err) {
     logger.error({ err, invoiceId, companyId }, "Failed to dispatch owner payment notification");
