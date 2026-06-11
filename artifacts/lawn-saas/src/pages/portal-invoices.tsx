@@ -7,13 +7,21 @@ import { ArrowLeft, CreditCard, CheckCircle, Leaf, ChevronRight, Download } from
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    draft:   { label: 'Draft',   className: 'bg-gray-100 text-gray-700' },
-    sent:    { label: 'Sent',    className: 'bg-blue-100 text-blue-800' },
-    paid:    { label: 'Paid',    className: 'bg-green-100 text-green-800' },
-    overdue: { label: 'Overdue', className: 'bg-red-100 text-red-800' },
+    draft:      { label: 'Draft',                 className: 'bg-gray-100 text-gray-700' },
+    sent:       { label: 'Sent',                  className: 'bg-blue-100 text-blue-800' },
+    paid:       { label: 'Paid',                  className: 'bg-green-100 text-green-800' },
+    overdue:    { label: 'Overdue',               className: 'bg-red-100 text-red-800' },
+    processing: { label: 'Payment in progress…',  className: 'bg-amber-100 text-amber-800' },
   };
   const s = map[status] ?? { label: status, className: 'bg-gray-100 text-gray-700' };
-  return <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${s.className}`}>{s.label}</span>;
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${s.className}`}>
+      {status === 'processing' && (
+        <span className="w-2.5 h-2.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin" />
+      )}
+      {s.label}
+    </span>
+  );
 }
 
 function PaymentMethodBadge({ method }: { method: string }) {
@@ -44,7 +52,14 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
     try {
       const res = await portalFetch(`/api/portal/invoices/${invoice.id}/pay`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Payment error');
+      if (!res.ok) {
+        if (res.status === 409 || data.error === 'ChargeInProgress') {
+          setDetail((d: any) => (d ? { ...d, status: 'processing' } : d));
+          toast({ title: 'Payment in progress', description: 'This invoice is already being processed. Please wait a moment before trying again.' });
+          return;
+        }
+        throw new Error(data.message || 'Payment error');
+      }
       if (data.url) window.location.href = data.url;
     } catch (err: any) {
       toast({ title: 'Payment failed', description: err.message, variant: 'destructive' });
@@ -97,7 +112,11 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
 
   const pc = detail?.paymentConfig;
   const methods: string[] = pc?.acceptedPaymentMethods ?? [];
-  const isPaid = invoice.status === 'paid';
+  // Prefer the freshly-fetched detail status over the (possibly stale) list
+  // item prop so the processing/paid state reflects the latest server value.
+  const effectiveStatus = detail?.status ?? invoice.status;
+  const isPaid = effectiveStatus === 'paid';
+  const isProcessing = effectiveStatus === 'processing';
 
   return (
     <div>
@@ -117,7 +136,7 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
                   {detail?.companyName && <p className="text-sm text-muted-foreground mt-0.5">From {detail.companyName}</p>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <StatusBadge status={invoice.status} />
+                  <StatusBadge status={effectiveStatus} />
                   <Button variant="outline" size="sm" onClick={handleDownloadPdf} isLoading={downloading}>
                     <Download className="w-4 h-4 mr-1.5" />PDF
                   </Button>
@@ -218,7 +237,15 @@ function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: a
                   )}
                 </div>
 
-                {(methods.includes('card') && detail?.companyPlan !== 'starter') ? (
+                {isProcessing ? (
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <span className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <div>
+                      <p className="font-semibold text-amber-800">Payment in progress…</p>
+                      <p className="text-sm text-amber-700">We're processing a payment for this invoice. This page will update once it's complete.</p>
+                    </div>
+                  </div>
+                ) : (methods.includes('card') && detail?.companyPlan !== 'starter') ? (
                   <Button className="w-full" onClick={handlePay} isLoading={paying}>
                     <CreditCard className="w-4 h-4 mr-2" />Pay Online Now
                   </Button>

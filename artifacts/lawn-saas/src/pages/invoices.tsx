@@ -33,8 +33,31 @@ const STATUS_COLORS: Record<string, string> = {
   sent: 'bg-blue-100 text-blue-700',
   paid: 'bg-green-100 text-green-700',
   overdue: 'bg-red-100 text-red-700',
+  processing: 'bg-amber-100 text-amber-700',
   cancelled: 'bg-gray-100 text-gray-500',
 };
+
+// Friendly status labels. The transient "processing" status is set by the
+// backend while a card charge is being attempted; surface it clearly instead
+// of the raw word so staff watching the list know a payment is underway.
+const STATUS_LABELS: Record<string, string> = {
+  processing: 'Payment in progress…',
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function InvoiceStatusBadge({ status }: { status: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[status] || 'bg-gray-100 text-gray-600'}`}>
+      {status === 'processing' && (
+        <span className="w-2.5 h-2.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      )}
+      {statusLabel(status)}
+    </span>
+  );
+}
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Cash', check: 'Check', zelle: 'Zelle', venmo: 'Venmo',
@@ -284,9 +307,7 @@ function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoi
             <h2 className="text-xl font-bold">{invoice.invoiceNumber}</h2>
             {detail?.customerName && <p className="text-sm text-muted-foreground mt-0.5">{detail.customerName}</p>}
           </div>
-          <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[invoice.status] || 'bg-gray-100 text-gray-600'}`}>
-            {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-          </span>
+          <InvoiceStatusBadge status={invoice.status} />
         </div>
 
         {loading ? (
@@ -642,9 +663,7 @@ export function InvoicesPage() {
                         <td className="p-4 text-sm font-semibold">${Number(inv.total).toFixed(2)}</td>
                         <td className="p-4">
                           <div className="flex items-center gap-1.5">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[inv.status] || 'bg-gray-100 text-gray-600'}`}>
-                              {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
-                            </span>
+                            <InvoiceStatusBadge status={inv.status} />
                             {inv.status === 'paid' && methodLabel && (
                               <span className="text-xs text-muted-foreground">· {methodLabel}</span>
                             )}
