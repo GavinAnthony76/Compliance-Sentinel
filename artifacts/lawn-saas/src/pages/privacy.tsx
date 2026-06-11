@@ -136,7 +136,49 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="9. Changes to This Policy">
+        <Section title="9. SMS, Text Messaging, and Mobile Opt-In">
+          <p>
+            GreenSynk, and the businesses that use GreenSynk, may send SMS/text messages for
+            transactional and service-related purposes — for example, appointment reminders and
+            confirmations, scheduling and status updates, invoice and payment notifications,
+            estimate updates, customer portal access links, and (where you have opted in) review
+            requests.
+          </p>
+          <p>
+            <strong>Consent.</strong> You opt in to text messages by providing your mobile phone
+            number and agreeing to be contacted, or by texting us first. Consent to receive text
+            messages is not a condition of purchasing any goods or services.
+          </p>
+          <p>
+            <strong>
+              No mobile information will be shared with third parties or affiliates for marketing
+              or promotional purposes. Text messaging opt-in data and consent will not be shared
+              with any third parties.
+            </strong>{' '}
+            We share mobile numbers only with the messaging service providers (such as Twilio)
+            required to deliver the messages on our behalf, and they are contractually prohibited
+            from using that information for any other purpose.
+          </p>
+          <p>
+            <strong>Message frequency.</strong> Message frequency varies depending on your
+            activity, settings, and interactions with the business — for example, reminders are
+            typically sent around your scheduled appointments.
+          </p>
+          <p>
+            <strong>Message and data rates may apply.</strong>
+          </p>
+          <p>
+            <strong>Opt-out and help.</strong> You can opt out at any time by replying STOP to any
+            message; you will receive a single confirmation and no further messages. Reply HELP for
+            assistance, or contact us at{' '}
+            <a href="mailto:privacy@greensynk.com" className="text-primary hover:underline">
+              privacy@greensynk.com
+            </a>
+            . Carriers are not liable for delayed or undelivered messages.
+          </p>
+        </Section>
+
+        <Section title="10. Changes to This Policy">
           <p>
             We may update this Privacy Policy from time to time. We will notify you of material
             changes by posting the new policy on this page and, where appropriate, by sending
@@ -145,7 +187,7 @@ export function PrivacyPage() {
           </p>
         </Section>
 
-        <Section title="10. Contact Us">
+        <Section title="11. Contact Us">
           <p>
             If you have questions or concerns about this Privacy Policy, please contact us at:{' '}
             <a href="mailto:privacy@greensynk.com" className="text-primary hover:underline">

@@ -154,7 +154,39 @@ export function TermsPage() {
           </p>
         </Section>
 
-        <Section title="11. Changes to Terms">
+        <Section title="11. SMS and Text Messaging Program">
+          <p>
+            By providing your mobile phone number and opting in, you agree to receive recurring
+            automated text messages from GreenSynk and/or the business you interact with through
+            GreenSynk. Messages may include appointment reminders and confirmations, scheduling and
+            status updates, invoice and payment notifications, estimate updates, customer portal
+            access links, and review requests.
+          </p>
+          <p>Program details:</p>
+          <ul className="list-disc list-inside space-y-1 mt-2">
+            <li>Message frequency varies based on your activity and account settings.</li>
+            <li>Message and data rates may apply.</li>
+            <li>Reply STOP to cancel at any time. Reply HELP for help.</li>
+            <li>Consent to receive messages is not a condition of any purchase.</li>
+            <li>
+              No mobile information or opt-in consent will be shared with third parties for
+              marketing purposes; numbers are shared only with our messaging provider solely to
+              deliver messages.
+            </li>
+            <li>
+              Wireless carriers are not liable for delayed or undelivered messages, and message
+              delivery is subject to your carrier's transmission.
+            </li>
+          </ul>
+          <p>
+            If you change or deactivate your mobile number, you agree to update your account or
+            notify the business so that messages are not sent to someone who later acquires your
+            former number. For full details on how we handle mobile information, see our{' '}
+            <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>.
+          </p>
+        </Section>
+
+        <Section title="12. Changes to Terms">
           <p>
             We may update these Terms from time to time. We will notify you of material changes
             by posting the updated Terms on this page and, where appropriate, by sending an email
@@ -163,7 +195,7 @@ export function TermsPage() {
           </p>
         </Section>
 
-        <Section title="12. Governing Law">
+        <Section title="13. Governing Law">
           <p>
             These Terms are governed by and construed in accordance with the laws of the State
             of Delaware, without regard to its conflict of law provisions. Any disputes arising
@@ -171,7 +203,7 @@ export function TermsPage() {
           </p>
         </Section>
 
-        <Section title="13. Contact Us">
+        <Section title="14. Contact Us">
           <p>
             If you have questions about these Terms, please contact us at:{' '}
             <a href="mailto:legal@greensynk.com" className="text-primary hover:underline">
