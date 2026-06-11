@@ -6,3 +6,15 @@ id = "kwQAih80dLN-XN_vSIpxJ"
 uri = "file://GREENSYNC_OVERVIEW.md"
 type = "text"
 title = "GreenSync — Comprehensive Application Document"
+
+[[outputs]]
+id = "FQVbXhAuwbTe1holrsQ-V"
+uri = "file://attached_assets/rcs/greensynk-rcs-logo.png"
+type = "image"
+title = "RCS Logo (224x224, ~30kB)"
+
+[[outputs]]
+id = "z6hE86TOYmLL8q9WRosTL"
+uri = "file://attached_assets/rcs/greensynk-rcs-banner.png"
+type = "image"
+title = "RCS Banner (1440x448, ~194kB)"
