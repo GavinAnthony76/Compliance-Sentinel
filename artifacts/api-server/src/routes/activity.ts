@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, activityLogsTable, usersTable } from "@workspace/db";
-import { eq, and, sql, desc, inArray, gt, ne, or, isNull, like } from "drizzle-orm";
+import { eq, and, sql, desc, inArray, gt, ne, or, isNull, like, ilike } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 
 const router = Router();
@@ -14,9 +14,35 @@ router.get("/", async (req: any, res) => {
   // Optional filter: only return actions in a given category (action prefix,
   // e.g. ?category=billing matches billing.plan_changed, billing.subscription_canceled, …).
   const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
+  // Optional free-text search across the action name, entity type, the recorded
+  // actor (metadata) and the acting user's name. Combines with the category filter.
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
 
   const conditions = [eq(activityLogsTable.companyId, companyId)];
   if (category) conditions.push(like(activityLogsTable.action, `${category}.%`));
+  if (search) {
+    const term = `%${search}%`;
+    // Match the search against users (by name) within this company so we can
+    // filter activity by the acting staff member as well.
+    const matchingUsers = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(and(
+        eq(usersTable.companyId, companyId),
+        ilike(sql`${usersTable.firstName} || ' ' || ${usersTable.lastName}`, term),
+      ));
+    const matchingUserIds = matchingUsers.map(u => u.id);
+
+    const searchConditions = [
+      ilike(activityLogsTable.action, term),
+      ilike(activityLogsTable.entityType, term),
+      ilike(sql`${activityLogsTable.metadataJson} ->> 'actor'`, term),
+    ];
+    if (matchingUserIds.length > 0) {
+      searchConditions.push(inArray(activityLogsTable.userId, matchingUserIds));
+    }
+    conditions.push(or(...searchConditions)!);
+  }
   const whereClause = and(...conditions);
 
   const [logs, total] = await Promise.all([

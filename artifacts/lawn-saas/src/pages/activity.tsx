@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout';
 import { Card } from '@/components/ui';
-import { Activity as ActivityIcon, Filter } from 'lucide-react';
+import { Activity as ActivityIcon, Filter, Search } from 'lucide-react';
 import { format } from 'date-fns';
 
 const PAGE_SIZE = 50;
@@ -61,12 +61,13 @@ function actorLabel(log: ActivityLog): string {
   return 'Stripe / automated';
 }
 
-function useActivity(page: number, category: string) {
+function useActivity(page: number, category: string, search: string) {
   return useQuery<ActivityResponse>({
-    queryKey: ['/api/activity', page, category],
+    queryKey: ['/api/activity', page, category, search],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
       if (category) params.set('category', category);
+      if (search) params.set('search', search);
       const res = await fetch(`/api/activity?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch activity');
       return res.json();
@@ -77,7 +78,20 @@ function useActivity(page: number, category: string) {
 export function ActivityPage() {
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState('');
-  const { data, isLoading } = useActivity(page, category);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const { data, isLoading } = useActivity(page, category, search);
+
+  // Debounce the search input so we reset to page 1 and query once the user pauses typing.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(prev => {
+        if (prev !== searchInput) setPage(1);
+        return searchInput;
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const handleCategory = (val: string) => { setCategory(val); setPage(1); };
   const totalPages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
@@ -92,7 +106,17 @@ export function ActivityPage() {
         {data && <span className="text-sm text-muted-foreground shrink-0">{data.total} {data.total === 1 ? 'event' : 'events'}</span>}
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder="Search by action, person, or record…"
+            className="w-full h-11 pl-10 pr-3 rounded-xl bg-card border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+          />
+        </div>
         <div className="relative inline-block">
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
           <select
@@ -114,7 +138,11 @@ export function ActivityPage() {
           {!data || data.logs.length === 0 ? (
             <div className="py-20 text-center">
               <ActivityIcon className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-              <p className="text-muted-foreground">No activity {category ? 'in this category ' : ''}yet</p>
+              <p className="text-muted-foreground">
+                {search
+                  ? `No activity matching "${search}"${category ? ' in this category' : ''}`
+                  : `No activity ${category ? 'in this category ' : ''}yet`}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-border">
