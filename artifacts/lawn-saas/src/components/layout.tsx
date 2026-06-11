@@ -10,6 +10,7 @@ import { Button } from './ui';
 import { Logo } from './logo';
 import { cn } from '@/lib/utils';
 import { TrialBanner } from './trial-banner';
+import { PastDueBanner } from './past-due-banner';
 
 const PLAN_ORDER: Record<string, number> = { starter: 0, growth: 1, pro: 2 };
 
@@ -304,6 +305,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 max-h-screen overflow-y-auto">
         <TrialBanner />
+        <PastDueBanner />
         <main className="flex-1 p-4 md:p-8 lg:p-10">
           <div className="max-w-6xl mx-auto">
             {children}
