@@ -85,6 +85,37 @@ export function buildSubscriptionUpdatedLog(input: {
   };
 }
 
+// invoice.paid / invoice.payment_succeeded / invoice.payment_failed — Stripe
+// finalized (or failed) a subscription invoice, which flips the company's billing
+// status (e.g. active → past_due, or trialing/past_due → active). Returns null
+// when the next status matches what we already have stored. That change-guard is
+// what prevents double-logging when Stripe emits BOTH a customer.subscription.updated
+// AND an invoice.* event for the same flip — whichever handler runs first records
+// it, the other becomes a no-op. These are automated events with no acting user.
+export function buildStatusFlipLog(input: {
+  company: {
+    id: number;
+    subscriptionPlan: string | null;
+    subscriptionStatus: string | null;
+  };
+  nextStatus: string;
+}): LogActivityOpts | null {
+  const { company, nextStatus } = input;
+  if (company.subscriptionStatus === nextStatus) return null;
+  return {
+    companyId: company.id,
+    action: "billing.subscription_updated",
+    entityType: "company",
+    entityId: company.id,
+    metadata: {
+      plan: company.subscriptionPlan,
+      status: nextStatus,
+      previousStatus: company.subscriptionStatus,
+      actor: "Stripe / automated",
+    },
+  };
+}
+
 // customer.subscription.deleted — the subscription was canceled at Stripe. This
 // is always an automated event (no acting user).
 export function buildSubscriptionCanceledLog(input: {

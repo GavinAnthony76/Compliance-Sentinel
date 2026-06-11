@@ -19,6 +19,10 @@
  *     plan, status, or scheduled-cancellation flag actually changed, always
  *     attributed to "Stripe / automated".
  *   - customer.subscription.deleted -> billing.subscription_canceled.
+ *   - invoice.paid / invoice.payment_succeeded / invoice.payment_failed ->
+ *     billing.subscription_updated ONLY when the next status differs from the
+ *     stored status (active -> past_due logs; a redundant event matching the
+ *     stored status logs nothing), always attributed to "Stripe / automated".
  *   - The de-duplication guard: a single checkout flow (checkout logs
  *     plan_changed, then the follow-up subscription.updated reflects the SAME
  *     state) produces NO second subscription_updated entry.
@@ -32,6 +36,7 @@ import {
   buildPlanChangedLog,
   buildSubscriptionUpdatedLog,
   buildSubscriptionCanceledLog,
+  buildStatusFlipLog,
 } from "../src/lib/billing-activity.ts";
 
 let failures = 0;
@@ -163,7 +168,54 @@ console.log("\ncustomer.subscription.deleted logs subscription_canceled:");
 }
 
 // ---------------------------------------------------------------------------
-// 4. No duplicate plan_changed + subscription_updated for a single checkout flow
+// 4. invoice.paid / invoice.payment_succeeded / invoice.payment_failed ->
+//    billing.subscription_updated (logBillingStatusFlip change-guard)
+// ---------------------------------------------------------------------------
+console.log("\ninvoice.* webhooks log a status flip ONLY when the status actually changed:");
+
+const flipCompany = {
+  id: 77,
+  subscriptionPlan: "growth",
+  subscriptionStatus: "active",
+};
+
+// 4a. invoice.payment_failed flips active -> past_due: logs once, attributed to Stripe.
+{
+  const log = buildStatusFlipLog({ company: flipCompany, nextStatus: "past_due" });
+  check("a flip to a new status produces a log", log !== null, JSON.stringify(log));
+  check("action is billing.subscription_updated", log?.action === "billing.subscription_updated");
+  check("scoped to the company", log?.companyId === 77 && log?.entityId === 77 && log?.entityType === "company");
+  check("records new and previous status", log?.metadata.status === "past_due" && log?.metadata.previousStatus === "active");
+  check("carries the stored plan", log?.metadata.plan === "growth");
+  check("attributed to 'Stripe / automated'", log?.metadata.actor === "Stripe / automated");
+  check("no acting user on an invoice-driven flip", log?.userId === undefined, String(log?.userId));
+}
+
+// 4b. Redundant event whose status matches what we already stored: NO log
+//     (this is the guard that stops double-logging when Stripe emits both
+//     customer.subscription.updated AND invoice.* for the same flip).
+{
+  const log = buildStatusFlipLog({ company: flipCompany, nextStatus: "active" });
+  check("a redundant event matching the stored status produces NO log", log === null, JSON.stringify(log));
+}
+
+// 4c. invoice.paid recovering past_due -> active also logs.
+{
+  const recovering = { id: 78, subscriptionPlan: "pro", subscriptionStatus: "past_due" };
+  const log = buildStatusFlipLog({ company: recovering, nextStatus: "active" });
+  check("a recovery flip (past_due -> active) produces a log", log !== null, JSON.stringify(log));
+  check("recovery records new and previous status", log?.metadata.status === "active" && log?.metadata.previousStatus === "past_due");
+}
+
+// 4d. invoice.paid on a preserved trial keeps "trialing": status unchanged -> NO log.
+{
+  const trialing = { id: 79, subscriptionPlan: "growth", subscriptionStatus: "trialing" };
+  const log = buildStatusFlipLog({ company: trialing, nextStatus: "trialing" });
+  check("a $0 trial-start invoice does not log when status stays 'trialing'", log === null, JSON.stringify(log));
+}
+
+// ---------------------------------------------------------------------------
+// 5. No duplicate plan_changed + subscription_updated for a single checkout flow
 // ---------------------------------------------------------------------------
 console.log("\nA single checkout flow does not double-log (plan_changed + subscription_updated):");
 {

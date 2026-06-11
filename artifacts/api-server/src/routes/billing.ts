@@ -10,6 +10,7 @@ import {
   buildPlanChangedLog,
   buildSubscriptionUpdatedLog,
   buildSubscriptionCanceledLog,
+  buildStatusFlipLog,
 } from "../lib/billing-activity";
 import { logger } from "../lib/logger";
 
@@ -24,19 +25,10 @@ const router = Router();
 async function logBillingStatusFlip(subscriptionId: string, nextStatus: string): Promise<void> {
   try {
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.stripeSubscriptionId, subscriptionId)).limit(1);
-    if (!company || company.subscriptionStatus === nextStatus) return;
-    await logActivity({
-      companyId: company.id,
-      action: "billing.subscription_updated",
-      entityType: "company",
-      entityId: company.id,
-      metadata: {
-        plan: company.subscriptionPlan,
-        status: nextStatus,
-        previousStatus: company.subscriptionStatus,
-        actor: "Stripe / automated",
-      },
-    });
+    if (!company) return;
+    const log = buildStatusFlipLog({ company, nextStatus });
+    if (!log) return;
+    await logActivity(log);
   } catch {
     // Activity logging must never break webhook processing
   }
