@@ -6,6 +6,7 @@ import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
 import { getPlanUsageSummary, type Plan } from "../lib/features";
 import { isEmailConfigured } from "../lib/resend";
+import { sendAdminDeactivationEmail, sendAdminReactivationEmail, resolveBaseUrl } from "../lib/notifications";
 import { getCatalog } from "../lib/plan-catalog";
 import { z } from "zod";
 
@@ -18,6 +19,12 @@ function planMrrCents(planId: string | null): number {
 function planLabel(planId: string | null): string {
   const plan = getCatalog().find(p => p.id === planId);
   return plan ? `${plan.name} ($${plan.price})` : (planId ?? "");
+}
+
+// Contact address surfaced to a deactivated admin so they know who to reach to
+// restore access. Falls back to a sensible default when no override is set.
+function resolveAdminSupportEmail(): string {
+  return process.env.ADMIN_SUPPORT_EMAIL || process.env.RESEND_FROM_EMAIL || "support@greensynk.com";
 }
 
 const router = Router();
@@ -624,6 +631,27 @@ router.put("/admins/:id", async (req: any, res) => {
     ? (rest.isActive ? "admin.admin_reactivated" : "admin.admin_deactivated")
     : "admin.admin_updated";
   await logActivity({ adminId: req.admin.adminId, action, entityType: "admin", entityId: id });
+
+  // Give the affected admin a heads-up that their access changed. Best-effort:
+  // sendEmail swallows its own errors, so this never blocks the response.
+  if ("isActive" in rest && updated?.email) {
+    if (rest.isActive === false) {
+      await sendAdminDeactivationEmail({
+        to: updated.email,
+        firstName: updated.firstName,
+        reason: "manual",
+        supportEmail: resolveAdminSupportEmail(),
+      });
+    } else if (rest.isActive === true) {
+      await sendAdminReactivationEmail({
+        to: updated.email,
+        firstName: updated.firstName,
+        loginUrl: `${resolveBaseUrl()}/admin/login`,
+        supportEmail: resolveAdminSupportEmail(),
+      });
+    }
+  }
+
   return res.json({ id: updated.id, email: updated.email, firstName: updated.firstName, lastName: updated.lastName, role: updated.role, isActive: updated.isActive });
 });
 
@@ -642,10 +670,24 @@ router.post("/admins/deactivate-stale", async (req: any, res) => {
         sql`${platformAdminsTable.lastLoginAt} < ${cutoff}`,
       ),
     ))
-    .returning({ id: platformAdminsTable.id });
+    .returning({ id: platformAdminsTable.id, email: platformAdminsTable.email, firstName: platformAdminsTable.firstName });
   const deactivatedIds = stale.map(s => s.id);
   if (deactivatedIds.length > 0) {
     await logActivity({ adminId: req.admin.adminId, action: "admin.admins_bulk_deactivated", entityType: "admin", metadata: { count: deactivatedIds.length, ids: deactivatedIds, thresholdDays: STALE_ADMIN_DAYS } });
+
+    // Let each newly deactivated admin know their access was disabled for
+    // inactivity. Best-effort and isolated so one failure can't sink the rest.
+    const supportEmail = resolveAdminSupportEmail();
+    await Promise.allSettled(
+      stale
+        .filter(a => a.email)
+        .map(a => sendAdminDeactivationEmail({
+          to: a.email,
+          firstName: a.firstName,
+          reason: "inactivity",
+          supportEmail,
+        })),
+    );
   }
   return res.json({ success: true, deactivatedCount: deactivatedIds.length, deactivatedIds });
 });

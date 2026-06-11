@@ -1019,6 +1019,150 @@ export async function sendLeadAssignmentSMS(opts: {
   await sendSMS({ to: opts.to, body });
 }
 
+// ─── Platform-admin (GreenSynk-branded) emails ──────────────────────────────
+// Shared branded HTML shell for platform-level emails sent from GreenSynk
+// itself (not company-branded). Mirrors the look of the invoice email: green
+// header bar, white card body, optional call-to-action button, and footer.
+const GREENSYNK_ACCENT = "#16a34a";
+
+function buildPlatformEmailHtml(opts: {
+  title: string;
+  paragraphs: string[];
+  button?: { label: string; url: string } | null;
+}): string {
+  const accent = GREENSYNK_ACCENT;
+  const title = escapeHtml(opts.title);
+  const paras = opts.paragraphs
+    .map(p => `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">${p}</p>`)
+    .join("");
+  const button = opts.button
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;">
+              <tr>
+                <td style="border-radius:6px;background-color:${accent};">
+                  <a href="${escapeHtml(opts.button.url)}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">${escapeHtml(opts.button.label)}</a>
+                </td>
+              </tr>
+            </table>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
+  <tr>
+    <td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr>
+          <td style="background-color:${accent};padding:24px 32px;">
+            <span style="font-size:22px;font-weight:700;color:#ffffff;">GreenSynk</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;">
+            ${paras}
+            ${button}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:24px 32px;border-top:1px solid #e5e7eb;">
+            <p style="margin:0;font-size:14px;color:#374151;">— The GreenSynk Team</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+}
+
+// Notify a platform admin that their admin access has been disabled. `reason`
+// distinguishes the automatic dormancy sweep ("inactivity") from a manual
+// single deactivation by another admin ("manual").
+export async function sendAdminDeactivationEmail(opts: {
+  to: string;
+  firstName?: string | null;
+  reason: "inactivity" | "manual";
+  supportEmail: string;
+}): Promise<void> {
+  const name = (opts.firstName || "there").trim();
+  const cause =
+    opts.reason === "inactivity"
+      ? "due to a period of inactivity on your account"
+      : "by a platform administrator";
+
+  const paragraphs = [
+    `Hi ${escapeHtml(name)},`,
+    `Your GreenSynk platform-admin access has been disabled ${cause}. You will no longer be able to sign in to the platform admin console until your access is restored.`,
+    `If you believe this was a mistake, or you'd like your access reinstated, please contact a GreenSynk platform administrator at <a href="mailto:${escapeHtml(opts.supportEmail)}" style="color:${GREENSYNK_ACCENT};">${escapeHtml(opts.supportEmail)}</a>.`,
+    `If you no longer need access, no action is required.`,
+  ];
+
+  const body = [
+    `Hi ${name},`,
+    ``,
+    `Your GreenSynk platform-admin access has been disabled ${cause}. You will no longer be able to sign in to the platform admin console until your access is restored.`,
+    ``,
+    `If you believe this was a mistake, or you'd like your access reinstated, please contact a GreenSynk platform administrator at ${opts.supportEmail}.`,
+    ``,
+    `If you no longer need access, no action is required.`,
+    ``,
+    `— The GreenSynk Team`,
+  ].join("\n");
+
+  await sendEmail({
+    to: opts.to,
+    subject: "Your GreenSynk admin access has been disabled",
+    body,
+    html: buildPlatformEmailHtml({ title: "Admin access disabled", paragraphs }),
+    replyTo: opts.supportEmail,
+  });
+}
+
+// Notify a platform admin that their previously disabled access has been restored.
+export async function sendAdminReactivationEmail(opts: {
+  to: string;
+  firstName?: string | null;
+  loginUrl: string;
+  supportEmail: string;
+}): Promise<void> {
+  const name = (opts.firstName || "there").trim();
+
+  const paragraphs = [
+    `Hi ${escapeHtml(name)},`,
+    `Good news — your GreenSynk platform-admin access has been restored. You can sign in to the admin console again using the button below.`,
+    `If you have any questions, reach out to us at <a href="mailto:${escapeHtml(opts.supportEmail)}" style="color:${GREENSYNK_ACCENT};">${escapeHtml(opts.supportEmail)}</a>.`,
+  ];
+
+  const body = [
+    `Hi ${name},`,
+    ``,
+    `Good news — your GreenSynk platform-admin access has been restored. You can sign in to the admin console again here:`,
+    opts.loginUrl,
+    ``,
+    `If you have any questions, reach out to us at ${opts.supportEmail}.`,
+    ``,
+    `— The GreenSynk Team`,
+  ].join("\n");
+
+  await sendEmail({
+    to: opts.to,
+    subject: "Your GreenSynk admin access has been restored",
+    body,
+    html: buildPlatformEmailHtml({
+      title: "Admin access restored",
+      paragraphs,
+      button: { label: "Sign in to GreenSynk", url: opts.loginUrl },
+    }),
+    replyTo: opts.supportEmail,
+  });
+}
+
 export async function sendTeamInviteEmail(opts: {
   to: string;
   firstName: string;
