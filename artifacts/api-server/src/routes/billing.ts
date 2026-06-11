@@ -2,7 +2,7 @@ import { Router, type Request } from "express";
 import { db, companiesTable, invoicesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
-import { getPlanUsageSummary } from "../lib/features";
+import { getPlanUsageSummary, getDowngradeViolations } from "../lib/features";
 import { getUncachableStripeClient, getStripePublishableKey, getStripePriceId } from "../lib/stripe";
 import { getCatalog } from "../lib/plan-catalog";
 import { logActivity } from "../lib/activity";
@@ -369,7 +369,7 @@ router.get("/status", requireRole("owner", "admin"), async (req: any, res) => {
 // restrict to owner/admin so staff cannot change plans or payment methods.
 router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) => {
   const { companyId, userId } = req.user;
-  const { planId } = req.body;
+  const { planId, confirmDowngrade } = req.body;
 
   if (!["starter", "growth", "pro"].includes(planId)) {
     return res.status(400).json({ error: "InvalidPlan" });
@@ -377,6 +377,22 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound" });
+
+  // Downgrade safety: if the chosen plan is smaller than what the account is
+  // actually using, refuse unless the manager has explicitly confirmed. This is
+  // enforced here (server-side) so the UI warning can't be bypassed. Usage is
+  // compared against the *target* plan's limits, not the current plan's.
+  if (!confirmDowngrade) {
+    const violations = await getDowngradeViolations(companyId, planId);
+    if (violations.length > 0) {
+      return res.status(409).json({
+        error: "DowngradeExceedsUsage",
+        message: "The selected plan is smaller than your current usage. Review what's over the limit before switching.",
+        targetPlan: planId,
+        violations,
+      });
+    }
+  }
 
   let stripe: any;
   try {

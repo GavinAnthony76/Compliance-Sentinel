@@ -1804,6 +1804,12 @@ export const GetBillingPlansResponse = zod.object({
  */
 export const CreateSubscriptionBody = zod.object({
   planId: zod.enum(["starter", "growth", "pro"]),
+  confirmDowngrade: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Set to true to proceed with a plan change even when the target plan is smaller than the company's current usage. When false\/omitted and the target plan would put the account over its limits, the request is rejected with a 409 listing what's over.",
+    ),
 });
 
 export const CreateSubscriptionResponse = zod.object({

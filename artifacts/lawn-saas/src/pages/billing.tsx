@@ -1,10 +1,21 @@
-import { useGetBillingStatus, useGetBillingPlans, useGetBillingUsage, useCreateSubscription, useCreateBillingPortal } from '@workspace/api-client-react';
+import { useGetBillingStatus, useGetBillingPlans, useGetBillingUsage, useCreateSubscription, useCreateBillingPortal, ApiError } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button } from '@/components/ui';
-import { Check, CreditCard, ArrowRight, Shield, AlertCircle } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
+import { Check, CreditCard, ArrowRight, Shield, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Link } from 'wouter';
+import { useState } from 'react';
 
 const PLAN_DESCRIPTIONS: Record<string, string> = {
   starter: 'For solo operators getting organized',
@@ -104,10 +115,35 @@ export function BillingPage() {
   const portalMut = useCreateBillingPortal();
   const { toast } = useToast();
 
+  const [downgradeWarning, setDowngradeWarning] = useState<{
+    planId: string;
+    violations: Array<{ limitType: string; noun: string; currentUsage: number; limit: number }>;
+  } | null>(null);
+
+  const startCheckout = async (planId: string, confirmDowngrade = false) => {
+    const res = await subscribeMut.mutateAsync({ data: { planId: planId as any, confirmDowngrade } });
+    window.location.href = res.url;
+  };
+
   const handleSubscribe = async (planId: string) => {
     try {
-      const res = await subscribeMut.mutateAsync({ data: { planId: planId as any } });
-      window.location.href = res.url;
+      await startCheckout(planId);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409 && (err.data as any)?.error === 'DowngradeExceedsUsage') {
+        const data = err.data as any;
+        setDowngradeWarning({ planId, violations: data.violations ?? [] });
+        return;
+      }
+      toast({ title: 'Error starting checkout', variant: 'destructive' });
+    }
+  };
+
+  const handleConfirmDowngrade = async () => {
+    if (!downgradeWarning) return;
+    const planId = downgradeWarning.planId;
+    setDowngradeWarning(null);
+    try {
+      await startCheckout(planId, true);
     } catch {
       toast({ title: 'Error starting checkout', variant: 'destructive' });
     }
@@ -259,6 +295,40 @@ export function BillingPage() {
           </p>
         </>
       )}
+
+      <AlertDialog open={!!downgradeWarning} onOpenChange={(open) => { if (!open) setDowngradeWarning(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
+              This plan is smaller than your current usage
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                <p className="mb-3">
+                  Switching to the <span className="font-semibold capitalize">{downgradeWarning && (PLAN_LABELS[downgradeWarning.planId] || downgradeWarning.planId)}</span> plan
+                  would put your account over its limits for:
+                </p>
+                <ul className="space-y-1.5 mb-3">
+                  {downgradeWarning?.violations.map((v) => (
+                    <li key={v.limitType} className="flex items-start gap-2 text-sm text-foreground">
+                      <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                      <span>
+                        <span className="font-medium capitalize">{v.noun}</span>: you have {v.currentUsage}, but this plan allows {v.limit}.
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p>You can still switch, but you may not be able to add new records until you're back under the limits.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep current plan</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDowngrade}>Switch anyway</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

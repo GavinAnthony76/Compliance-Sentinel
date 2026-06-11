@@ -363,3 +363,38 @@ export async function getPlanUsageSummary(companyId: number): Promise<PlanUsageS
     usage: { customers, users, appointments, estimates, invoices },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Downgrade safety — does the target plan still fit the company's usage?
+// ---------------------------------------------------------------------------
+
+export interface DowngradeViolation {
+  limitType: LimitType;
+  noun: string;
+  currentUsage: number;
+  limit: number;
+}
+
+/**
+ * Compares a company's current usage against the limits of a *target* plan and
+ * returns every resource that would exceed the target plan's limit. An empty
+ * array means the target plan comfortably fits the account. Usage counts are
+ * plan-independent, so this works whether the target plan is higher or lower
+ * than the current one — only smaller plans can produce violations.
+ */
+export async function getDowngradeViolations(companyId: number, targetPlan: Plan): Promise<DowngradeViolation[]> {
+  const targetLimits = getPlanLimits(targetPlan);
+  const summary = await getPlanUsageSummary(companyId);
+
+  const violations: DowngradeViolation[] = [];
+  for (const limitType of Object.keys(LIMIT_META) as LimitType[]) {
+    const meta = LIMIT_META[limitType];
+    const limit = targetLimits[meta.limitKey];
+    if (limit === null) continue; // unlimited on the target plan
+    const currentUsage = summary.usage[limitType];
+    if (currentUsage > limit) {
+      violations.push({ limitType, noun: meta.noun, currentUsage, limit });
+    }
+  }
+  return violations;
+}
