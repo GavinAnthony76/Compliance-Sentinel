@@ -815,6 +815,25 @@ export async function sendLeadAssignmentEmail(opts: {
   });
 }
 
+export async function sendLeadAssignmentSMS(opts: {
+  to: string;
+  staffName: string;
+  companyName: string;
+  leadName: string;
+  leadPhone?: string | null;
+  leadsUrl?: string;
+}): Promise<void> {
+  const firstName = opts.staffName.split(" ")[0] || opts.staffName;
+  const body = [
+    `Hi ${firstName}, a new lead was assigned to you: ${opts.leadName}.`,
+    ...(opts.leadPhone ? [`Phone: ${opts.leadPhone}`] : []),
+    ...(opts.leadsUrl ? [`View it: ${opts.leadsUrl}`] : []),
+    `— ${opts.companyName}`,
+  ].join(" ");
+
+  await sendSMS({ to: opts.to, body });
+}
+
 export async function sendTeamInviteEmail(opts: {
   to: string;
   firstName: string;

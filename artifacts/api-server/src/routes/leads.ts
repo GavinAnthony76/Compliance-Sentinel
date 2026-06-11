@@ -11,11 +11,11 @@ import {
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
-import { requireFeature } from "../lib/features";
+import { requireFeature, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { enqueueFollowUps } from "../lib/follow-ups";
 import { canAccessLead, isManagerRole } from "../lib/lead-access";
-import { sendLeadAssignmentEmail, resolveBaseUrl } from "../lib/notifications";
+import { sendLeadAssignmentEmail, sendLeadAssignmentSMS, resolveBaseUrl } from "../lib/notifications";
 import { logger } from "../lib/logger";
 
 const LEAD_SOURCES = ["public_booking", "manual", "referral", "website", "phone", "other"] as const;
@@ -84,6 +84,20 @@ async function dispatchLeadAssignmentEmail(
       logoUrl: company?.logoUrl ?? null,
       primaryColor: company?.primaryColor ?? null,
     });
+
+    // Optionally also text the staff member. Gated by the SMS plan feature and
+    // requires the staff member to have a phone number on file. sendSMS itself
+    // no-ops when Twilio isn't configured, so nothing is sent in that case.
+    if (staff.phone && hasFeature(company?.subscriptionPlan, "sms_notifications")) {
+      await sendLeadAssignmentSMS({
+        to: staff.phone,
+        staffName,
+        companyName,
+        leadName,
+        leadPhone: lead.phone,
+        leadsUrl,
+      });
+    }
   } catch (err) {
     logger.error({ err, companyId, assignedUserId, leadId: lead.id }, "Failed to send lead assignment email");
   }
