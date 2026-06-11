@@ -155,11 +155,45 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
     return res.status(400).json({ error: "NoPaymentMethod", message: "Customer has no saved payment method" });
   }
 
+  // --- CONCURRENCY CLAIM ---------------------------------------------------
+  // The "status === paid" check above is a read-then-act guard with no lock, so
+  // two near-simultaneous charge requests on the same unpaid invoice could both
+  // pass it and both create a Stripe PaymentIntent -> double charge. Before
+  // touching Stripe, atomically CLAIM the invoice by flipping it to a transient
+  // "processing" status with a conditional UPDATE: only the row whose status is
+  // not already paid/processing is updated, so exactly one concurrent request
+  // wins the claim. The loser gets 0 rows back and bails out without charging.
+  // On any non-success outcome we revert to the prior status so the invoice can
+  // be charged again later.
+  const priorStatus = invoice.status;
+  const claimed = await db.update(invoicesTable).set({ status: "processing", updatedAt: new Date() })
+    .where(and(
+      eq(invoicesTable.id, invoiceId),
+      eq(invoicesTable.companyId, companyId),
+      ne(invoicesTable.status, "paid"),
+      ne(invoicesTable.status, "processing"),
+    ))
+    .returning({ id: invoicesTable.id });
+  if (claimed.length === 0) {
+    // Someone else won the claim (or it was just paid). Re-read to report the
+    // most useful error to the caller.
+    const [current] = await db.select({ status: invoicesTable.status }).from(invoicesTable)
+      .where(eq(invoicesTable.id, invoiceId)).limit(1);
+    if (current?.status === "paid") return res.status(400).json({ error: "AlreadyPaid" });
+    return res.status(409).json({ error: "ChargeInProgress", message: "A charge for this invoice is already in progress" });
+  }
+
+  const revertClaim = async () => {
+    await db.update(invoicesTable).set({ status: priorStatus, updatedAt: new Date() })
+      .where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.status, "processing")));
+  };
+
   let stripe: any;
   try {
     const { getUncachableStripeClient } = await import("../lib/stripe");
     stripe = await getUncachableStripeClient();
   } catch {
+    await revertClaim();
     return res.status(503).json({ error: "BillingUnavailable" });
   }
 
@@ -173,6 +207,11 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
       off_session: true,
       metadata: { invoiceId: String(invoiceId), companyId: String(companyId) },
       description: `Invoice ${invoice.invoiceNumber}`,
+    }, {
+      // Defense-in-depth: even if the DB claim were somehow bypassed, Stripe
+      // dedups concurrent/retried creates that share this key, so the same
+      // invoice can't be charged twice.
+      idempotencyKey: `autopay-charge-inv-${invoiceId}-${Math.round(Number(invoice.total) * 100)}`,
     });
 
     if (paymentIntent.status === "succeeded") {
@@ -194,8 +233,12 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
       return res.json({ success: true, status: "paid" });
     }
 
+    // Not settled (e.g. requires_action) — release the claim so the customer
+    // can retry, but keep the PaymentIntent id for follow-up.
+    await revertClaim();
     return res.json({ success: false, status: paymentIntent.status, message: "Payment requires additional action" });
   } catch (err: any) {
+    await revertClaim();
     logger.error({ err, invoiceId }, "Autopay charge failed");
     return res.status(402).json({ error: "PaymentFailed", message: err.message || "Payment failed" });
   }

@@ -559,10 +559,22 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
       transfer_data: { destination: company.stripeConnectAccountId },
     },
   };
-  const session = await stripe.checkout.sessions.create(sessionParams);
+  // Concurrency guard: two near-simultaneous pay requests (e.g. a double-click)
+  // could otherwise each create their own Checkout Session for the same unpaid
+  // invoice. A stable idempotency key keyed on the invoice + amount makes Stripe
+  // return the SAME session for concurrent/retried creates, so only one charge
+  // path is ever opened. (The downstream confirm-payment + webhook handlers are
+  // already transition-guarded on status, so the invoice still can't be marked
+  // paid — or notified — twice.)
+  const session = await stripe.checkout.sessions.create(sessionParams, {
+    idempotencyKey: `portal-checkout-inv-${invoice.id}-${amountCents}`,
+  });
 
-  // Store checkout session ID so confirm-payment can retrieve and verify it
-  await db.update(invoicesTable).set({ stripePaymentIntentId: session.id, updatedAt: new Date() }).where(eq(invoicesTable.id, id));
+  // Store checkout session ID so confirm-payment can retrieve and verify it.
+  // Guard on status so a session id can't clobber an invoice that was paid in
+  // the meantime.
+  await db.update(invoicesTable).set({ stripePaymentIntentId: session.id, updatedAt: new Date() })
+    .where(and(eq(invoicesTable.id, id), ne(invoicesTable.status, "paid")));
 
   return res.json({ url: session.url });
 });

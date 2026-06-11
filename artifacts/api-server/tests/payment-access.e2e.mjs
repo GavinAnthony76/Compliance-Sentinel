@@ -356,6 +356,96 @@ async function main() {
     );
   }
 
+  // ==========================================================================
+  // 5. Concurrent double-charge protection — two near-simultaneous pay/charge
+  //    requests on the SAME still-unpaid invoice must not both initiate a
+  //    charge. The "status === paid" guards are read-then-act checks, so the
+  //    charge handlers add a transactional claim (autopay) / idempotency key
+  //    (portal) before touching Stripe. This check fires the requests in
+  //    parallel and verifies the invariant holds: at most one request can
+  //    proceed to charge, none returns a server error, and the invoice is never
+  //    left wrongly paid or stuck in the transient "processing" claim state.
+  //
+  //    NOTE: in this black-box run Stripe itself is never reachable (the test
+  //    customer has no saved card and the company has no Connect account), so
+  //    both requests short-circuit at their pre-charge guard. That is exactly
+  //    the point: the concurrency hardening must never turn a safe rejection
+  //    into a crash, a double success, or a wedged invoice.
+  // ==========================================================================
+  console.log("\nConcurrent double-charge protection — parallel pay/charge on one unpaid invoice:");
+
+  const getInvoiceStatus = async (ownerToken, invoiceId) => {
+    const r = await req("GET", `/invoices/${invoiceId}`, { token: ownerToken });
+    return r.json?.status;
+  };
+
+  // --- Autopay charge: fire 4 concurrent charges on a fresh unpaid invoice ---
+  {
+    const concInvoice = await createInvoice(companyA.ownerToken, custA1.id);
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        req("POST", `/autopay/invoices/${concInvoice}/charge`, { token: companyA.ownerToken }),
+      ),
+    );
+    const successes = results.filter((r) => r.status >= 200 && r.status < 300).length;
+    const serverErrors = results.filter((r) => r.status >= 500).length;
+    const allExpected = results.every((r) =>
+      (r.status === 400 && r.json?.error === "NoPaymentMethod") ||
+      (r.status === 409 && r.json?.error === "ChargeInProgress"),
+    );
+    check(
+      "concurrent autopay charges -> at most one charge initiated",
+      successes <= 1,
+      `got ${successes} successes: ${JSON.stringify(results.map((r) => r.status))}`,
+    );
+    check(
+      "concurrent autopay charges -> no server errors",
+      serverErrors === 0,
+      `statuses: ${JSON.stringify(results.map((r) => r.status))}`,
+    );
+    check(
+      "concurrent autopay charges -> every response is a safe rejection (400/409)",
+      allExpected,
+      `got ${JSON.stringify(results.map((r) => ({ s: r.status, e: r.json?.error })))}`,
+    );
+    const finalStatus = await getInvoiceStatus(companyA.ownerToken, concInvoice);
+    check(
+      "concurrent autopay charges -> invoice not left paid and not stuck in 'processing'",
+      finalStatus !== "paid" && finalStatus !== "processing",
+      `final status: ${finalStatus}`,
+    );
+  }
+
+  // --- Portal pay: fire 4 concurrent pay requests on a fresh unpaid invoice --
+  // companyA accepts card but has no Connect account, so each request stops at
+  // the ConnectRequired guard before any Checkout session is created.
+  {
+    const concInvoice = await createInvoice(companyA.ownerToken, custA1.id);
+    const results = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        req("POST", `/portal/invoices/${concInvoice}/pay`, { token: portalA1.portalToken }),
+      ),
+    );
+    const successes = results.filter((r) => r.status >= 200 && r.status < 300).length;
+    const serverErrors = results.filter((r) => r.status >= 500).length;
+    check(
+      "concurrent portal pays -> at most one charge initiated",
+      successes <= 1,
+      `got ${successes} successes: ${JSON.stringify(results.map((r) => r.status))}`,
+    );
+    check(
+      "concurrent portal pays -> no server errors",
+      serverErrors === 0,
+      `statuses: ${JSON.stringify(results.map((r) => r.status))}`,
+    );
+    const finalStatus = await getInvoiceStatus(companyA.ownerToken, concInvoice);
+    check(
+      "concurrent portal pays -> invoice not left paid and not stuck in 'processing'",
+      finalStatus !== "paid" && finalStatus !== "processing",
+      `final status: ${finalStatus}`,
+    );
+  }
+
   // --- Summary --------------------------------------------------------------
   console.log(`\n${passes} passed, ${failures} failed`);
   process.exit(failures === 0 ? 0 : 1);
