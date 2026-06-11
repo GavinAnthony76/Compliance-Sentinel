@@ -33,6 +33,18 @@ tables; activity_logs (no FK to companies) is cleared first for the doomed set.
 **Why these two guards, not just id>snapshot:** id>snapshot alone would delete a
 genuine signup created during the validation window — the @example.com marker is
 the safety net against deleting live tenant data on the prod DB.
+3. **Disjoint owner-email namespaces per runner (CRITICAL for concurrency).** The
+   permissions and access CI harnesses are separate processes that the validation
+   gate runs CONCURRENTLY against the same DB. A global "delete every @example.com
+   company above my snapshot" makes each runner delete the OTHER runner's
+   still-in-use companies mid-test — symptom: access suite gets random 404s and
+   `customers_company_id_companies_id_fk` FK violations while permissions passes.
+   Fix: permissions runner creates only `lead_*`/`perm_*` owners and purges ONLY
+   those; access runner creates everything else and purges everything EXCEPT
+   `lead_%`/`perm_%`. The two delete sets are then provably disjoint. The shared
+   pattern list lives in db-cleanup.mjs (PERMISSIONS_OWNER_PATTERNS) as the single
+   source of truth. **Why:** snapshot+marker is NOT enough under concurrency —
+   isolation also requires that no two concurrent runners share a delete namespace.
 **Why not a separate test DB:** full isolation via sandbox $DATABASE_URL was
 rejected — that DB has a stale/partial schema (ongoing sync burden). Snapshot +
 marker purge keeps NEON clean with no schema-sync work.

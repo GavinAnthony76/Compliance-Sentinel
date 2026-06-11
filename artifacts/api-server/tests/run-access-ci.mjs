@@ -29,7 +29,11 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { snapshotMaxCompanyId, purgeTestDataAbove } from "./db-cleanup.mjs";
+import {
+  snapshotMaxCompanyId,
+  purgeTestDataAbove,
+  PERMISSIONS_OWNER_PATTERNS,
+} from "./db-cleanup.mjs";
 
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = process.env.ACCESS_CI_PORT || "5098";
@@ -163,7 +167,11 @@ async function main() {
     // Always purge, even if a suite threw, so failures don't leave residue.
     // A purge failure is itself a run failure so leftover pollution is visible.
     try {
-      await purgeTestDataAbove(dbSnapshot);
+      // Purge everything this runner created EXCEPT the permissions runner's
+      // namespace, so a concurrently-running permissions suite isn't deleted.
+      await purgeTestDataAbove(dbSnapshot, {
+        excludeOwnerPatterns: PERMISSIONS_OWNER_PATTERNS,
+      });
     } catch (err) {
       cleanupFailed = true;
       console.error(`[db-cleanup] CRITICAL: cleanup failed, test data may remain: ${err.message}`);
