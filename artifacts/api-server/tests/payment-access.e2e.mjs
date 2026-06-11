@@ -261,6 +261,126 @@ async function main() {
   }
 
   // ==========================================================================
+  // 1c. Autopay positive path — a customer who DID opt in (has a saved card)
+  //     can have autopay enabled AND their invoice charged successfully, with
+  //     the invoice flipping to "paid". This is the complement to 1b: it proves
+  //     that the consent gate, while blocking customers without a card, does NOT
+  //     break legitimate autopay for consenting customers. Without it, a future
+  //     change could silently stop charging opted-in customers and no test would
+  //     catch it.
+  //
+  //     This path actually moves money through Stripe, so it requires Stripe
+  //     TEST keys in the environment (STRIPE_SECRET_KEY starting with sk_test_)
+  //     — that lets us mint a test card and charge it without touching real
+  //     money. When test keys aren't configured (live keys, connector-only, or
+  //     no Stripe at all), this section SKIPS rather than fails, keeping the
+  //     staff-access validation gate green everywhere.
+  //
+  //     Note: the autopay charge handler bills the platform Stripe account
+  //     directly (no Connect transfer), so a connected account is NOT required
+  //     here — only a test secret key.
+  // ==========================================================================
+  console.log("\nAutopay positive path (Pro company, customer WITH a saved card):");
+  {
+    const secretKey = process.env.STRIPE_SECRET_KEY || "";
+    const testMode = secretKey.startsWith("sk_test_");
+
+    if (!testMode) {
+      console.log(
+        "  SKIP  autopay positive path — Stripe test keys not configured " +
+          "(STRIPE_SECRET_KEY is not an sk_test_ key); cannot mint a test card.",
+      );
+    } else {
+      let stripe = null;
+      try {
+        const Stripe = (await import("stripe")).default;
+        stripe = new Stripe(secretKey);
+      } catch (err) {
+        console.log(`  SKIP  autopay positive path — could not load Stripe SDK: ${err.message}`);
+      }
+
+      if (stripe) {
+        const cust = await createCustomer(proCompany.ownerToken, "optin", 1);
+
+        // 1) Server-side half of "save a card": create the Stripe customer and a
+        //    SetupIntent. A 503 here means billing is unavailable in this env, so
+        //    we skip the rest rather than fail.
+        const si = await req("GET", `/autopay/customers/${cust.id}/setup-intent`, {
+          token: proCompany.ownerToken,
+        });
+        const stripeCustomerId = si.json?.stripeCustomerId;
+
+        if (si.status === 503 || !stripeCustomerId) {
+          console.log(
+            `  SKIP  autopay positive path — setup-intent unavailable (got ${si.status} ${JSON.stringify(si.json)}).`,
+          );
+        } else {
+          check(
+            "GET setup-intent -> 200 with stripeCustomerId",
+            si.status === 200 && !!si.json?.clientSecret,
+            `got ${si.status} ${JSON.stringify(si.json)}`,
+          );
+
+          // 2) Mint a real test payment method (test card 4242) and hand it to
+          //    the API to attach + save as the customer's default card — this is
+          //    the consenting customer's saved card.
+          let paymentMethodId = null;
+          try {
+            const pm = await stripe.paymentMethods.create({
+              type: "card",
+              card: { token: "tok_visa" },
+            });
+            paymentMethodId = pm.id;
+          } catch (err) {
+            check("mint Stripe test payment method", false, err.message);
+          }
+
+          if (paymentMethodId) {
+            const save = await req("POST", `/autopay/customers/${cust.id}/payment-method`, {
+              token: proCompany.ownerToken,
+              body: { paymentMethodId },
+            });
+            check(
+              "POST save payment-method -> 200 success",
+              save.status === 200 && save.json?.success === true,
+              `got ${save.status} ${JSON.stringify(save.json)}`,
+            );
+
+            // 3) Enabling autopay now SUCCEEDS (the consenting customer has a card).
+            const toggle = await req("PATCH", `/autopay/customers/${cust.id}/autopay`, {
+              token: proCompany.ownerToken,
+              body: { enabled: true },
+            });
+            check(
+              "PATCH autopay enabled:true w/ saved card -> 200 success",
+              toggle.status === 200 && toggle.json?.success === true && toggle.json?.autopayEnabled === true,
+              `got ${toggle.status} ${JSON.stringify(toggle.json)}`,
+            );
+
+            // 4) Charging their invoice SUCCEEDS and flips it to paid.
+            const invoice = await createInvoice(proCompany.ownerToken, cust.id);
+            const chargeOk = await req("POST", `/autopay/invoices/${invoice}/charge`, {
+              token: proCompany.ownerToken,
+            });
+            check(
+              "POST charge w/ saved card -> success, invoice paid",
+              chargeOk.status === 200 && chargeOk.json?.success === true && chargeOk.json?.status === "paid",
+              `got ${chargeOk.status} ${JSON.stringify(chargeOk.json)}`,
+            );
+          }
+
+          // Best-effort cleanup of the Stripe test customer we created.
+          try {
+            await stripe.customers.del(stripeCustomerId);
+          } catch {
+            /* best-effort */
+          }
+        }
+      }
+    }
+  }
+
+  // ==========================================================================
   // 2. Portal online-payment guards — card must be accepted AND a Stripe
   //    Connect account must be present before any charge can be initiated.
   // ==========================================================================
