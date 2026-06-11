@@ -363,17 +363,18 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
   // actually using, refuse unless the manager has explicitly confirmed. This is
   // enforced here (server-side) so the UI warning can't be bypassed. Usage is
   // compared against the *target* plan's limits, not the current plan's.
-  if (!confirmDowngrade) {
-    const violations = await getDowngradeViolations(companyId, planId);
-    if (violations.length > 0) {
-      return res.status(409).json({
-        error: "DowngradeExceedsUsage",
-        message: "The selected plan is smaller than your current usage. Review what's over the limit before switching.",
-        targetPlan: planId,
-        violations,
-      });
-    }
+  const violations = await getDowngradeViolations(companyId, planId);
+  if (!confirmDowngrade && violations.length > 0) {
+    return res.status(409).json({
+      error: "DowngradeExceedsUsage",
+      message: "The selected plan is smaller than your current usage. Review what's over the limit before switching.",
+      targetPlan: planId,
+      violations,
+    });
   }
+  // A confirmed downgrade that still exceeds the target plan's limits is a
+  // notable decision: record it so owners can see why the account is over tier.
+  const isOverLimitDowngrade = confirmDowngrade && violations.length > 0;
 
   let stripe: any;
   try {
@@ -436,6 +437,22 @@ router.post("/subscribe", requireRole("owner", "admin"), async (req: any, res) =
     });
 
     await logActivity({ companyId, userId, action: "billing.checkout_started", metadata: { plan: planId } });
+    if (isOverLimitDowngrade) {
+      await logActivity({
+        companyId,
+        userId,
+        action: "billing.over_limit_downgrade",
+        metadata: {
+          plan: planId,
+          violations: violations.map((v) => ({
+            resource: v.limitType,
+            noun: v.noun,
+            currentUsage: v.currentUsage,
+            limit: v.limit,
+          })),
+        },
+      });
+    }
     return res.json({ url: session.url });
   } catch (err) {
     logger.error({ err }, "Error creating checkout session");
