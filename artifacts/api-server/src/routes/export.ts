@@ -93,9 +93,12 @@ router.get("/invoices", async (req: any, res) => {
     : [];
   const customerMap = Object.fromEntries(customers.map(c => [c.id, `${c.firstName} ${c.lastName}`]));
 
+  const paymentMethod = (i: typeof invoices[number]): string =>
+    i.paymentMethod ?? (i.stripePaymentIntentId ? "card" : "");
+
   const csv = toCSV(
-    ["ID", "Invoice #", "Customer", "Status", "Subtotal", "Tax", "Total", "Due Date", "Paid At", "Notes", "Created At"],
-    invoices.map(i => [i.id, i.invoiceNumber, customerMap[i.customerId] ?? "", i.status, i.subtotal, i.tax, i.total, i.dueDate?.toISOString() ?? "", i.paidAt?.toISOString() ?? "", i.notes ?? "", i.createdAt?.toISOString()])
+    ["ID", "Invoice #", "Customer", "Status", "Subtotal", "Tax", "Total", "Payment Method", "Due Date", "Paid At", "Notes", "Created At"],
+    invoices.map(i => [i.id, i.invoiceNumber, customerMap[i.customerId] ?? "", i.status, i.subtotal, i.tax, i.total, paymentMethod(i), i.dueDate?.toISOString() ?? "", i.paidAt?.toISOString() ?? "", i.notes ?? "", i.createdAt?.toISOString()])
   );
 
   res.setHeader("Content-Type", "text/csv");
