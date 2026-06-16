@@ -1,7 +1,6 @@
 import { db, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { sendInvoiceEmail, resolveBaseUrl } from "./notifications";
-import { hasFeature } from "./features";
 import { logCommunicationEvent } from "./communications";
 import { logger } from "./logger";
 
@@ -21,11 +20,13 @@ export async function dispatchInvoiceEmail(invoiceId: number, companyId: number)
     const companyName = company?.name || "Your Service Provider";
     const companySlug = company?.slug || "";
     const baseUrl = resolveBaseUrl();
-    // Online payment + the customer portal are Growth/Pro features. On Starter the
-    // portal login is a dead end for customers, so only surface "Pay Now" when the
-    // plan includes the portal; otherwise show the company's manual payment instructions.
-    const hasPortal = hasFeature(company?.subscriptionPlan, "customer_portal");
-    const payNowUrl = hasPortal && companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : null;
+    // The customer portal is available on every plan, but online card payments
+    // are a Growth/Pro capability (enforced in the portal pay endpoint). Only
+    // surface the "Pay Now" link when the plan can actually accept online card
+    // payments; otherwise show the company's manual payment instructions.
+    const canAcceptOnlinePayments =
+      company?.subscriptionPlan === "growth" || company?.subscriptionPlan === "pro";
+    const payNowUrl = canAcceptOnlinePayments && companySlug ? `${baseUrl}/portal/${companySlug}/invoices` : null;
     const paymentInstructions: string[] = [];
     if (company?.paymentInstructions) paymentInstructions.push(company.paymentInstructions);
     if (company?.checkPayableTo) paymentInstructions.push(`Check payable to: ${company.checkPayableTo}`);

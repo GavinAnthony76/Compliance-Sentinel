@@ -30,11 +30,11 @@ const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
 
 const STARTER_FEATURES = [
   'customer_crm', 'properties', 'services', 'scheduling', 'basic_job_tracking',
-  'invoicing', 'payment_collection', 'public_booking', 'email_reminders', 'dashboard', 'settings',
+  'invoicing', 'payment_collection', 'public_booking', 'email_reminders', 'customer_portal', 'dashboard', 'settings',
 ];
 
 const GROWTH_ONLY_FEATURES = [
-  'team_management', 'route_optimization', 'recurring_plans', 'customer_portal',
+  'team_management', 'route_optimization', 'recurring_plans',
   'sms_notifications', 'review_requests', 'before_after_photos', 'gps_tracking',
   'growth_analytics', 'customer_notes_tags', 'communication_timeline',
   'follow_up_campaigns', 'branded_booking_page',

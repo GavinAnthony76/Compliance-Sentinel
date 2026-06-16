@@ -297,6 +297,7 @@ const PRICING_FALLBACK: PricingPlan[] = [
       'Invoicing & payments',
       'Public booking page',
       'Email reminders',
+      'Customer portal',
     ],
   },
   {
@@ -313,7 +314,6 @@ const PRICING_FALLBACK: PricingPlan[] = [
       '250 invoices/month',
       'Route optimization',
       'Recurring plans',
-      'Customer portal',
       'SMS notifications',
       'Review requests',
       'GPS tracking',
