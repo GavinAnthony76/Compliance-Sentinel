@@ -91,8 +91,12 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
       const { sendSMS, sendPortalAccessEmail, sendCustomerWelcomeBookingEmail } = await import("../lib/notifications");
       if (hasFeature(company.subscriptionPlan, "customer_portal") && (customer.email || customer.phone)) {
         const inviteToken = crypto.randomBytes(32).toString("hex");
+        // Store only the SHA-256 hash; the raw token lives solely in the emailed/SMS
+        // link. Verification endpoints (portal set-password/login) hash the incoming
+        // token and compare against this stored hash, so the two must match.
+        const inviteTokenHash = crypto.createHash("sha256").update(inviteToken).digest("hex");
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        await db.update(customersTable).set({ portalInviteToken: inviteToken, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+        await db.update(customersTable).set({ portalInviteToken: inviteTokenHash, portalInviteExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
         // Invite link takes customers to the set-password page so they create a password on first access.
         portalUrl = `${baseUrl}/portal/set-password?token=${inviteToken}&slug=${company.slug}`;
         if (customer.email) {
