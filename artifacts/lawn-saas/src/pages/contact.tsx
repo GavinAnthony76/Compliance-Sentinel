@@ -3,12 +3,15 @@ import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
 import { Mail, MessageSquare, BookOpen, Clock } from 'lucide-react';
 import { usePageMeta } from '@/hooks/use-page-meta';
+import { useContactInfo } from '@/hooks/use-contact-info';
+import { ContactEmailLink } from '@/components/contact-email-link';
 
 export function ContactPage() {
   usePageMeta({
     title: 'Contact GreenSynk — Get in Touch',
     description: 'Get in touch with the GreenSynk team for support, sales inquiries, or general questions. We typically respond within one business day.',
   });
+  const { data: contactInfo } = useContactInfo();
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white/80 backdrop-blur-sm sticky top-0 z-50">
@@ -44,12 +47,7 @@ export function ContactPage() {
             <p className="text-muted-foreground mb-4 text-sm">
               Questions about GreenSynk, partnerships, or anything else.
             </p>
-            <a
-              href="mailto:hello@greensynk.com"
-              className="text-primary font-medium hover:underline"
-            >
-              hello@greensynk.com
-            </a>
+            <ContactEmailLink email={contactInfo?.generalEmail} className="font-medium" />
           </div>
 
           <div className="p-8 rounded-3xl border border-border bg-card">
@@ -60,12 +58,7 @@ export function ContactPage() {
             <p className="text-muted-foreground mb-4 text-sm">
               Already a GreenSynk customer? We're ready to help you get the most out of the platform.
             </p>
-            <a
-              href="mailto:support@greensynk.com"
-              className="text-primary font-medium hover:underline"
-            >
-              support@greensynk.com
-            </a>
+            <ContactEmailLink email={contactInfo?.supportEmail} className="font-medium" />
           </div>
 
           <div className="p-8 rounded-3xl border border-border bg-card">
@@ -76,12 +69,7 @@ export function ContactPage() {
             <p className="text-muted-foreground mb-4 text-sm">
               Want a demo or have questions about which plan is right for your business?
             </p>
-            <a
-              href="mailto:sales@greensynk.com"
-              className="text-primary font-medium hover:underline"
-            >
-              sales@greensynk.com
-            </a>
+            <ContactEmailLink email={contactInfo?.salesEmail} className="font-medium" />
           </div>
 
           <div className="p-8 rounded-3xl border border-border bg-card">

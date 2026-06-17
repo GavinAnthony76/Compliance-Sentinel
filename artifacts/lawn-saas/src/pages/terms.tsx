@@ -2,6 +2,8 @@ import { Link } from 'wouter';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
 import { usePageMeta } from '@/hooks/use-page-meta';
+import { useContactInfo } from '@/hooks/use-contact-info';
+import { ContactEmailLink } from '@/components/contact-email-link';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -17,6 +19,7 @@ export function TermsPage() {
     title: 'Terms of Service — GreenSynk',
     description: 'Read the GreenSynk Terms of Service governing your use of our outdoor service business management platform.',
   });
+  const { data: contactInfo } = useContactInfo();
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white/80 backdrop-blur-sm sticky top-0 z-50">
@@ -206,9 +209,7 @@ export function TermsPage() {
         <Section title="14. Contact Us">
           <p>
             If you have questions about these Terms, please contact us at:{' '}
-            <a href="mailto:legal@greensynk.com" className="text-primary hover:underline">
-              legal@greensynk.com
-            </a>
+            <ContactEmailLink email={contactInfo?.legalEmail} />
           </p>
         </Section>
       </main>

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { sendEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
+import { getPlatformSettings } from "../lib/platform-settings";
 
 const router = Router();
 
@@ -22,7 +23,8 @@ router.post("/demo-request", async (req, res) => {
   const { name, email, phone, company, message } = parsed.data;
 
   try {
-    const toEmail = process.env.CONTACT_EMAIL || process.env.RESEND_FROM_EMAIL || "hello@greensynk.com";
+    const settings = await getPlatformSettings();
+    const toEmail = process.env.CONTACT_EMAIL || settings.contactEmailGeneral || process.env.RESEND_FROM_EMAIL;
     await sendEmail({
       to: toEmail,
       subject: `New Demo Request — ${name}${company ? ` (${company})` : ""}`,

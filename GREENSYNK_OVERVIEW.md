@@ -349,6 +349,7 @@ The data layer (`lib/db/src/schema/`) defines the full relational model in Drizz
 | `companies` | The tenant root — branding, contact info, slug, `subscription_plan`, `subscription_status`, `trial_ends_at` |
 | `users` | Company staff/owners (roles: owner, admin, staff) |
 | `platform_admins` | Super-admins for the whole SaaS platform |
+| `platform_settings` | Singleton (id=1) platform-wide config: admin-dormancy settings **and the public contact email addresses** (general/support/sales/privacy/legal) referenced by the marketing site, legal pages, and the contact form |
 | `customers` | Client profiles (includes portal password hash, magic-link token) |
 | `properties` | Physical service locations, linked to customers |
 | `services` | Master list of offered services + base prices/duration |
@@ -393,10 +394,13 @@ All endpoints are mounted under `/api`.
 > **Write routes** (non-GET) are additionally gated by `requireActiveSubscription` — returns `402 SubscriptionRequired` when the trial has expired or the subscription is canceled.
 
 ### Public
+- `GET /api/platform/contact-info` — platform contact emails (general/support/sales/privacy/legal) from `platform_settings`; **single source of truth** consumed by the marketing site, legal pages, and SEO JSON-LD
 - `GET /api/public/booking/:slug` — booking page data
 - `POST /api/public/booking/:slug` — submit a booking request
 - Public estimate view/sign endpoints (tokenized)
 - `POST /api/stripe/webhook` — Stripe events
+
+> **No-hardcoding principle:** Platform contact emails must NOT be hardcoded in the frontend. They live in `platform_settings` and are fetched at runtime via `/api/platform/contact-info` (React: `use-contact-info` hook + `ContactEmailLink`). SEO prerender/SSR resolve them at build/serve time via `site-config.mjs` (`getOrgContactEmail`), falling back to `DEFAULT_CONTACT_EMAIL` only when the API is unreachable during a build.
 
 ### Customer Portal (portal auth)
 - `POST /api/portal/auth/login` — password login (phone or email + password)
