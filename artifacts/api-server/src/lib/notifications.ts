@@ -12,6 +12,14 @@ interface EmailPayload {
   attachments?: { filename: string; content: Buffer }[];
 }
 
+// Result of an email send attempt. `delivered` is the single source of truth for
+// whether the message actually went out — callers that tie state to delivery
+// (e.g. marking an invoice "sent") MUST gate on this rather than assuming success.
+export interface EmailResult {
+  delivered: boolean;
+  reason?: "no_credentials" | "provider_rejected" | "exception";
+}
+
 interface SMSPayload {
   to: string;
   body: string;
@@ -39,7 +47,7 @@ export function resolveBaseUrl(): string {
   return "http://localhost:3000";
 }
 
-export async function sendEmail(payload: EmailPayload): Promise<void> {
+export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   const creds = await resolveEmailCredentials();
   if (!creds) {
     const msg =
@@ -50,7 +58,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
       logger.error(`[Email] ${msg}`);
     }
     logger.info({ mock: true, to: payload.to, subject: payload.subject }, "[MOCK EMAIL] Would send email");
-    return;
+    return { delivered: false, reason: "no_credentials" };
   }
 
   try {
@@ -71,12 +79,14 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 
     if (error) {
       logger.error({ error, to: payload.to, subject: payload.subject }, "Resend rejected email");
-      return;
+      return { delivered: false, reason: "provider_rejected" };
     }
 
     logger.info({ to: payload.to, subject: payload.subject }, "Email sent via Resend");
+    return { delivered: true };
   } catch (err) {
     logger.error({ err, to: payload.to, subject: payload.subject }, "Failed to send email via Resend");
+    return { delivered: false, reason: "exception" };
   }
 }
 
@@ -589,7 +599,7 @@ export async function sendInvoiceEmail(opts: {
   paymentInstructions?: string[];
   logoUrl?: string | null;
   primaryColor?: string | null;
-}): Promise<void> {
+}): Promise<EmailResult> {
   const dueDateStr = opts.dueDate
     ? new Date(opts.dueDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
     : "Upon receipt";
@@ -632,7 +642,7 @@ export async function sendInvoiceEmail(opts: {
     primaryColor: opts.primaryColor,
   });
 
-  await sendEmail({
+  return await sendEmail({
     to: opts.customerEmail,
     subject: `Invoice ${opts.invoiceNumber} from ${opts.companyName} — $${opts.total.toFixed(2)} due`,
     body,

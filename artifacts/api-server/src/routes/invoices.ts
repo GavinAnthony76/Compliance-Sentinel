@@ -260,10 +260,19 @@ router.post("/:id/send", async (req: any, res) => {
   const id = Number(req.params.id);
   const [existing] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
+  // Attempt delivery FIRST so the invoice is only marked "sent" when the email
+  // actually went out — status must reflect real sends, never an assumed one.
+  const emailed = await dispatchInvoiceEmail(id, companyId);
+  if (!emailed) {
+    return res.status(502).json({
+      error: "EmailDeliveryFailed",
+      message:
+        "The invoice email could not be sent, so the invoice was not marked as sent. Check the customer's email address and your email settings, then try again.",
+    });
+  }
   const [updated] = await db.update(invoicesTable).set({ status: "sent", updatedAt: new Date() }).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "invoice.sent", entityType: "invoice", entityId: id });
   fireAutomations(companyId, "invoice_sent", { customerId: existing.customerId, userId, invoiceId: id });
-  dispatchInvoiceEmail(id, companyId);
   const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
   return res.json(fmt(updated, undefined, lineItems.map(fmtLineItem)));
 });

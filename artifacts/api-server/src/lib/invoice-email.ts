@@ -34,7 +34,7 @@ export async function dispatchInvoiceEmail(invoiceId: number, companyId: number)
     if (company?.venmoHandle) paymentInstructions.push(`Venmo: ${company.venmoHandle}`);
     if (company?.cashAppTag) paymentInstructions.push(`Cash App: ${company.cashAppTag}`);
     const customerName = `${customer.firstName} ${customer.lastName}`.trim() || customer.email;
-    await sendInvoiceEmail({
+    const result = await sendInvoiceEmail({
       customerEmail: customer.email,
       customerName,
       companyName,
@@ -53,16 +53,20 @@ export async function dispatchInvoiceEmail(invoiceId: number, companyId: number)
       logoUrl: company?.logoUrl ?? null,
       primaryColor: company?.primaryColor ?? null,
     });
+    // Record the real outcome so the activity feed never claims a send that did
+    // not happen, and so callers can trust the boolean to gate invoice status.
     await logCommunicationEvent({
       companyId,
       customerId: inv.customerId,
       invoiceId: inv.id,
       channel: "email",
       subject: `Invoice ${inv.invoiceNumber}`,
-      bodyPreview: `Invoice ${inv.invoiceNumber} for $${Number(inv.total).toFixed(2)} sent to ${customerName}`,
-      status: "sent",
+      bodyPreview: result.delivered
+        ? `Invoice ${inv.invoiceNumber} for $${Number(inv.total).toFixed(2)} sent to ${customerName}`
+        : `Invoice ${inv.invoiceNumber} email to ${customerName} was NOT delivered (${result.reason ?? "unknown"})`,
+      status: result.delivered ? "sent" : "failed",
     });
-    return true;
+    return result.delivered;
   } catch (err) {
     logger.error({ err, invoiceId, companyId }, "Failed to dispatch invoice email");
     return false;
