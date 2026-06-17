@@ -239,6 +239,33 @@ async function main() {
       after.status === 200 && after.json?.status === "draft",
       `got status ${after.status}, invoice status ${after.json?.status}`,
     );
+
+    // Creating directly with status:"sent" for a customer w/o email must also
+    // refuse to surface as sent — it falls back to "draft" rather than lying.
+    const createdSent = await req("POST", "/invoices", {
+      token: companyA.ownerToken,
+      body: {
+        customerId: customerA,
+        status: "sent",
+        lineItems: [{ description: "Lawn mowing", quantity: 1, unitPrice: 100 }],
+      },
+    });
+    check(
+      "POST /invoices status:'sent' for customer w/o email -> created as 'draft'",
+      createdSent.status === 201 && createdSent.json?.status === "draft",
+      `got ${createdSent.status}, invoice status ${createdSent.json?.status}`,
+    );
+
+    // PUT-promoting an invoice to "sent" must likewise be gated on real delivery.
+    const putSent = await req("PUT", `/invoices/${createdSent.json?.id}`, {
+      token: companyA.ownerToken,
+      body: { status: "sent" },
+    });
+    check(
+      "PUT /invoices/:id status:'sent' for customer w/o email -> stays 'draft'",
+      putSent.status === 200 && putSent.json?.status === "draft",
+      `got ${putSent.status}, invoice status ${putSent.json?.status}`,
+    );
   }
 
   // --- Summary --------------------------------------------------------------

@@ -18,10 +18,11 @@ about reality. A code review blocked the task on exactly this.
 
 **How to apply:** Any flow that ties persisted state to an email actually being
 delivered MUST gate on the `delivered` boolean (or the `EmailResult`), not on the
-call completing. The manual invoice send endpoint attempts delivery FIRST and
-returns an error (and leaves status unchanged) when `delivered` is false; the
-automation path only flips draft→sent when `delivered` is true. Fire-and-forget
-sends (where status is a user-set field, e.g. direct invoice create with
-status:"sent") may ignore the result, but never invent a "sent" state from a
-failed/awaited send. Deterministic test hook: a customer with no email address
-makes delivery impossible without any mail provider.
+call completing. EVERY invoice "sent" transition is gated: create
+(`POST /invoices` with status:"sent" persists as draft, promotes to sent only if
+delivered), update (`PUT /invoices/:id` defers the draft→sent flip until
+delivered), manual send (`POST /invoices/:id/send` attempts delivery first and
+502s `EmailDeliveryFailed` with status unchanged on failure), and the automation
+auto-invoice path. None of these are fire-and-forget — a failed/awaited send must
+never invent a "sent" state. Deterministic test hook: a customer with no email
+address makes delivery impossible without any mail provider.

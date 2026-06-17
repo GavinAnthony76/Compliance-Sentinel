@@ -171,6 +171,11 @@ router.post("/", requireWithinPlanLimit("invoices"), async (req: any, res) => {
   }
 
   const invoiceNumber = await nextInvoiceNumber(companyId);
+  // A "sent" status must reflect a real email send. Persist as "draft" first and
+  // only promote to "sent" once the invoice email is actually delivered, so an
+  // invoice can never surface as sent when no email ever went out.
+  const requestedStatus = req.body.status ?? "draft";
+  const initialStatus = requestedStatus === "sent" ? "draft" : requestedStatus;
   const [inv] = await db.insert(invoicesTable).values({
     companyId,
     customerId: req.body.customerId,
@@ -179,7 +184,7 @@ router.post("/", requireWithinPlanLimit("invoices"), async (req: any, res) => {
     subtotal: String(subtotal),
     tax: String(tax),
     total: String(total),
-    status: req.body.status ?? "draft",
+    status: initialStatus,
     dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
     notes: req.body.notes ?? null,
   }).returning();
@@ -189,11 +194,23 @@ router.post("/", requireWithinPlanLimit("invoices"), async (req: any, res) => {
   }
 
   await logActivity({ companyId, userId, action: "invoice.created", entityType: "invoice", entityId: inv.id });
-  if (inv.status === "sent") {
-    dispatchInvoiceEmail(inv.id, companyId);
+
+  let finalInv = inv;
+  if (requestedStatus === "sent") {
+    const emailed = await dispatchInvoiceEmail(inv.id, companyId);
+    if (emailed) {
+      const [updated] = await db.update(invoicesTable)
+        .set({ status: "sent", updatedAt: new Date() })
+        .where(and(eq(invoicesTable.id, inv.id), eq(invoicesTable.companyId, companyId)))
+        .returning();
+      finalInv = updated ?? inv;
+      await logActivity({ companyId, userId, action: "invoice.sent", entityType: "invoice", entityId: inv.id });
+      fireAutomations(companyId, "invoice_sent", { customerId: finalInv.customerId, userId, invoiceId: inv.id });
+    }
   }
+
   const savedLineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, inv.id)).orderBy(invoiceLineItemsTable.sortOrder);
-  return res.status(201).json(fmt(inv, undefined, savedLineItems.map(fmtLineItem)));
+  return res.status(201).json(fmt(finalInv, undefined, savedLineItems.map(fmtLineItem)));
 });
 
 router.get("/:id", async (req: any, res) => {
@@ -228,18 +245,34 @@ router.put("/:id", async (req: any, res) => {
     if (req.body.total != null) updates.total = String(req.body.total);
   }
 
-  if (req.body.status) updates.status = req.body.status;
+  // A "sent" status must reflect a real email send. Defer any draft->sent
+  // transition until the invoice email is confirmed delivered (handled below),
+  // so an update can never falsely flip an invoice to "sent".
+  const wantsSentTransition = req.body.status === "sent" && existing.status !== "sent";
+  if (req.body.status && !wantsSentTransition) updates.status = req.body.status;
   if (req.body.dueDate) updates.dueDate = new Date(req.body.dueDate);
   if (req.body.notes !== undefined) updates.notes = req.body.notes;
   if (req.body.paidAt) updates.paidAt = new Date(req.body.paidAt);
 
-  const [updated] = await db.update(invoicesTable).set(updates).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
+  let [updated] = await db.update(invoicesTable).set(updates).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
   if (lineItems) {
     await upsertLineItems(id, lineItems);
   }
   await logActivity({ companyId, userId, action: "invoice.updated", entityType: "invoice", entityId: id });
   if (updates.status === "overdue" && existing.status !== "overdue") {
     fireAutomations(companyId, "invoice_overdue", { customerId: existing.customerId, userId, invoiceId: id });
+  }
+  if (wantsSentTransition) {
+    const emailed = await dispatchInvoiceEmail(id, companyId);
+    if (emailed) {
+      const [promoted] = await db.update(invoicesTable)
+        .set({ status: "sent", updatedAt: new Date() })
+        .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId)))
+        .returning();
+      updated = promoted ?? updated;
+      await logActivity({ companyId, userId, action: "invoice.sent", entityType: "invoice", entityId: id });
+      fireAutomations(companyId, "invoice_sent", { customerId: existing.customerId, userId, invoiceId: id });
+    }
   }
   const savedLineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
   return res.json(fmt(updated, undefined, savedLineItems.map(fmtLineItem)));
