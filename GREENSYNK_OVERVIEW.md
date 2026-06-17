@@ -236,7 +236,15 @@ Templates that automatically generate future appointments on a weekly / bi-weekl
 Create and send quotes with itemized line items. Customers can view and **e-sign** estimates through a secure public link — the signature and signed-at timestamp are stored on the estimate.
 
 ### Invoices (`/invoices`)
-Generate invoices (with itemized line items), send them, and track status (Draft → Sent → Paid). Invoices can be created directly or generated from a completed appointment. When an invoice is created or sent, a **professional invoice email** is automatically dispatched to the customer (including invoice number, due date, itemized line items, total due, and a direct payment link). The **manual send** action (`POST /invoices/:id/send`) is **delivery-gated**: it attempts the email first and only marks the invoice **Sent** when the email is actually delivered — if delivery fails (no provider credentials, provider rejection, or no customer email on file) it returns `502 EmailDeliveryFailed` and leaves the status unchanged, so a "Sent" status never lies about a message that never went out. Customer lookups are scoped by company to prevent cross-tenant disclosure.
+Generate invoices (with itemized line items), send them, and track status (Draft → Sent → Paid). Invoices can be created directly or generated from a completed appointment. When an invoice is sent, a **professional invoice email** is automatically dispatched to the customer (including invoice number, due date, itemized line items, total due, and a direct payment link).
+
+**The "Sent" status is delivery-gated — it never appears unless the email was actually delivered.** This guarantee holds across every path that could mark an invoice sent:
+- **Manual send** (`POST /invoices/:id/send`) attempts the email first and returns `502 EmailDeliveryFailed` with the status unchanged if it fails.
+- **Create** (`POST /invoices` with `status: "sent"`) persists the invoice as **Draft** first and only promotes it to **Sent** once delivery is confirmed.
+- **Update** (`PUT /invoices/:id` setting `status: "sent"`) defers the Draft → Sent transition until delivery succeeds, otherwise the prior status is retained.
+- **Automations** (auto-invoice on appointment completion) follow the same create-as-draft-then-promote-on-delivery pattern.
+
+Delivery fails when there are no email-provider credentials, the provider rejects the message, or the customer has no email on file — in all of these cases the invoice stays Draft so a "Sent" status never lies about a message that never went out. The underlying email helper returns a structured delivery result (`{ delivered, reason }`) rather than silently swallowing failures. Customer lookups are scoped by company to prevent cross-tenant disclosure.
 
 ### Routes (`/routes`) — Growth+ ("SmartRoute")
 Plan and optimize the day's service stops. Provides a day-view list (and map) for technicians to follow an ordered route, linking each stop to an appointment.
