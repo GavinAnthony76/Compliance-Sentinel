@@ -24,7 +24,7 @@ router.post("/demo-request", async (req, res) => {
 
   try {
     const settings = await getPlatformSettings();
-    const toEmail = process.env.CONTACT_EMAIL || settings.contactEmailGeneral || process.env.RESEND_FROM_EMAIL;
+    const toEmail = process.env.CONTACT_EMAIL || settings.contactEmailGeneral;
     await sendEmail({
       to: toEmail,
       subject: `New Demo Request — ${name}${company ? ` (${company})` : ""}`,

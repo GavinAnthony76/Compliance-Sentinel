@@ -9,11 +9,14 @@ export const DEFAULT_STALE_ADMIN_DAYS = 90;
 // Default platform contact addresses. These seed the singleton settings row so
 // the marketing site, legal pages, and outbound contact form all resolve their
 // addresses from one source (the DB) instead of hardcoded frontend literals.
+// Only three real mailboxes exist (hello/support/sales); the privacy and legal
+// surfaces default to the general "hello" address but remain independently
+// overridable should dedicated mailboxes be added later.
 export const DEFAULT_CONTACT_EMAIL_GENERAL = "hello@greensynk.com";
 export const DEFAULT_CONTACT_EMAIL_SUPPORT = "support@greensynk.com";
 export const DEFAULT_CONTACT_EMAIL_SALES = "sales@greensynk.com";
-export const DEFAULT_CONTACT_EMAIL_PRIVACY = "privacy@greensynk.com";
-export const DEFAULT_CONTACT_EMAIL_LEGAL = "legal@greensynk.com";
+export const DEFAULT_CONTACT_EMAIL_PRIVACY = DEFAULT_CONTACT_EMAIL_GENERAL;
+export const DEFAULT_CONTACT_EMAIL_LEGAL = DEFAULT_CONTACT_EMAIL_GENERAL;
 
 // Platform-wide configuration. Modeled as a singleton row (id = 1) so settings
 // shared across the whole platform live in one place rather than being

@@ -128,6 +128,35 @@ async function provisionPortalCustomer(ownerToken, customerId) {
   return { portalToken: setPw.json.token, slug };
 }
 
+async function createService(ownerToken) {
+  const created = await req("POST", "/services", {
+    token: ownerToken,
+    body: { name: "Lawn mowing", basePrice: 100, isActive: true },
+  });
+  if (created.status !== 201 || !created.json?.id) {
+    console.error("Setup failed: could not create service", created.status, created.json);
+    process.exit(1);
+  }
+  return created.json.id;
+}
+
+// A visit the COMPANY scheduled (origin defaults to 'company').
+async function createCompanyAppointment(ownerToken, customerId) {
+  const created = await req("POST", "/appointments", {
+    token: ownerToken,
+    body: {
+      customerId,
+      status: "pending",
+      scheduledStart: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    },
+  });
+  if (created.status !== 201 || !created.json?.id) {
+    console.error("Setup failed: could not create company appointment", created.status, created.json);
+    process.exit(1);
+  }
+  return created.json.id;
+}
+
 async function createInvoice(ownerToken, customerId) {
   const created = await req("POST", "/invoices", {
     token: ownerToken,
@@ -230,6 +259,42 @@ async function main() {
     // Unauthenticated portal request is rejected.
     const r = await req("GET", "/portal/invoices");
     check("unauthenticated GET /portal/invoices -> 401", r.status === 401, `got ${r.status}`);
+  }
+
+  // --- Portal appointment cancellation is gated by origin -------------------
+  // Customers may cancel ONLY their own portal-submitted requests. A visit the
+  // company scheduled (origin = 'company', the default — incl. recurring) must
+  // be uncancellable from the portal so the "contact the company" policy holds.
+  console.log("\nPortal appointment cancellation origin gating:");
+  {
+    const serviceA = await createService(companyA.ownerToken);
+
+    // Company-scheduled visit for A1.
+    const companyAppt = await createCompanyAppointment(companyA.ownerToken, custA1.id);
+    const denied = await req("POST", `/portal/appointments/${companyAppt}/cancel`, { token: portalA1.portalToken });
+    check(
+      "portal cancel of COMPANY-scheduled appointment -> 403",
+      denied.status === 403,
+      `got ${denied.status}`,
+    );
+
+    // Customer A1 books their own request through the portal (origin = portal_request).
+    const booked = await req("POST", "/portal/appointments", {
+      token: portalA1.portalToken,
+      body: { serviceId: serviceA, scheduledStart: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() },
+    });
+    check(
+      "portal booking creates a portal_request appointment -> 201 + origin",
+      booked.status === 201 && booked.json?.origin === "portal_request",
+      `got ${booked.status}, origin ${booked.json?.origin}`,
+    );
+
+    const allowed = await req("POST", `/portal/appointments/${booked.json?.id}/cancel`, { token: portalA1.portalToken });
+    check(
+      "portal cancel of OWN portal_request appointment -> 200",
+      allowed.status === 200,
+      `got ${allowed.status}`,
+    );
   }
 
   // --- Summary --------------------------------------------------------------

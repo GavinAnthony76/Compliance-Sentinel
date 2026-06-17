@@ -349,11 +349,11 @@ The data layer (`lib/db/src/schema/`) defines the full relational model in Drizz
 | `companies` | The tenant root — branding, contact info, slug, `subscription_plan`, `subscription_status`, `trial_ends_at` |
 | `users` | Company staff/owners (roles: owner, admin, staff) |
 | `platform_admins` | Super-admins for the whole SaaS platform |
-| `platform_settings` | Singleton (id=1) platform-wide config: admin-dormancy settings **and the public contact email addresses** (general/support/sales/privacy/legal) referenced by the marketing site, legal pages, and the contact form |
+| `platform_settings` | Singleton (id=1) platform-wide config: admin-dormancy settings **and the public contact email addresses** referenced by the marketing site, legal pages, and the contact form. Only three real mailboxes exist — `hello@` (general), `support@`, `sales@`; the `privacy` and `legal` columns default to the general `hello@` address but remain independently overridable |
 | `customers` | Client profiles (includes portal password hash, magic-link token) |
 | `properties` | Physical service locations, linked to customers |
 | `services` | Master list of offered services + base prices/duration |
-| `appointments` | Individual work orders (status: pending / confirmed / in_progress / completed / cancelled / no_show) |
+| `appointments` | Individual work orders (status: pending / confirmed / in_progress / completed / cancelled / no_show). The `origin` column marks who created the visit — `company` (default, incl. recurring-generated) vs `portal_request` (booked by a customer through the portal); only `portal_request` rows are customer-cancellable |
 | `recurring_plans` | Templates that generate future appointments |
 | `invoices` + `invoice_line_items` | Billing records and their itemized lines |
 | `estimates` + `estimate_line_items` | Quotes, with signature data and signed-at timestamp |
@@ -408,6 +408,8 @@ All endpoints are mounted under `/api`.
 - `POST /api/portal/auth/verify-link` — exchange magic-link token for portal session
 - `POST /api/portal/auth/set-password` / `forgot-password` / `reset-password`
 - View appointments, invoices (pay via Stripe), estimates (sign)
+- `POST /api/portal/appointments` — customer-submitted booking request (`origin = portal_request`)
+- `POST /api/portal/appointments/:id/cancel` — customers may cancel **only their own portal-submitted requests**; company-scheduled visits (incl. recurring-generated) return `403` and the UI directs the customer to contact the company
 
 ### Platform Admin (JWT: `greensync_admin_token`)
 - `POST /api/admin/auth/login` + `GET /api/admin/auth/me`
