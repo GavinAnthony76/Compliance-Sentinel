@@ -499,7 +499,7 @@ export function LandingPage() {
             </button>
             <video
               ref={videoRef}
-              src={`${import.meta.env.BASE_URL}greensyncad1.mp4`}
+              src={`${import.meta.env.BASE_URL}greensynk-ad.mp4`}
               className="w-full h-auto max-h-[90vh] object-contain"
               controls
               autoPlay
