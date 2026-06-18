@@ -611,3 +611,29 @@ The following are not bugs — they are missing features relative to what compet
 8. Add `past_due` to the subscription cutoff with a configurable grace period.
 9. Enable CSP headers (coordinate with the SSR/Vite server).
 10. QuickBooks Online integration — the single highest-ROI feature missing vs. Jobber/HCP at this price point.
+
+---
+
+## 17. Future Iterations
+
+### PWA — Installable Web App (Tabled — Future Iteration)
+
+GreenSynk is currently a standard React SPA. It is **not** a Progressive Web App and cannot be installed on a user's device. This is a known gap vs. Jobber and Housecall Pro, which offer native mobile apps.
+
+**When this is prioritized, the implementation plan is:**
+
+1. Install `vite-plugin-pwa` (`pnpm --filter @workspace/lawn-saas add -D vite-plugin-pwa`)
+2. Add `VitePWA()` to `artifacts/lawn-saas/vite.config.ts` with a manifest pointing `start_url` to `/dashboard`
+3. Generate 192×192 and 512×512 maskable icon variants from the existing `logo-icon.png`
+4. Scope the Workbox service worker to cache static assets only — never authenticated API responses
+
+**What users would gain:**
+- **Android:** Install prompt, standalone launch, home screen icon, splash screen
+- **iOS:** "Add to Home Screen" via Safari share sheet, standalone mode (no browser chrome)
+- **Desktop (Chrome/Edge):** Address bar install button, launches as its own window
+
+**Constraints to keep in mind:**
+- iOS does not auto-prompt for installation — users must use the Safari share sheet manually
+- The service worker must not cache `/api/*` routes or portal/dashboard routes
+- `start_url: "/dashboard"` ensures installed users land on the app, not the marketing page
+- A native iOS/Android app (Expo/React Native) remains the longer-term goal for field crews; the PWA is a stepping stone that closes the gap at low cost
