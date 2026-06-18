@@ -18,3 +18,21 @@ id = "z6hE86TOYmLL8q9WRosTL"
 uri = "file://attached_assets/rcs/greensynk-rcs-banner.png"
 type = "image"
 title = "RCS Banner (1440x448, ~194kB)"
+
+[[outputs]]
+id = "YOg5FGKMqCwCEs1Rj3-K_"
+uri = "file://artifacts/greensynk-ad/public/images/lawn-worker.jpg"
+type = "image"
+title = "professional lawn care landscaping worker maintaining grass"
+
+[[outputs]]
+id = "hAW8fC-KVssBTybGr6u5k"
+uri = "file://artifacts/greensynk-ad/public/audio/bg_music.mp3"
+type = "audio"
+title = "background music"
+
+[[outputs]]
+id = "AhetjCXPhyg9GYC8-U7hy"
+uri = "file://attached_assets/stock_images/lawn_care_worker.jpg"
+type = "image"
+title = "professional lawn care landscaper mowing a green lawn with a mower on a sunny day, residential yard"
