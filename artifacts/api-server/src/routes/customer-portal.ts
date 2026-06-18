@@ -338,6 +338,7 @@ router.post("/appointments", requirePortalAuth, async (req: any, res) => {
     customerId,
     serviceId,
     status: "pending",
+    origin: "portal_request",
     scheduledStart: scheduledDate,
     notes: notes || null,
     price: service.basePrice ?? null,
@@ -361,6 +362,12 @@ router.post("/appointments/:id/cancel", requirePortalAuth, async (req: any, res)
     .limit(1);
 
   if (!appointment) return res.status(404).json({ error: "NotFound", message: "Appointment not found" });
+  // Customers may only cancel their own portal-submitted requests. Visits the
+  // company scheduled (including recurring-generated ones) must be changed by
+  // the company — the portal directs customers to contact them instead.
+  if (appointment.origin !== "portal_request") {
+    return res.status(403).json({ error: "CannotCancel", message: "This visit was scheduled by the company. Please contact them to make changes." });
+  }
   if (!["pending", "confirmed"].includes(appointment.status)) {
     return res.status(400).json({ error: "CannotCancel", message: `Cannot cancel an appointment with status: ${appointment.status}` });
   }

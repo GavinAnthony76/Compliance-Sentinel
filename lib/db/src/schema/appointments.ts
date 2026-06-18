@@ -12,6 +12,7 @@ export const appointmentsTable = pgTable("appointments", {
   serviceId: integer("service_id"),
   assignedUserId: integer("assigned_user_id"),
   status: text("status").notNull().default("pending"),
+  origin: text("origin").notNull().default("company"),
   scheduledStart: timestamp("scheduled_start").notNull(),
   scheduledEnd: timestamp("scheduled_end"),
   price: numeric("price", { precision: 10, scale: 2 }),

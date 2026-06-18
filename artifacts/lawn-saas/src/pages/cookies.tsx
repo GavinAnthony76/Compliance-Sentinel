@@ -2,6 +2,8 @@ import { Link } from 'wouter';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
 import { usePageMeta } from '@/hooks/use-page-meta';
+import { useContactInfo } from '@/hooks/use-contact-info';
+import { ContactEmailLink } from '@/components/contact-email-link';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -17,6 +19,7 @@ export function CookiesPage() {
     title: 'Cookie Policy — GreenSynk',
     description: "GreenSynk's Cookie Policy explains how we use cookies and similar tracking technologies on our website and platform.",
   });
+  const { data: contactInfo } = useContactInfo();
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white/80 backdrop-blur-sm sticky top-0 z-50">
@@ -116,9 +119,7 @@ export function CookiesPage() {
         <Section title="6. Contact Us">
           <p>
             If you have questions about our use of cookies, please contact us at:{' '}
-            <a href="mailto:privacy@greensynk.com" className="text-primary hover:underline">
-              privacy@greensynk.com
-            </a>
+            <ContactEmailLink email={contactInfo?.privacyEmail} />
           </p>
         </Section>
       </main>

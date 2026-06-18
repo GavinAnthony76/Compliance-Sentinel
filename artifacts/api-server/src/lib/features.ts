@@ -28,6 +28,7 @@ const STARTER_FEATURES = [
   "payment_collection",
   "public_booking",
   "email_reminders",
+  "customer_portal",
   "dashboard",
   "settings",
 ] as const;
@@ -36,7 +37,6 @@ const GROWTH_ONLY_FEATURES = [
   "team_management",
   "route_optimization",
   "recurring_plans",
-  "customer_portal",
   "sms_notifications",
   "review_requests",
   "before_after_photos",

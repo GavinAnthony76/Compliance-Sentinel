@@ -2,6 +2,8 @@ import { Link } from 'wouter';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
 import { usePageMeta } from '@/hooks/use-page-meta';
+import { useContactInfo } from '@/hooks/use-contact-info';
+import { ContactEmailLink } from '@/components/contact-email-link';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -17,6 +19,7 @@ export function PrivacyPage() {
     title: 'Privacy Policy — GreenSynk',
     description: "GreenSynk's Privacy Policy explains how we collect, use, and protect your information when you use our outdoor service business management platform.",
   });
+  const { data: contactInfo } = useContactInfo();
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-white/80 backdrop-blur-sm sticky top-0 z-50">
@@ -113,9 +116,7 @@ export function PrivacyPage() {
             You have the right to access, correct, or delete the personal information we hold
             about you. You may also request a copy of your data or ask us to restrict certain
             processing activities. To exercise these rights, contact us at{' '}
-            <a href="mailto:privacy@greensynk.com" className="text-primary hover:underline">
-              privacy@greensynk.com
-            </a>.
+            <ContactEmailLink email={contactInfo?.privacyEmail} />.
           </p>
         </Section>
 
@@ -171,9 +172,7 @@ export function PrivacyPage() {
             <strong>Opt-out and help.</strong> You can opt out at any time by replying STOP to any
             message; you will receive a single confirmation and no further messages. Reply HELP for
             assistance, or contact us at{' '}
-            <a href="mailto:privacy@greensynk.com" className="text-primary hover:underline">
-              privacy@greensynk.com
-            </a>
+            <ContactEmailLink email={contactInfo?.privacyEmail} />
             . Carriers are not liable for delayed or undelivered messages.
           </p>
         </Section>
@@ -190,9 +189,7 @@ export function PrivacyPage() {
         <Section title="11. Contact Us">
           <p>
             If you have questions or concerns about this Privacy Policy, please contact us at:{' '}
-            <a href="mailto:privacy@greensynk.com" className="text-primary hover:underline">
-              privacy@greensynk.com
-            </a>
+            <ContactEmailLink email={contactInfo?.privacyEmail} />
           </p>
         </Section>
       </main>

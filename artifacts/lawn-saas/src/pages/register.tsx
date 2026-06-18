@@ -14,7 +14,7 @@ const PLANS = [
     name: 'Starter',
     price: '$49/mo',
     desc: 'For solo operators getting organized',
-    features: ['1 user · 50 active customers', '100 appointments/mo · 10 estimates/mo', 'Customer CRM & scheduling', 'Invoicing & online payments', 'Public booking page'],
+    features: ['1 user · 50 active customers', '100 appointments/mo · 10 estimates/mo', 'Customer CRM & scheduling', 'Invoicing & online payments', 'Public booking page & customer portal'],
   },
   {
     id: 'growth',
@@ -22,7 +22,7 @@ const PLANS = [
     price: '$99/mo',
     desc: 'For growing crews',
     popular: true,
-    features: ['Up to 5 users · 250 customers', '500 appointments/mo · 100 estimates/mo', 'Team management & route optimization', 'Customer portal & SMS notifications', 'Recurring plans & review requests'],
+    features: ['Up to 5 users · 250 customers', '500 appointments/mo · 100 estimates/mo', 'Team management & route optimization', 'SMS notifications & GPS tracking', 'Recurring plans & review requests'],
   },
   {
     id: 'pro',

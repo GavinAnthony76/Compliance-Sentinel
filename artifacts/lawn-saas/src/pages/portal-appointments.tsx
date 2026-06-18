@@ -227,7 +227,7 @@ export function PortalAppointmentsPage() {
   }
 
   function AppointmentCard({ apt }: { apt: any }) {
-    const canCancel = apt.status === 'pending' || apt.status === 'confirmed';
+    const canCancel = apt.origin === 'portal_request' && (apt.status === 'pending' || apt.status === 'confirmed');
     const isConfirming = confirmCancelId === apt.id;
     const isCancelling = cancellingId === apt.id;
 

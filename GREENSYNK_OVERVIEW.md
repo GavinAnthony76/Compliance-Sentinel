@@ -236,7 +236,15 @@ Templates that automatically generate future appointments on a weekly / bi-weekl
 Create and send quotes with itemized line items. Customers can view and **e-sign** estimates through a secure public link — the signature and signed-at timestamp are stored on the estimate.
 
 ### Invoices (`/invoices`)
-Generate invoices (with itemized line items), send them, and track status (Draft → Sent → Paid). Invoices can be created directly or generated from a completed appointment. When an invoice is created or sent, a **professional invoice email** is automatically dispatched to the customer (including invoice number, due date, itemized line items, total due, and a direct payment link). Customer lookups are scoped by company to prevent cross-tenant disclosure.
+Generate invoices (with itemized line items), send them, and track status (Draft → Sent → Paid). Invoices can be created directly or generated from a completed appointment. When an invoice is sent, a **professional invoice email** is automatically dispatched to the customer (including invoice number, due date, itemized line items, total due, and a direct payment link).
+
+**The "Sent" status is delivery-gated — it never appears unless the email was actually delivered.** This guarantee holds across every path that could mark an invoice sent:
+- **Manual send** (`POST /invoices/:id/send`) attempts the email first and returns `502 EmailDeliveryFailed` with the status unchanged if it fails.
+- **Create** (`POST /invoices` with `status: "sent"`) persists the invoice as **Draft** first and only promotes it to **Sent** once delivery is confirmed.
+- **Update** (`PUT /invoices/:id` setting `status: "sent"`) defers the Draft → Sent transition until delivery succeeds, otherwise the prior status is retained.
+- **Automations** (auto-invoice on appointment completion) follow the same create-as-draft-then-promote-on-delivery pattern.
+
+Delivery fails when there are no email-provider credentials, the provider rejects the message, or the customer has no email on file — in all of these cases the invoice stays Draft so a "Sent" status never lies about a message that never went out. The underlying email helper returns a structured delivery result (`{ delivered, reason }`) rather than silently swallowing failures. Customer lookups are scoped by company to prevent cross-tenant disclosure.
 
 ### Routes (`/routes`) — Growth+ ("SmartRoute")
 Plan and optimize the day's service stops. Provides a day-view list (and map) for technicians to follow an ordered route, linking each stop to an appointment.
@@ -349,10 +357,11 @@ The data layer (`lib/db/src/schema/`) defines the full relational model in Drizz
 | `companies` | The tenant root — branding, contact info, slug, `subscription_plan`, `subscription_status`, `trial_ends_at` |
 | `users` | Company staff/owners (roles: owner, admin, staff) |
 | `platform_admins` | Super-admins for the whole SaaS platform |
+| `platform_settings` | Singleton (id=1) platform-wide config: admin-dormancy settings **and the public contact email addresses** referenced by the marketing site, legal pages, and the contact form. Only three real mailboxes exist — `hello@` (general), `support@`, `sales@`; the `privacy` and `legal` columns default to the general `hello@` address but remain independently overridable |
 | `customers` | Client profiles (includes portal password hash, magic-link token) |
 | `properties` | Physical service locations, linked to customers |
 | `services` | Master list of offered services + base prices/duration |
-| `appointments` | Individual work orders (status: pending / confirmed / in_progress / completed / cancelled / no_show) |
+| `appointments` | Individual work orders (status: pending / confirmed / in_progress / completed / cancelled / no_show). The `origin` column marks who created the visit — `company` (default, incl. recurring-generated) vs `portal_request` (booked by a customer through the portal); only `portal_request` rows are customer-cancellable |
 | `recurring_plans` | Templates that generate future appointments |
 | `invoices` + `invoice_line_items` | Billing records and their itemized lines |
 | `estimates` + `estimate_line_items` | Quotes, with signature data and signed-at timestamp |
@@ -393,10 +402,13 @@ All endpoints are mounted under `/api`.
 > **Write routes** (non-GET) are additionally gated by `requireActiveSubscription` — returns `402 SubscriptionRequired` when the trial has expired or the subscription is canceled.
 
 ### Public
+- `GET /api/platform/contact-info` — platform contact emails (general/support/sales/privacy/legal) from `platform_settings`; **single source of truth** consumed by the marketing site, legal pages, and SEO JSON-LD
 - `GET /api/public/booking/:slug` — booking page data
 - `POST /api/public/booking/:slug` — submit a booking request
 - Public estimate view/sign endpoints (tokenized)
 - `POST /api/stripe/webhook` — Stripe events
+
+> **No-hardcoding principle:** Platform contact emails must NOT be hardcoded in the frontend. They live in `platform_settings` and are fetched at runtime via `/api/platform/contact-info` (React: `use-contact-info` hook + `ContactEmailLink`). SEO prerender/SSR resolve them at build/serve time via `site-config.mjs` (`getOrgContactEmail`), falling back to `DEFAULT_CONTACT_EMAIL` only when the API is unreachable during a build.
 
 ### Customer Portal (portal auth)
 - `POST /api/portal/auth/login` — password login (phone or email + password)
@@ -404,6 +416,8 @@ All endpoints are mounted under `/api`.
 - `POST /api/portal/auth/verify-link` — exchange magic-link token for portal session
 - `POST /api/portal/auth/set-password` / `forgot-password` / `reset-password`
 - View appointments, invoices (pay via Stripe), estimates (sign)
+- `POST /api/portal/appointments` — customer-submitted booking request (`origin = portal_request`)
+- `POST /api/portal/appointments/:id/cancel` — customers may cancel **only their own portal-submitted requests**; company-scheduled visits (incl. recurring-generated) return `403` and the UI directs the customer to contact the company
 
 ### Platform Admin (JWT: `greensync_admin_token`)
 - `POST /api/admin/auth/login` + `GET /api/admin/auth/me`

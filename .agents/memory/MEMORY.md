@@ -24,3 +24,5 @@
 - [Autopay charge vs Connect & test keys](autopay-charge-vs-connect.md) — autopay charge bills PLATFORM account (no Connect); portal pay needs Connect. Workspace has LIVE Stripe key, so money-moving e2e must gate on sk_test_ and skip.
 - [Post-merge drizzle destructive hang](post-merge-drizzle-destructive.md) — post-merge `db push` stalls on data-loss prompts (orphan tables from unmerged tasks); never use --force, wrap non-fatal so merges aren't blocked.
 - [Platform settings singleton](platform-settings-singleton.md) — admin-configurable settings live in a one-row platform_settings table (id=1, lazily created); stale-admin lockout days/sweep-enabled read from it.
+- [Portal appointment origin gating](portal-appointment-origin.md) — appointments.origin (default 'company'); customers may cancel only their own 'portal_request' visits; enforce in API (403) AND UI.
+- [Email delivery gating](email-delivery-gating.md) — sendEmail/sendInvoiceEmail return {delivered,reason}; never mark an invoice "sent" unless delivered===true (manual send 502s on failure).

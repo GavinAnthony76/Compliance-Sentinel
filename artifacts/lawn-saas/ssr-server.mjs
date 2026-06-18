@@ -26,6 +26,7 @@ import { createServer } from 'node:http';
 import { createReadStream, readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_CONTACT_EMAIL, getOrgContactEmail } from './site-config.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -143,30 +144,44 @@ function injectJsonLd(html, ldObject) {
 }
 
 /**
+ * Platform contact email for structured data. Sourced from the DB-backed API
+ * (refreshed periodically) so it is never hardcoded; falls back to the shared
+ * default when the API is unreachable.
+ */
+let orgContactEmail = DEFAULT_CONTACT_EMAIL;
+async function refreshOrgContactEmail() {
+  orgContactEmail = await getOrgContactEmail(API_URL);
+}
+refreshOrgContactEmail();
+setInterval(refreshOrgContactEmail, 60 * 60 * 1000).unref?.();
+
+/**
  * Minimal site-level JSON-LD for informational pages (about, contact, etc.).
  * Only Organisation + WebSite — no SoftwareApplication product schema.
  */
-const SITE_JSONLD = {
-  '@context': 'https://schema.org',
-  '@graph': [
-    {
-      '@type': 'Organization',
-      '@id': `${CANONICAL_BASE}/#organization`,
-      name: SITE,
-      url: CANONICAL_BASE,
-      logo: { '@type': 'ImageObject', url: `${CANONICAL_BASE}/favicon.svg` },
-      contactPoint: { '@type': 'ContactPoint', email: 'hello@greensynk.com', contactType: 'customer support' },
-      sameAs: [],
-    },
-    {
-      '@type': 'WebSite',
-      '@id': `${CANONICAL_BASE}/#website`,
-      url: CANONICAL_BASE,
-      name: SITE,
-      publisher: { '@id': `${CANONICAL_BASE}/#organization` },
-    },
-  ],
-};
+function buildSiteJsonLd() {
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${CANONICAL_BASE}/#organization`,
+        name: SITE,
+        url: CANONICAL_BASE,
+        logo: { '@type': 'ImageObject', url: `${CANONICAL_BASE}/favicon.svg` },
+        contactPoint: { '@type': 'ContactPoint', email: orgContactEmail, contactType: 'customer support' },
+        sameAs: [],
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${CANONICAL_BASE}/#website`,
+        url: CANONICAL_BASE,
+        name: SITE,
+        publisher: { '@id': `${CANONICAL_BASE}/#organization` },
+      },
+    ],
+  };
+}
 
 /**
  * Build a LocalBusiness JSON-LD object from booking API data.
@@ -460,7 +475,7 @@ const server = createServer(async (req, res) => {
         ...meta,
         canonicalUrl: `${CANONICAL_BASE}${pathname}`,
       });
-      html = injectJsonLd(html, SITE_JSONLD);
+      html = injectJsonLd(html, buildSiteJsonLd());
       html = injectRobotsAndCanonical(html, { indexable: true, canonicalPath: pathname });
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(html);
