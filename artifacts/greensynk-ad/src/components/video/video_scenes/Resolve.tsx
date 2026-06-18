@@ -39,7 +39,7 @@ export function ResolveScene() {
         animate={phase >= 2 ? { opacity: 1 } : { opacity: 0 }}
         transition={{ duration: 1 }}
       >
-        The operating system for lawn care.
+        The operating system for outdoor services.
       </motion.h2>
 
       <motion.div

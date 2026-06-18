@@ -23,8 +23,8 @@ export function HookScene() {
     >
       <div className="absolute inset-0 z-0">
         <img 
-          src={`${import.meta.env.BASE_URL}images/lawn-worker.jpg`} 
-          alt="Lawn Worker" 
+          src={`${import.meta.env.BASE_URL}images/lawn-worker.png`} 
+          alt="Landscaping crew at work" 
           className="w-full h-full object-cover opacity-30" 
         />
         <div className="absolute inset-0 bg-gradient-to-t from-bg-dark to-transparent" />
@@ -48,7 +48,7 @@ export function HookScene() {
           animate={phase >= 1 ? { y: 0, opacity: 1 } : { y: 50, opacity: 0 }}
           transition={{ type: "spring", stiffness: 100, damping: 20 }}
         >
-          Run your lawn business<br/>
+          Run your outdoor service business<br/>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-emerald-300">
             on autopilot.
           </span>

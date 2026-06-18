@@ -1,5 +1,10 @@
 uploads = []
-generated = []
+
+[[generated]]
+id = "LqXuCTGaXtGu767u7Atr5"
+uri = "file://artifacts/greensynk-ad/public/images/lawn-worker.png"
+type = "image"
+title = "landscaping crew"
 
 [[outputs]]
 id = "kwQAih80dLN-XN_vSIpxJ"
