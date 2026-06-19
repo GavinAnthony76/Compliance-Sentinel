@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import type { UserJWTPayload } from "./auth";
 
+const PAST_DUE_GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 7-day grace period for failed payments
+
 export async function requireActiveSubscription(
   req: Request,
   res: Response,
@@ -18,6 +20,7 @@ export async function requireActiveSubscription(
       .select({
         subscriptionStatus: companiesTable.subscriptionStatus,
         trialEndsAt: companiesTable.trialEndsAt,
+        currentPeriodEnd: companiesTable.currentPeriodEnd,
       })
       .from(companiesTable)
       .where(eq(companiesTable.id, user.companyId))
@@ -32,13 +35,20 @@ export async function requireActiveSubscription(
         : false;
     const isCanceled = company.subscriptionStatus === "canceled";
 
-    if (trialExpired || isCanceled) {
-      res.status(402).json({
-        error: "SubscriptionRequired",
-        message: trialExpired
-          ? "Your free trial has ended. Please upgrade to continue."
-          : "Your subscription has been canceled. Please reactivate to continue.",
-      });
+    // past_due gets a 7-day grace period from the end of the billing period before writes are blocked.
+    const isPastDue = company.subscriptionStatus === "past_due";
+    const pastDueGraceExpired =
+      isPastDue && company.currentPeriodEnd
+        ? new Date(company.currentPeriodEnd).getTime() + PAST_DUE_GRACE_MS < Date.now()
+        : false;
+
+    if (trialExpired || isCanceled || pastDueGraceExpired) {
+      const message = trialExpired
+        ? "Your free trial has ended. Please upgrade to continue."
+        : isCanceled
+        ? "Your subscription has been canceled. Please reactivate to continue."
+        : "Your payment is overdue. Please update your billing information to continue.";
+      res.status(402).json({ error: "SubscriptionRequired", message });
       return;
     }
   } catch {

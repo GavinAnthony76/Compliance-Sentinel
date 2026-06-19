@@ -198,11 +198,12 @@ async function executeAction(
         }
       }
 
-      const [countResult] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(invoicesTable)
-        .where(eq(invoicesTable.companyId, companyId));
-      const invoiceNum = `INV-${String(Number(countResult.count) + 1).padStart(4, "0")}`;
+      const [seqResult] = await db
+        .update(companiesTable)
+        .set({ nextInvoiceSeq: sql`GREATEST(next_invoice_seq + 1, (SELECT COUNT(*) + 1 FROM invoices WHERE company_id = ${companyId}))` })
+        .where(eq(companiesTable.id, companyId))
+        .returning({ seq: companiesTable.nextInvoiceSeq });
+      const invoiceNum = `INV-${String(seqResult!.seq!).padStart(4, "0")}`;
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 14);
 

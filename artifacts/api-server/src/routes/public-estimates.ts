@@ -15,7 +15,8 @@ const router = Router();
 // blocks or fails the signing response. All errors are caught and logged.
 async function dispatchSignedEstimateEmails(token: string): Promise<void> {
   try {
-    const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, token)).limit(1);
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, tokenHash)).limit(1);
     if (!estimate) return;
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, estimate.customerId)).limit(1);
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, estimate.companyId)).limit(1);
@@ -134,7 +135,8 @@ async function dispatchSignedEstimateEmails(token: string): Promise<void> {
 // GET /public/estimates/:token — get estimate for signing
 router.get("/estimates/:token", async (req, res) => {
   const { token } = req.params;
-  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, token)).limit(1);
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, tokenHash)).limit(1);
   if (!estimate) return res.status(404).json({ error: "NotFound", message: "Estimate not found" });
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, estimate.customerId)).limit(1);
@@ -161,6 +163,7 @@ router.get("/estimates/:token", async (req, res) => {
 // POST /public/estimates/:token/sign — customer signs estimate
 router.post("/estimates/:token/sign", async (req, res) => {
   const { token } = req.params;
+  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
   const parsed = z.object({
     // 200 chars is generous for a full name; prevents DB bloat from crafted payloads.
     signerName: z.string().min(1).max(200).trim(),
@@ -174,7 +177,7 @@ router.post("/estimates/:token/sign", async (req, res) => {
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
-  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, token)).limit(1);
+  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, tokenHash)).limit(1);
   if (!estimate) return res.status(404).json({ error: "NotFound" });
   if (estimate.signedAt) return res.status(400).json({ error: "AlreadySigned", message: "This estimate has already been signed" });
   if (estimate.status === "rejected") return res.status(400).json({ error: "Rejected", message: "This estimate has been rejected" });

@@ -197,6 +197,7 @@ router.post("/webhook", async (req: Request, res) => {
           await logBillingStatusFlip(inv.subscription as string, nextStatus);
           await db.update(companiesTable).set({
             subscriptionStatus: nextStatus,
+            trialEndsAt: null,
             updatedAt: new Date(),
           }).where(eq(companiesTable.stripeSubscriptionId, inv.subscription as string));
         }

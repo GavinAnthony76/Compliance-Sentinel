@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -35,6 +35,7 @@ export const companiesTable = pgTable("companies", {
   cashAppTag: text("cash_app_tag"),
   checkPayableTo: text("check_payable_to"),
   stripeConnectAccountId: text("stripe_connect_account_id"),
+  nextInvoiceSeq: integer("next_invoice_seq").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

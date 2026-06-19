@@ -208,6 +208,14 @@ router.post("/auth/set-password", async (req, res) => {
 
   const { token, password, companySlug } = parsed.data;
 
+  const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+  if (!PASSWORD_REGEX.test(password)) {
+    return res.status(400).json({
+      error: "WeakPassword",
+      message: "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.",
+    });
+  }
+
   const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
   if (!company) return res.status(404).json({ error: "NotFound", message: "Company not found" });
 

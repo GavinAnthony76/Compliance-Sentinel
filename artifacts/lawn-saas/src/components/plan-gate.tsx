@@ -12,8 +12,10 @@ export type FeatureKey =
   | 'route_optimization'
   | 'review_requests'
   | 'growth_analytics'
+  | 'sms_notifications'
   | 'advanced_analytics'
   | 'advanced_automations'
+  | 'data_export'
   | 'lead_pipeline'
   | 'follow_up_campaigns';
 
@@ -22,9 +24,11 @@ const REQUIRED_PLAN: Record<FeatureKey, 'growth' | 'pro'> = {
   route_optimization: 'growth',
   review_requests: 'growth',
   growth_analytics: 'growth',
+  sms_notifications: 'growth',
   follow_up_campaigns: 'growth',
   advanced_analytics: 'pro',
   advanced_automations: 'pro',
+  data_export: 'pro',
   lead_pipeline: 'pro',
 };
 
@@ -82,6 +86,16 @@ const PLAN_COLORS: Record<string, { bg: string; border: string; icon: string; ba
 };
 
 const FEATURE_DESCRIPTIONS: Record<FeatureKey, { title: string; description: string; bullets: string[] }> = {
+  sms_notifications: {
+    title: 'SMS Notifications',
+    description: 'Keep customers informed automatically with SMS confirmations, reminders, and status updates.',
+    bullets: ['Appointment confirmation texts', 'Day-before reminders', '"On my way" alerts to customers'],
+  },
+  data_export: {
+    title: 'Data Export',
+    description: 'Export your customers, appointments, and invoices to CSV for use in spreadsheets or other tools.',
+    bullets: ['Export customers to CSV', 'Export appointments to CSV', 'Export invoices to CSV'],
+  },
   recurring_plans: {
     title: 'Recurring Service Plans',
     description: 'Auto-schedule weekly or bi-weekly jobs and generate work orders automatically — no manual rescheduling.',

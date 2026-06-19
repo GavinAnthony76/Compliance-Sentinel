@@ -742,6 +742,9 @@ router.delete("/admins/:id", async (req: any, res) => {
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
 router.post("/seed", async (req: any, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ error: "NotFound" });
+  }
   try {
     const existingDemo = await db.select().from(companiesTable).where(eq(companiesTable.slug, "greenscapes-demo")).limit(1);
     if (existingDemo.length > 0) return res.json({ success: true, message: "Demo data already seeded" });

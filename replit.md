@@ -131,9 +131,8 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Pro**: $199/mo — everything + automations, advanced analytics
 
 ## Demo Credentials
-- Company: `alex@greenscapes.com` / `Demo1234!` (Growth plan)
-- Admin: `admin@greensynk.com` / `Admin1234!`
 - Public booking: `/book/greenscapes-demo`
+- Use the seed endpoint (`POST /api/admin/seed`) to create the demo company. Retrieve credentials from your password manager — do not store them in this file.
 
 ## Demo Data (seeded)
 - 6 customers (James Harrison, Maria Santos, David Chen, Rachel Thompson, Tom Williams, Linda Garcia)

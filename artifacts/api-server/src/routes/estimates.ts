@@ -121,7 +121,8 @@ const estimateRecipientSchema = z.object({
 router.post("/", requireWithinPlanLimit("estimates"), async (req: any, res) => {
   const { companyId, userId } = req.user;
   const estimateNumber = await nextEstimateNumber(companyId);
-  const publicToken = crypto.randomBytes(32).toString("hex");
+  const rawEstimateToken = crypto.randomBytes(32).toString("hex");
+  const publicToken = crypto.createHash("sha256").update(rawEstimateToken).digest("hex");
   const lineItems: any[] = req.body.lineItems ?? [];
   const subtotal = lineItems.length > 0
     ? lineItems.reduce((s: number, li: any) => s + Number(li.quantity ?? 1) * Number(li.unitPrice ?? 0), 0)
@@ -184,13 +185,11 @@ router.post("/:id/send-for-signature", async (req: any, res) => {
   const [est] = await db.select().from(estimatesTable).where(and(eq(estimatesTable.id, id), eq(estimatesTable.companyId, companyId))).limit(1);
   if (!est) return res.status(404).json({ error: "NotFound" });
 
-  let token = est.publicToken;
-  if (!token) {
-    token = crypto.randomBytes(32).toString("hex");
-    await db.update(estimatesTable).set({ publicToken: token, updatedAt: new Date() }).where(eq(estimatesTable.id, id));
-  }
-
-  await db.update(estimatesTable).set({ status: "sent", updatedAt: new Date() }).where(eq(estimatesTable.id, id));
+  // Always generate a fresh token on send-for-signature — stored value is a hash,
+  // so the raw token cannot be recovered. Old signing links are invalidated.
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  await db.update(estimatesTable).set({ publicToken: tokenHash, status: "sent", updatedAt: new Date() }).where(eq(estimatesTable.id, id));
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, est.customerId)).limit(1);
   const { sendEmail, sendSMS } = await import("../lib/notifications");
@@ -199,7 +198,7 @@ router.post("/:id/send-for-signature", async (req: any, res) => {
   const [company] = await db.select().from(companiesTable).where(deq(companiesTable.id, companyId)).limit(1);
 
   const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
-  const signUrl = `${baseUrl}/estimates/${token}/sign`;
+  const signUrl = `${baseUrl}/estimates/${rawToken}/sign`;
 
   if (customer?.email) {
     await sendEmail({

@@ -4,6 +4,22 @@ import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { logActivity } from "../lib/activity";
+import { z } from "zod";
+
+const createPropertySchema = z.object({
+  customerId: z.number().int(),
+  propertyName: z.string().max(200).optional().nullable(),
+  addressLine1: z.string().min(1).max(500),
+  addressLine2: z.string().max(200).optional().nullable(),
+  city: z.string().max(100).optional().nullable(),
+  state: z.string().max(100).optional().nullable(),
+  zip: z.string().max(20).optional().nullable(),
+  gateNotes: z.string().max(1000).optional().nullable(),
+  yardSize: z.string().max(50).optional().nullable(),
+  propertyNotes: z.string().max(2000).optional().nullable(),
+});
+
+const updatePropertySchema = createPropertySchema.partial().omit({ customerId: true });
 
 const router = Router();
 router.use(requireAuth);
@@ -29,7 +45,9 @@ router.get("/", async (req: any, res) => {
 
 router.post("/", async (req: any, res) => {
   const { companyId, userId } = req.user;
-  const [property] = await db.insert(propertiesTable).values({ companyId, ...req.body }).returning();
+  const parsed = createPropertySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  const [property] = await db.insert(propertiesTable).values({ companyId, ...parsed.data }).returning();
   await logActivity({ companyId, userId, action: "property.created", entityType: "property", entityId: property.id });
   return res.status(201).json(property);
 });
@@ -47,7 +65,9 @@ router.put("/:id", async (req: any, res) => {
   const id = Number(req.params.id);
   const [existing] = await db.select().from(propertiesTable).where(and(eq(propertiesTable.id, id), eq(propertiesTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
-  const [updated] = await db.update(propertiesTable).set({ ...req.body, updatedAt: new Date() }).where(and(eq(propertiesTable.id, id), eq(propertiesTable.companyId, companyId))).returning();
+  const bodyParsed = updatePropertySchema.safeParse(req.body);
+  if (!bodyParsed.success) return res.status(400).json({ error: "ValidationError", message: bodyParsed.error.message });
+  const [updated] = await db.update(propertiesTable).set({ ...bodyParsed.data, updatedAt: new Date() }).where(and(eq(propertiesTable.id, id), eq(propertiesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "property.updated", entityType: "property", entityId: id });
   return res.json(updated);
 });

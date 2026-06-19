@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable, companiesTable } from "@workspace/db";
+import { db, invoicesTable, invoiceLineItemsTable, customersTable, appointmentsTable, servicesTable, companiesTable, propertiesTable } from "@workspace/db";
 import { eq, and, ne, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
@@ -38,9 +38,14 @@ function fmtLineItem(li: any) {
 }
 
 async function nextInvoiceNumber(companyId: number): Promise<string> {
-  const [result] = await db.select({ count: sql<number>`count(*)` }).from(invoicesTable).where(eq(invoicesTable.companyId, companyId));
-  const num = Number(result.count) + 1;
-  return `INV-${String(num).padStart(4, "0")}`;
+  // Atomic per-company sequence — prevents duplicate invoice numbers under concurrent requests.
+  // GREATEST self-heals on first call by initialising from existing invoice count.
+  const [r] = await db
+    .update(companiesTable)
+    .set({ nextInvoiceSeq: sql`GREATEST(next_invoice_seq + 1, (SELECT COUNT(*) + 1 FROM invoices WHERE company_id = ${companyId}))` })
+    .where(eq(companiesTable.id, companyId))
+    .returning({ seq: companiesTable.nextInvoiceSeq });
+  return `INV-${String(r!.seq!).padStart(4, "0")}`;
 }
 
 async function upsertLineItems(invoiceId: number, lineItems: any[]) {

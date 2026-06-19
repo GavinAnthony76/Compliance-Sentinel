@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import type { Request, Response, NextFunction } from "express";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const JWT_SECRET_ENV = process.env.SESSION_SECRET || process.env.JWT_SECRET;
 const ADMIN_JWT_SECRET_ENV = process.env.ADMIN_JWT_SECRET;
@@ -33,7 +35,7 @@ export function signUserToken(payload: Omit<UserJWTPayload, "type">): string {
 }
 
 export function signAdminToken(payload: Omit<AdminJWTPayload, "type">): string {
-  return jwt.sign({ ...payload, type: "admin" }, ADMIN_JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign({ ...payload, type: "admin" }, ADMIN_JWT_SECRET, { expiresIn: "4h" });
 }
 
 export function verifyUserToken(token: string): UserJWTPayload {
@@ -52,7 +54,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     res.status(401).json({ error: "Unauthorized", message: "Authentication required" });
@@ -60,14 +62,37 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   const token = authHeader.slice(7);
+  let payload: UserJWTPayload;
   try {
-    const payload = verifyUserToken(token);
+    payload = verifyUserToken(token);
     if (payload.type !== "user") throw new Error("Invalid token type");
-    (req as any).user = payload;
-    next();
   } catch {
     res.status(401).json({ error: "Unauthorized", message: "Invalid or expired token" });
+    return;
   }
+
+  // Invalidate tokens issued before the user's last password change so that
+  // a stolen token is blocked as soon as the owner resets their password.
+  try {
+    const [user] = await db
+      .select({ passwordChangedAt: usersTable.passwordChangedAt })
+      .from(usersTable)
+      .where(eq(usersTable.id, payload.userId))
+      .limit(1);
+    if (user?.passwordChangedAt) {
+      const changedAtSec = Math.floor(user.passwordChangedAt.getTime() / 1000);
+      const iat = (payload as any).iat as number | undefined;
+      if (iat !== undefined && iat < changedAtSec) {
+        res.status(401).json({ error: "Unauthorized", message: "Session expired. Please log in again." });
+        return;
+      }
+    }
+  } catch {
+    // DB check failed — don't block the request
+  }
+
+  (req as any).user = payload;
+  next();
 }
 
 export function requireAdminAuth(req: Request, res: Response, next: NextFunction): void {

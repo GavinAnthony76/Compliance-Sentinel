@@ -123,7 +123,7 @@ router.post("/reset-password", async (req, res) => {
   }
 
   const passwordHash = await hashPassword(password);
-  await db.update(platformAdminsTable).set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() }).where(eq(platformAdminsTable.id, admin.id));
+  await db.update(platformAdminsTable).set({ passwordHash, mustChangePassword: false, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() }).where(eq(platformAdminsTable.id, admin.id));
 
   return res.json({ success: true, message: "Password updated successfully." });
 });

@@ -4,8 +4,11 @@ import { eq, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 
+import { requireActiveSubscription } from "../lib/subscription";
+
 const router = Router();
 router.use(requireAuth);
+router.use(requireActiveSubscription);
 router.use(requireFeature("data_export"));
 
 function toCSV(headers: string[], rows: (string | number | null | undefined)[][]): string {

@@ -36,6 +36,13 @@ router.post("/register", async (req, res) => {
 
   const { firstName, lastName, email, password, companyName, phone, selectedPlan } = parsed.data;
 
+  if (!PASSWORD_REGEX.test(password)) {
+    return res.status(400).json({
+      error: "WeakPassword",
+      message: "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.",
+    });
+  }
+
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
   if (existing.length > 0) {
     return res.status(409).json({ error: "ConflictError", message: "Email already in use" });
@@ -281,7 +288,7 @@ router.post("/reset-password", async (req, res) => {
 
   const passwordHash = await hashPassword(password);
   await db.update(usersTable)
-    .set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() })
+    .set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, passwordChangedAt: new Date(), updatedAt: new Date() })
     .where(eq(usersTable.id, user.id));
 
   await logActivity({ companyId: user.companyId, userId: user.id, action: "user.password_reset", entityType: "user", entityId: user.id });

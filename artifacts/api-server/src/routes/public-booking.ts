@@ -46,19 +46,19 @@ router.get("/book/:slug", async (req, res) => {
 });
 
 const bookingSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
   email: z.string().email().optional(),
-  phone: z.string().min(1),
-  addressLine1: z.string().min(1),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zip: z.string().optional(),
+  phone: z.string().min(1).max(30),
+  addressLine1: z.string().min(1).max(500),
+  city: z.string().max(100).optional(),
+  state: z.string().max(100).optional(),
+  zip: z.string().max(20).optional(),
   serviceId: z.number().int(),
   preferredDate: z.string().optional(),
-  notes: z.string().optional(),
-  gateNotes: z.string().optional(),
-  yardSize: z.string().optional(),
+  notes: z.string().max(2000).optional(),
+  gateNotes: z.string().max(500).optional(),
+  yardSize: z.string().max(50).optional(),
 });
 
 router.post("/book/:slug/submit", async (req, res) => {
@@ -72,6 +72,13 @@ router.post("/book/:slug/submit", async (req, res) => {
   if (!company) return res.status(404).json({ error: "NotFound", message: "Company not found" });
 
   const data = parsed.data;
+
+  // Validate serviceId belongs to this company so a crafted request cannot
+  // reference another tenant's service catalog entry.
+  const [service] = await db.select({ id: servicesTable.id }).from(servicesTable)
+    .where(and(eq(servicesTable.id, data.serviceId), eq(servicesTable.companyId, company.id), eq(servicesTable.isActive, true)))
+    .limit(1);
+  if (!service) return res.status(400).json({ error: "ValidationError", message: "Invalid service selection" });
 
   let [customer] = await db.select().from(customersTable).where(and(
     eq(customersTable.companyId, company.id),
@@ -127,6 +134,7 @@ router.post("/book/:slug/submit", async (req, res) => {
     status: "pending",
     scheduledStart,
     notes: data.notes ?? null,
+    origin: "portal_request",
   }).returning();
 
   await logActivity({
