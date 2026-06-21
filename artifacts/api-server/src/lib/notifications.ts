@@ -1128,6 +1128,74 @@ export async function sendPortalAccessEmail(opts: {
   });
 }
 
+// Confirmation sent after a customer successfully sets or changes their portal
+// password. Acts as a security notice ("if this wasn't you, contact us").
+export async function sendPortalPasswordChangedEmail(opts: {
+  to: string;
+  customerName: string;
+  companyName: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  loginUrl?: string;
+  wasReset: boolean;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): Promise<void> {
+  const action = opts.wasReset ? "changed" : "set";
+  const subject = `Your ${opts.companyName} portal password was ${action}`;
+
+  const customerName = escapeHtml(opts.customerName);
+  const companyName = escapeHtml(opts.companyName);
+
+  const contactParts = [
+    opts.companyEmail ? `email ${opts.companyEmail}` : null,
+    opts.companyPhone ? `call ${opts.companyPhone}` : null,
+  ].filter(Boolean);
+  const contactText = contactParts.length
+    ? `please contact ${opts.companyName} right away (${contactParts.join(" or ")}).`
+    : `please contact ${opts.companyName} right away.`;
+  const contactHtml = contactParts.length
+    ? `please contact ${companyName} right away (${escapeHtml(contactParts.join(" or "))}).`
+    : `please contact ${companyName} right away.`;
+
+  const textBody = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `This is a confirmation that your password for the ${opts.companyName} customer portal was successfully ${action}.`,
+    ``,
+    ...(opts.loginUrl ? [`You can log in any time at:`, opts.loginUrl, ``] : []),
+    `If you made this change, no further action is needed.`,
+    ``,
+    `If you did NOT request this change, ${contactText} Your account security may be at risk.`,
+    ``,
+    `Thank you,`,
+    opts.companyName,
+  ];
+
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${customerName},</p>
+            <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.5;">This is a confirmation that your password for the ${companyName} customer portal was successfully <strong>${action}</strong>.</p>
+            <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.5;">If you made this change, no further action is needed.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: subject,
+    companyName: opts.companyName,
+    bodyHtml,
+    cta: opts.loginUrl ? { label: "Log In", url: opts.loginUrl } : null,
+    footerHtml: `<strong>Didn't make this change?</strong> If you did not request this, ${contactHtml} Your account security may be at risk.<br /><br />Thank you,<br /><strong>${companyName}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+
+  await sendEmail({
+    to: opts.to,
+    subject,
+    body: textBody.join("\n"),
+    html,
+    replyTo: opts.companyEmail,
+  });
+}
+
 // Customer-facing notification when an appointment's status changes.
 export async function sendAppointmentStatusEmail(opts: {
   to: string;

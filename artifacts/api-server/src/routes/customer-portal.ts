@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from "../lib/auth";
 import { hasFeature, getRequiredPlanForFeature } from "../lib/features";
 import { z } from "zod";
 import crypto from "crypto";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -219,6 +220,8 @@ router.post("/auth/set-password", async (req, res) => {
     return res.status(400).json({ error: "ExpiredToken", message: "This invite link has expired" });
   }
 
+  const wasReset = !!customer.portalPasswordHash;
+
   const hash = await hashPassword(password);
   await db.update(customersTable).set({
     portalPasswordHash: hash,
@@ -226,6 +229,27 @@ router.post("/auth/set-password", async (req, res) => {
     portalInviteExpiresAt: null,
     updatedAt: new Date(),
   }).where(eq(customersTable.id, customer.id));
+
+  // Confirmation / security notice — don't block the response on email delivery.
+  if (customer.email) {
+    const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+    const loginUrl = `${baseUrl}/portal/${company.slug}/login`;
+    import("../lib/notifications")
+      .then(({ sendPortalPasswordChangedEmail }) =>
+        sendPortalPasswordChangedEmail({
+          to: customer.email!,
+          customerName: customer.firstName || customer.email!,
+          companyName: company.name,
+          companyEmail: company.email ?? undefined,
+          companyPhone: company.phone ?? undefined,
+          loginUrl,
+          wasReset,
+          logoUrl: company.logoUrl,
+          primaryColor: company.primaryColor,
+        }),
+      )
+      .catch((err) => logger.error({ err, customerId: customer.id }, "Failed to send portal password-changed email"));
+  }
 
   const portalToken = signPortalToken({ customerId: customer.id, companyId: company.id });
   return res.json({
