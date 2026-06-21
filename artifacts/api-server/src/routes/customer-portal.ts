@@ -241,12 +241,18 @@ router.post("/auth/forgot-password", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
   const { email, companySlug } = parsed.data;
+  const genericResponse = { success: true, message: "If that email has a portal account, a reset link has been sent." };
   const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
-  if (!company) return res.json({ success: true }); // silent — avoid slug enumeration
+  if (!company) return res.json(genericResponse); // silent — avoid slug enumeration
 
   const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.email, email))).limit(1);
 
-  if (customer && customer.portalPasswordHash) {
+  // Send the set/reset link to any portal customer with an email — not only
+  // those who already created a password. Customers who have only ever used
+  // magic links have no password hash yet, and must still be able to set one
+  // via "forgot password" (the set-password page handles both set and reset).
+  if (customer && customer.email) {
+    const hasPassword = !!customer.portalPasswordHash;
     const rawResetToken = crypto.randomBytes(32).toString("hex");
     const resetTokenHash = crypto.createHash("sha256").update(rawResetToken).digest("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -254,15 +260,21 @@ router.post("/auth/forgot-password", async (req, res) => {
 
     const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
     const resetUrl = `${baseUrl}/portal/set-password?token=${rawResetToken}&slug=${companySlug}`;
-    const { sendEmail } = await import("../lib/notifications");
-    await sendEmail({
-      to: customer.email!,
-      subject: `Reset your ${company.name} portal password`,
-      body: `Hi ${customer.firstName},\n\nClick the link below to reset your portal password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
+    const { sendPortalAccessEmail } = await import("../lib/notifications");
+    await sendPortalAccessEmail({
+      to: customer.email,
+      customerName: customer.firstName || customer.email,
+      companyName: company.name,
+      companyEmail: company.email ?? undefined,
+      loginUrl: resetUrl,
+      intent: hasPassword ? "reset" : "set",
+      expiresLabel: "in 1 hour",
+      logoUrl: company.logoUrl,
+      primaryColor: company.primaryColor,
     });
   }
 
-  return res.json({ success: true, message: "If that email has a portal account, a reset link has been sent." });
+  return res.json(genericResponse);
 });
 
 // GET /portal/auth/me

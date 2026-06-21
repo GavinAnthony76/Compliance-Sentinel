@@ -1020,19 +1020,31 @@ export async function sendPortalAccessEmail(opts: {
   companyEmail?: string;
   loginUrl: string;
   portalUrl?: string;
-  intent: "invite" | "login";
+  intent: "invite" | "login" | "set" | "reset";
   expiresLabel: string;
   logoUrl?: string | null;
   primaryColor?: string | null;
 }): Promise<void> {
+  const isPasswordFlow = opts.intent === "set" || opts.intent === "reset";
   const subject =
     opts.intent === "invite"
       ? `${opts.companyName} invited you to your customer portal`
+      : opts.intent === "reset"
+      ? `Reset your ${opts.companyName} portal password`
+      : opts.intent === "set"
+      ? `Set your ${opts.companyName} portal password`
       : `Your ${opts.companyName} portal login link`;
 
   const customerName = escapeHtml(opts.customerName);
   const companyName = escapeHtml(opts.companyName);
-  const ctaLabel = opts.intent === "invite" ? "Get Started" : "Log In";
+  const ctaLabel =
+    opts.intent === "invite"
+      ? "Get Started"
+      : opts.intent === "reset"
+      ? "Reset Password"
+      : opts.intent === "set"
+      ? "Set Password"
+      : "Log In";
 
   const inviteBody = [
     `Hi ${opts.customerName},`,
@@ -1073,10 +1085,32 @@ export async function sendPortalAccessEmail(opts: {
             <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Here is your secure, one-click login link for the ${companyName} customer portal — no password needed. Just tap the button below.</p>
             ${opts.portalUrl ? `<p style="margin:0 0 8px;font-size:14px;color:#6b7280;line-height:1.5;">You can also log in with your email and password any time at:<br /><a href="${escapeHtml(opts.portalUrl)}" style="color:${resolveAccent(opts.primaryColor)};word-break:break-all;">${escapeHtml(opts.portalUrl)}</a></p>` : ""}`;
 
+  const passwordVerb = opts.intent === "reset" ? "reset" : "set";
+  const passwordBody = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `We received a request to ${passwordVerb} your password for the ${opts.companyName} customer portal.`,
+    ``,
+    `Click the secure link below to ${passwordVerb} your password and sign in:`,
+    opts.loginUrl,
+    ``,
+    `This link expires ${opts.expiresLabel}. If you didn't request it, you can safely ignore this email.`,
+    ``,
+    `Thank you,`,
+    opts.companyName,
+  ];
+
+  const passwordHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${customerName},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">We received a request to ${passwordVerb} your password for the ${companyName} customer portal. Tap the button below to ${passwordVerb} your password and sign in.</p>`;
+
+  const bodyHtml = opts.intent === "invite" ? inviteHtml : isPasswordFlow ? passwordHtml : loginHtml;
+  const textBody = opts.intent === "invite" ? inviteBody : isPasswordFlow ? passwordBody : loginBody;
+
   const html = buildBrandedEmailHtml({
     title: subject,
     companyName: opts.companyName,
-    bodyHtml: opts.intent === "invite" ? inviteHtml : loginHtml,
+    bodyHtml,
     cta: { label: ctaLabel, url: opts.loginUrl },
     footerHtml: `This link expires ${escapeHtml(opts.expiresLabel)}. If you didn't ${
       opts.intent === "invite" ? "expect this email" : "request it"
@@ -1088,7 +1122,7 @@ export async function sendPortalAccessEmail(opts: {
   await sendEmail({
     to: opts.to,
     subject,
-    body: (opts.intent === "invite" ? inviteBody : loginBody).join("\n"),
+    body: textBody.join("\n"),
     html,
     replyTo: opts.companyEmail,
   });
