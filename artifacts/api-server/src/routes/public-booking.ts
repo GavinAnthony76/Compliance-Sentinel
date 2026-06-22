@@ -149,9 +149,11 @@ router.post("/book/:slug/submit", async (req, res) => {
       const address = [data.addressLine1, data.city, data.state, data.zip].filter(Boolean).join(", ") || null;
       const customerName = `${data.firstName} ${data.lastName}`.trim();
 
-      if (company.email) {
+      const { resolveCompanyNotificationEmail } = await import("../lib/notifications");
+      const companyNotifyEmail = await resolveCompanyNotificationEmail(company.id, company.email);
+      if (companyNotifyEmail) {
         await sendBookingRequestNotification({
-          companyEmail: company.email,
+          companyEmail: companyNotifyEmail,
           companyName: company.name,
           customerName,
           customerEmail: data.email ?? null,

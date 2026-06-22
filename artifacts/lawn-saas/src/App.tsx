@@ -8,6 +8,7 @@ import { Suspense, lazy, useEffect } from "react";
 const NOINDEX_PATTERNS: RegExp[] = [
   /^\/login$/,
   /^\/register$/,
+  /^\/verify-email$/,
   /^\/forgot-password$/,
   /^\/forgot-username$/,
   /^\/reset-password$/,
@@ -66,6 +67,7 @@ const CookiesPage = lazy(() => import("@/pages/cookies").then(m => ({ default: m
 // Auth / misc public pages — lazy loaded
 const LoginPage = lazy(() => import("@/pages/login").then(m => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/pages/register").then(m => ({ default: m.RegisterPage })));
+const VerifyEmailPage = lazy(() => import("@/pages/verify-email").then(m => ({ default: m.VerifyEmailPage })));
 const AdminLoginPage = lazy(() => import("@/pages/admin-login").then(m => ({ default: m.AdminLoginPage })));
 const ForgotPasswordPage = lazy(() => import("@/pages/forgot-password").then(m => ({ default: m.ForgotPasswordPage })));
 const ForgotUsernamePage = lazy(() => import("@/pages/forgot-username").then(m => ({ default: m.ForgotUsernamePage })));
@@ -255,6 +257,7 @@ function Router() {
           {/* Auth routes — lazy loaded */}
           <Route path="/login" component={LoginPage} />
           <Route path="/register" component={RegisterPage} />
+          <Route path="/verify-email" component={VerifyEmailPage} />
           <Route path="/admin/login" component={AdminLoginPage} />
           <Route path="/forgot-password" component={ForgotPasswordPage} />
           <Route path="/forgot-username" component={ForgotUsernamePage} />

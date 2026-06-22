@@ -30,10 +30,34 @@ export const RegisterBody = zod.object({
 });
 
 /**
+ * @summary Verify a company user's email with a token
+ */
+export const VerifyEmailBody = zod.object({
+  token: zod.string(),
+});
+
+export const VerifyEmailResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
+ * @summary Resend the email-verification message
+ */
+export const ResendConfirmationBody = zod.object({
+  email: zod.string().email(),
+});
+
+export const ResendConfirmationResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string().optional(),
+});
+
+/**
  * @summary Log in as company user
  */
 export const LoginBody = zod.object({
-  email: zod.string().email(),
+  identifier: zod.string().describe("Email address or phone number"),
   password: zod.string(),
 });
 

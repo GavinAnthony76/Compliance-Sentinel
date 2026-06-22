@@ -1,7 +1,24 @@
-import { db, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable } from "@workspace/db";
+import { db, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveEmailCredentials } from "./resend";
+
+// Resolve the address that company-directed notifications (booking requests,
+// cancellations, etc.) should go to. Companies don't always have their own
+// contact email set, so fall back to the company owner's email. Returns null
+// when neither is available, in which case the caller should skip the send.
+export async function resolveCompanyNotificationEmail(
+  companyId: number,
+  companyEmail?: string | null,
+): Promise<string | null> {
+  if (companyEmail && companyEmail.trim()) return companyEmail;
+  const [owner] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "owner")))
+    .limit(1);
+  return owner?.email ?? null;
+}
 
 interface EmailPayload {
   to: string;
@@ -1006,6 +1023,140 @@ export async function sendWelcomeEmail(opts: {
       `The GreenSynk Team`,
     ].join("\n"),
     html,
+  });
+}
+
+// Email-confirmation message sent to a new company signup. Until the user
+// clicks the verification link, login is hard-gated (see routes/auth.ts).
+export async function sendEmailVerificationEmail(opts: {
+  to: string;
+  firstName: string;
+  verifyUrl: string;
+}): Promise<EmailResult> {
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Thanks for signing up for GreenSynk! Please confirm your email address to activate your account. This link is valid for 24 hours.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: "Confirm your GreenSynk email",
+    companyName: "GreenSynk",
+    bodyHtml,
+    cta: { label: "Confirm my email", url: opts.verifyUrl },
+    footerHtml: `If you didn't create a GreenSynk account, you can safely ignore this email.<br /><br />— The GreenSynk Team`,
+  });
+
+  return sendEmail({
+    to: opts.to,
+    subject: "Confirm your GreenSynk email address",
+    body: [
+      `Hi ${opts.firstName},`,
+      ``,
+      `Thanks for signing up for GreenSynk! Please confirm your email address to activate your account.`,
+      ``,
+      `Click the link below (valid for 24 hours):`,
+      ``,
+      opts.verifyUrl,
+      ``,
+      `If you didn't create a GreenSynk account, you can safely ignore this email.`,
+      ``,
+      `— The GreenSynk Team`,
+    ].join("\n"),
+    html,
+  });
+}
+
+// Notify the company that a customer cancelled a portal-submitted booking.
+export async function sendPortalCancellationNotification(opts: {
+  companyEmail: string;
+  companyName: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  serviceName?: string | null;
+  scheduledStart?: Date | null;
+}): Promise<void> {
+  const dateStr = opts.scheduledStart
+    ? new Date(opts.scheduledStart).toLocaleString("en-US", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    : "an unspecified time";
+
+  await sendEmail({
+    to: opts.companyEmail,
+    subject: `Booking cancelled by ${opts.customerName}`,
+    body: [
+      `${opts.customerName} has cancelled their booking request through the customer portal.`,
+      ``,
+      `Service: ${opts.serviceName || "Not specified"}`,
+      `Was scheduled for: ${dateStr}`,
+      ``,
+      `Customer contact:`,
+      ...(opts.customerEmail ? [`  Email: ${opts.customerEmail}`] : []),
+      ...(opts.customerPhone ? [`  Phone: ${opts.customerPhone}`] : []),
+      ``,
+      `This appointment is now marked cancelled in your dashboard.`,
+    ].join("\n"),
+    replyTo: opts.customerEmail || undefined,
+  });
+}
+
+// Customer-facing notice when the company reschedules their appointment to a
+// new date/time (no status change).
+export async function sendAppointmentRescheduledEmail(opts: {
+  to: string;
+  customerName: string;
+  scheduledStart: Date;
+  serviceName?: string;
+  companyName?: string;
+  companyEmail?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): Promise<EmailResult> {
+  const dateStr = opts.scheduledStart.toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const timeStr = opts.scheduledStart.toLocaleTimeString("en-US", {
+    hour: "2-digit", minute: "2-digit",
+  });
+  const serviceName = opts.serviceName || "Lawn Care";
+  const companyName = opts.companyName || "Your Service Provider";
+
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.customerName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Your appointment with ${escapeHtml(companyName)} has been rescheduled. Here are the new details:</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Service:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(serviceName)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">New date:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(dateStr)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">New time:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(timeStr)}</td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>`;
+  const html = buildBrandedEmailHtml({
+    title: `Appointment Rescheduled — ${serviceName}`,
+    companyName,
+    bodyHtml,
+    footerHtml: `If this new time doesn't work for you, just reply to this email.<br /><br />Thank you,<br /><strong>${escapeHtml(companyName)}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+  return sendEmail({
+    to: opts.to,
+    subject: `Appointment Rescheduled — ${serviceName} now on ${dateStr}`,
+    body: `Hi ${opts.customerName},\n\nYour ${serviceName} appointment with ${companyName} has been rescheduled.\n\nNew date: ${dateStr}\nNew time: ${timeStr}\n\nIf this new time doesn't work for you, just reply to this email.\n\nThank you!`,
+    html,
+    replyTo: opts.companyEmail,
   });
 }
 

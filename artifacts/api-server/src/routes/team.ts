@@ -38,6 +38,18 @@ router.post("/", requireRole("owner", "admin"), requireFeature("team_management"
     return res.status(409).json({ error: "ConflictError", message: "Email already in use" });
   }
 
+  // Phone (optional) must be unique across all users so it can serve as a login
+  // identifier — match on digits only.
+  if (req.body.phone && String(req.body.phone).trim()) {
+    const normalized = String(req.body.phone).replace(/\D/g, "");
+    if (normalized) {
+      const all = await db.select({ phone: usersTable.phone }).from(usersTable);
+      if (all.some(u => u.phone && u.phone.replace(/\D/g, "") === normalized)) {
+        return res.status(409).json({ error: "ConflictError", message: "Phone number is already in use" });
+      }
+    }
+  }
+
   const temporaryPassword = req.body.password;
   const passwordHash = await hashPassword(temporaryPassword);
   const [member] = await db.insert(usersTable).values({

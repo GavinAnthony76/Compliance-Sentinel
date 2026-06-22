@@ -7,7 +7,7 @@ import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
-import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail } from "../lib/notifications";
+import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail, sendAppointmentRescheduledEmail } from "../lib/notifications";
 import { fireAutomations } from "../lib/automations";
 
 // ─── GPS job-tracking helpers ────────────────────────────────────────────────
@@ -164,6 +164,53 @@ async function sendAppointmentStatusNotification(appt: any, companyId: number, s
   }
 }
 
+// Notify the customer when their appointment is rescheduled to a new time
+// (no status change). Email + SMS where enabled.
+async function sendAppointmentRescheduleNotification(appt: any, companyId: number) {
+  try {
+    const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1);
+    if (!customer) return;
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    const [service] = appt.serviceId ? await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1) : [null];
+
+    const when = appt.scheduledStart ? new Date(appt.scheduledStart) : null;
+    if (!when) return;
+    const dateStr = when.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const timeStr = when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const companyName = company?.name || 'Your service provider';
+    const serviceName = service?.name || 'lawn care service';
+
+    const smsAllowed = hasFeature(company?.subscriptionPlan, "sms_notifications");
+    if (customer.phone && smsAllowed) {
+      await sendSMS({ to: customer.phone, body: `${companyName}: your ${serviceName} appointment has been rescheduled to ${dateStr} at ${timeStr}. Reply STOP to opt out.` });
+    }
+    if (customer.email) {
+      await sendAppointmentRescheduledEmail({
+        to: customer.email,
+        customerName: customer.firstName,
+        scheduledStart: when,
+        serviceName,
+        companyName,
+        companyEmail: company?.email || undefined,
+        logoUrl: company?.logoUrl,
+        primaryColor: company?.primaryColor,
+      });
+    }
+
+    await logCommunicationEvent({
+      companyId,
+      customerId: appt.customerId,
+      appointmentId: appt.id,
+      channel: customer.phone && smsAllowed ? "sms" : "email",
+      subject: `Appointment Rescheduled — ${serviceName}`,
+      bodyPreview: `${serviceName} rescheduled to ${dateStr} at ${timeStr}`,
+      status: "sent",
+    });
+  } catch (_err) {
+    // Non-fatal: notification failure must not block the reschedule
+  }
+}
+
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
@@ -297,6 +344,15 @@ router.put("/:id", async (req: any, res) => {
   // If the status actually changed, notify the customer (email + SMS where enabled).
   if (updateData.status && updateData.status !== existing.status) {
     void sendAppointmentStatusNotification(updated, companyId, updateData.status);
+  } else if (
+    // Reschedule: the date/time moved but the status did NOT change. Status
+    // changes already carry their own copy (incl. the new time), so only send
+    // a dedicated "rescheduled" notice when there's no concurrent status change.
+    updateData.scheduledStart &&
+    existing.scheduledStart &&
+    new Date(updateData.scheduledStart).getTime() !== new Date(existing.scheduledStart).getTime()
+  ) {
+    void sendAppointmentRescheduleNotification(updated, companyId);
   }
   // If status changed to completed, fire appointment_completed automations
   if (updateData.status === "completed" && existing.status !== "completed") {

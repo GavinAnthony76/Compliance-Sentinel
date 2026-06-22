@@ -13,6 +13,13 @@ export const usersTable = pgTable("users", {
   role: text("role").notNull().default("staff"),
   phone: text("phone"),
   isActive: boolean("is_active").notNull().default(true),
+  // Email confirmation gate for company signups. Defaults to true so existing
+  // users (and owner-invited team members) are grandfathered as verified; the
+  // self-serve register flow explicitly sets this false until the user clicks
+  // the emailed confirmation link.
+  emailVerified: boolean("email_verified").notNull().default(true),
+  emailVerificationToken: text("email_verification_token"),
+  emailVerificationExpiresAt: timestamp("email_verification_expires_at"),
   lastLoginAt: timestamp("last_login_at"),
   activitySeenAt: timestamp("activity_seen_at"),
   passwordResetToken: text("password_reset_token"),

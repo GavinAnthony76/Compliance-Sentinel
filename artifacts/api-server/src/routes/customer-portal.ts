@@ -380,6 +380,50 @@ router.post("/appointments", requirePortalAuth, async (req: any, res) => {
     price: service.basePrice ?? null,
   }).returning();
 
+  // Notify the company of the new request AND confirm to the customer
+  // (fire-and-forget — never block the booking response on email).
+  void (async () => {
+    try {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+      if (!customer || !company) return;
+      const customerName = `${customer.firstName} ${customer.lastName}`.trim();
+      const { sendBookingRequestNotification, sendBookingConfirmationEmail, resolveCompanyNotificationEmail } = await import("../lib/notifications");
+
+      const companyNotifyEmail = await resolveCompanyNotificationEmail(companyId, company.email);
+      if (companyNotifyEmail) {
+        await sendBookingRequestNotification({
+          companyEmail: companyNotifyEmail,
+          companyName: company.name,
+          customerName,
+          customerEmail: customer.email,
+          customerPhone: customer.phone,
+          serviceName: service.name,
+          address: customer.addressLine1 ?? null,
+          preferredDate: scheduledDate,
+          notes: notes || null,
+        });
+      }
+
+      if (customer.email) {
+        await sendBookingConfirmationEmail({
+          to: customer.email,
+          customerName,
+          companyName: company.name,
+          companyEmail: company.email ?? undefined,
+          companyPhone: company.phone ?? null,
+          serviceName: service.name,
+          preferredDate: scheduledDate,
+          address: customer.addressLine1 ?? null,
+          logoUrl: company.logoUrl,
+          primaryColor: company.primaryColor,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, companyId }, "Failed to send portal booking notifications");
+    }
+  })();
+
   return res.status(201).json({
     ...appointment,
     price: appointment.price ? Number(appointment.price) : null,
@@ -412,6 +456,32 @@ router.post("/appointments/:id/cancel", requirePortalAuth, async (req: any, res)
     .set({ status: "cancelled", updatedAt: new Date() })
     .where(eq(appointmentsTable.id, id))
     .returning();
+
+  // Notify the company that the customer cancelled (fire-and-forget).
+  void (async () => {
+    try {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+      if (!customer || !company) return;
+      const [service] = updated.serviceId
+        ? await db.select({ name: servicesTable.name }).from(servicesTable).where(eq(servicesTable.id, updated.serviceId)).limit(1)
+        : [null];
+      const { sendPortalCancellationNotification, resolveCompanyNotificationEmail } = await import("../lib/notifications");
+      const companyNotifyEmail = await resolveCompanyNotificationEmail(companyId, company.email);
+      if (!companyNotifyEmail) return;
+      await sendPortalCancellationNotification({
+        companyEmail: companyNotifyEmail,
+        companyName: company.name,
+        customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+        customerEmail: customer.email,
+        customerPhone: customer.phone,
+        serviceName: service?.name ?? null,
+        scheduledStart: updated.scheduledStart,
+      });
+    } catch (err) {
+      logger.error({ err, companyId }, "Failed to send portal cancellation notification");
+    }
+  })();
 
   return res.json({ ...updated, price: updated.price ? Number(updated.price) : null });
 });

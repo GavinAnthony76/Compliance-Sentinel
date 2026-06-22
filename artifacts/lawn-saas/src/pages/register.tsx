@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { useRegister } from '@workspace/api-client-react';
-import { useAuthState } from '@/hooks/use-auth-state';
+import { useRegister, useResendConfirmation } from '@workspace/api-client-react';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { User, Mail, Lock, Building2, Check, ChevronRight } from 'lucide-react';
+import { User, Mail, Lock, Building2, Check, ChevronRight, MailCheck } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -48,23 +47,65 @@ export function RegisterPage() {
     companyName: '',
     phone: '',
   });
-  const { login } = useAuthState();
+  const [registered, setRegistered] = useState(false);
   const { toast } = useToast();
   const registerMutation = useRegister();
+  const resendMutation = useResendConfirmation();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (step < 3) { setStep(s => s + 1); return; }
     try {
-      const res = await registerMutation.mutateAsync({ data: { ...form, selectedPlan: selectedPlan as any } });
-      login(res.token);
-      toast({ title: 'Account created!', description: 'Welcome to GreenSynk. Complete your onboarding to get started.' });
+      await registerMutation.mutateAsync({ data: { ...form, selectedPlan: selectedPlan as any } });
+      setRegistered(true);
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err.message || 'Please try again', variant: 'destructive' });
     }
   };
 
+  const handleResend = async () => {
+    try {
+      await resendMutation.mutateAsync({ data: { email: form.email } });
+      toast({ title: 'Confirmation sent', description: 'We sent another verification link to your email.' });
+    } catch {
+      toast({ title: "Couldn't resend", description: 'Please try again in a moment.', variant: 'destructive' });
+    }
+  };
+
   const steps = ['Account Info', 'Choose Plan', 'Business Details'];
+
+  if (registered) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4 relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] bg-primary/5 rounded-full blur-3xl -z-10" />
+        <div className="w-full max-w-md">
+          <div className="flex justify-center mb-8">
+            <Link href="/"><Logo className="h-12" /></Link>
+          </div>
+          <Card className="border-border/50 shadow-2xl shadow-black/5 text-center">
+            <CardHeader className="pb-2">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <MailCheck className="h-8 w-8 text-primary" />
+              </div>
+              <CardTitle className="text-2xl">Check your email</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground text-sm">
+                We sent a confirmation link to <span className="font-semibold text-foreground">{form.email}</span>.
+                Click it to verify your account, then sign in.
+              </p>
+              <Button variant="outline" className="w-full" isLoading={resendMutation.isPending} onClick={handleResend}>
+                Resend confirmation email
+              </Button>
+              <p className="text-center text-sm text-muted-foreground">
+                Already verified? <Link href="/login" className="text-primary font-semibold hover:underline">Sign in</Link>
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4 relative overflow-hidden">
