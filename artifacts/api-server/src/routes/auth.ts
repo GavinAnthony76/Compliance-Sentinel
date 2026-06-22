@@ -13,7 +13,7 @@ const router = Router();
 const registerSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().email().transform((s) => s.trim().toLowerCase()),
   password: z.string().min(8),
   companyName: z.string().min(1),
   phone: z.string().optional(),
@@ -346,7 +346,7 @@ router.post("/forgot-password", async (req, res) => {
   const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email)).limit(1);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email.trim().toLowerCase())).limit(1);
 
   // Always return success to avoid email enumeration
   if (user && user.isActive) {
@@ -439,7 +439,7 @@ router.post("/forgot-username", async (req, res) => {
   const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email)).limit(1);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email.trim().toLowerCase())).limit(1);
 
   // Always return success to avoid account enumeration
   if (user && user.isActive) {

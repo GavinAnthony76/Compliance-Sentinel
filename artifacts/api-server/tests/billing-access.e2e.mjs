@@ -89,6 +89,15 @@ async function registerCompany(label, plan) {
       selectedPlan: plan,
     },
   });
+  // Self-serve owners register UNVERIFIED with no token; flip the verification
+  // gate in the test DB (mirrors clicking the emailed link), then log in.
+  if (reg.status === 201) {
+    const { markOwnerVerified } = await import("./verify-owner.mjs");
+    await markOwnerVerified(ownerEmail);
+    const ownerLogin = await req("POST", "/auth/login", { body: { identifier: ownerEmail, password: PASSWORD } });
+    reg.status = ownerLogin.status === 200 ? 201 : ownerLogin.status;
+    reg.json = ownerLogin.json;
+  }
   if (reg.status !== 201 || !reg.json?.token) {
     console.error(`Setup failed: could not register company ${label}`, reg.status, reg.json);
     process.exit(1);
@@ -106,7 +115,7 @@ async function createStaff(ownerToken, label) {
     console.error(`Setup failed: could not create staff for ${label}`, created.status, created.json);
     process.exit(1);
   }
-  const login = await req("POST", "/auth/login", { body: { email, password: PASSWORD } });
+  const login = await req("POST", "/auth/login", { body: { identifier: email, password: PASSWORD } });
   if (login.status !== 200 || !login.json?.token) {
     console.error(`Setup failed: could not log in staff for ${label}`, login.status, login.json);
     process.exit(1);

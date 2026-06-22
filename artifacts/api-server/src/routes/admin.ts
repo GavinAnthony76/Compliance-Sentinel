@@ -431,7 +431,7 @@ const createCompanySchema = z.object({
   plan: z.enum(["starter", "growth", "pro"]).default("starter"),
   ownerFirstName: z.string().min(1),
   ownerLastName: z.string().min(1),
-  ownerEmail: z.string().email(),
+  ownerEmail: z.string().email().transform((s) => s.trim().toLowerCase()),
   ownerPassword: z.string().min(8),
 });
 
@@ -465,7 +465,7 @@ router.post("/companies", async (req: any, res) => {
 const addCompanyUserSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().email().transform((s) => s.trim().toLowerCase()),
   password: z.string().min(8),
   role: z.enum(["admin", "staff"]).default("staff"),
 });
