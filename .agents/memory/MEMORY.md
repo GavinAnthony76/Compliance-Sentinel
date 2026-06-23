@@ -32,3 +32,4 @@
 - [Company notification recipient](company-notification-recipient.md) — never gate company-directed emails on company.email alone (often null); route through resolveCompanyNotificationEmail (owner-email fallback).
 - [Email case normalization](email-case-normalization.md) — login looks up email lowercased; every user-email write/lookup must lowercase too or accounts become un-loginable (401 despite existing).
 - [Portal forgot-password gating](portal-forgot-password-gating.md) — never gate access-recovery emails on portalPasswordHash; magic-link-only customers have none, so forgot-password silently sent nothing. Email anyone with an email.
+- [PWA precache size limit](pwa-precache-size-limit.md) — lawn-saas build aborts if any png/webp/jpg in public/ exceeds workbox's 2MiB precache limit; keep large/unused images out of public/.
