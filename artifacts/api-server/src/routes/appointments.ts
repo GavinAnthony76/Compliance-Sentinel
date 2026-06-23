@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db, appointmentsTable, customersTable, servicesTable, usersTable, companiesTable, jobTrackingEventsTable } from "@workspace/db";
-import { eq, and, gte, lte, sql, desc, asc, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, asc, inArray, gt } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
@@ -224,6 +224,42 @@ function fmtAppt(a: any, customerName?: string, serviceName?: string, assignedUs
     assignedUserName: assignedUserName ?? null,
   };
 }
+
+// GET /appointments/unread-count — number of NEW customer-initiated bookings
+// (origin = "portal_request") created since this user last opened the
+// Appointments page. Drives the "new appointment" dot on the sidebar nav item.
+router.get("/unread-count", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const [user] = await db
+    .select({ appointmentsSeenAt: usersTable.appointmentsSeenAt })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  const seenAt = user?.appointmentsSeenAt ?? null;
+
+  const conditions: any[] = [
+    eq(appointmentsTable.companyId, companyId),
+    eq(appointmentsTable.origin, "portal_request"),
+  ];
+  if (seenAt) conditions.push(gt(appointmentsTable.createdAt, seenAt));
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(appointmentsTable)
+    .where(and(...conditions));
+  return res.json({ unread: Number(row.count) });
+});
+
+// POST /appointments/mark-seen — mark the Appointments list as seen for the
+// current user, clearing the "new appointment" indicator.
+router.post("/mark-seen", async (req: any, res) => {
+  const { userId } = req.user;
+  await db
+    .update(usersTable)
+    .set({ appointmentsSeenAt: new Date(), updatedAt: new Date() })
+    .where(eq(usersTable.id, userId));
+  return res.json({ success: true, seenAt: new Date() });
+});
 
 router.get("/", async (req: any, res) => {
   const { companyId, userId, role } = req.user;

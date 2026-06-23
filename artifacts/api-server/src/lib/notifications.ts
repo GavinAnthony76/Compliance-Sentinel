@@ -65,6 +65,17 @@ export function resolveBaseUrl(): string {
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
+  // Automated tests must NEVER hit the real Resend API. The e2e suites register
+  // throwaway "@example.com" accounts; sending to those addresses produces
+  // thousands of bounced / "delivery delayed" messages that destroy the
+  // domain's sending reputation (see the Resend dashboard spike). Short-circuit
+  // to a logged no-op that still reports success, so delivery-gated endpoints
+  // (e.g. manual invoice send) behave normally under test.
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ mock: true, to: payload.to, subject: payload.subject }, "[TEST EMAIL] suppressed (not sent to Resend)");
+    return { delivered: true };
+  }
+
   const creds = await resolveEmailCredentials();
   if (!creds) {
     const msg =
@@ -108,6 +119,12 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
 }
 
 export async function sendSMS(payload: SMSPayload): Promise<void> {
+  // Same rationale as sendEmail: never hit Twilio from automated tests, or the
+  // e2e suites would send real (and failing) texts to fake numbers.
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ mock: true, to: payload.to }, "[TEST SMS] suppressed (not sent to Twilio)");
+    return;
+  }
   if (isSMSMockMode()) {
     logger.info({ mock: true, to: payload.to }, "[MOCK SMS] Would send SMS");
     return;

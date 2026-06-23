@@ -26,6 +26,7 @@
 - [Platform settings singleton](platform-settings-singleton.md) — admin-configurable settings live in a one-row platform_settings table (id=1, lazily created); stale-admin lockout days/sweep-enabled read from it.
 - [Portal appointment origin gating](portal-appointment-origin.md) — appointments.origin (default 'company'); customers may cancel only their own 'portal_request' visits; enforce in API (403) AND UI.
 - [Email delivery gating](email-delivery-gating.md) — sendEmail/sendInvoiceEmail return {delivered,reason}; never mark an invoice "sent" unless delivered===true (manual send 502s on failure).
+- [Tests must never hit real Resend/Twilio](test-sends-real-resend-twilio.md) — sendEmail/sendSMS must short-circuit on NODE_ENV==="test"; workspace has LIVE creds so mock-mode checks don't fire in CI; bounce flood wrecks domain reputation.
 - [Company notification recipient](company-notification-recipient.md) — never gate company-directed emails on company.email alone (often null); route through resolveCompanyNotificationEmail (owner-email fallback).
 - [Email case normalization](email-case-normalization.md) — login looks up email lowercased; every user-email write/lookup must lowercase too or accounts become un-loginable (401 despite existing).
 - [Portal forgot-password gating](portal-forgot-password-gating.md) — never gate access-recovery emails on portalPasswordHash; magic-link-only customers have none, so forgot-password silently sent nothing. Email anyone with an email.

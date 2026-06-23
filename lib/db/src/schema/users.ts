@@ -22,6 +22,7 @@ export const usersTable = pgTable("users", {
   emailVerificationExpiresAt: timestamp("email_verification_expires_at"),
   lastLoginAt: timestamp("last_login_at"),
   activitySeenAt: timestamp("activity_seen_at"),
+  appointmentsSeenAt: timestamp("appointments_seen_at"),
   passwordResetToken: text("password_reset_token"),
   passwordResetExpiresAt: timestamp("password_reset_expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

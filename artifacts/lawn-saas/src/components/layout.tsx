@@ -65,6 +65,30 @@ function useActivityUnread() {
   return { unread, setUnread };
 }
 
+function useAppointmentsUnread() {
+  const [unread, setUnread] = React.useState(0);
+
+  const loadCount = React.useCallback(() => {
+    fetch('/api/appointments/unread-count')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d && typeof d.unread === 'number') setUnread(d.unread); })
+      .catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    loadCount();
+    const id = setInterval(loadCount, 60000);
+    return () => clearInterval(id);
+  }, [loadCount]);
+
+  const markSeen = React.useCallback(() => {
+    setUnread(0);
+    fetch('/api/appointments/mark-seen', { method: 'POST' }).catch(() => {});
+  }, []);
+
+  return { unread, markSeen };
+}
+
 function ActivityBell({ unread, onSeen }: { unread: number; onSeen: () => void }) {
   const [open, setOpen] = React.useState(false);
   const [logs, setLogs] = React.useState<ActivityLog[]>([]);
@@ -157,9 +181,10 @@ interface NavItemProps {
   isActive: boolean;
   requiredPlan?: 'growth' | 'pro' | null;
   currentPlan?: string | null;
+  badge?: number;
 }
 
-function NavItem({ href, icon: Icon, label, isActive, requiredPlan, currentPlan }: NavItemProps) {
+function NavItem({ href, icon: Icon, label, isActive, requiredPlan, currentPlan, badge }: NavItemProps) {
   const locked = requiredPlan && !planHasFeature(currentPlan, requiredPlan);
   const badgeColors = requiredPlan === 'pro'
     ? 'bg-violet-100 text-violet-700'
@@ -177,6 +202,12 @@ function NavItem({ href, icon: Icon, label, isActive, requiredPlan, currentPlan 
     >
       <Icon className={cn("w-5 h-5 shrink-0", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")} />
       <span className="flex-1 truncate">{label}</span>
+      {!locked && badge != null && badge > 0 && (
+        <span className="relative flex items-center justify-center min-w-[18px] h-[18px] px-1 shrink-0 text-[10px] font-bold text-white bg-destructive rounded-full">
+          <span className="absolute inset-0 rounded-full bg-destructive animate-ping opacity-60" />
+          <span className="relative">{badge > 99 ? '99+' : badge}</span>
+        </span>
+      )}
       {locked && requiredPlan && (
         <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 capitalize", badgeColors)}>
           {requiredPlan === 'pro' ? 'Pro' : 'Growth'}
@@ -197,6 +228,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const role = (user as any)?.role as string | undefined;
   const isManager = role === 'owner' || role === 'admin';
   const { unread, setUnread } = useActivityUnread();
+  const { unread: apptUnread, markSeen: markApptSeen } = useAppointmentsUnread();
+
+  React.useEffect(() => {
+    if (location.startsWith('/appointments') && apptUnread > 0) {
+      markApptSeen();
+    }
+  }, [location, apptUnread, markApptSeen]);
 
   const displayName =
     [(user as any)?.firstName, (user as any)?.lastName].filter(Boolean).join(' ') ||
@@ -287,6 +325,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {...item}
               isActive={location.startsWith(item.href)}
               currentPlan={plan}
+              badge={item.href === '/appointments' ? apptUnread : undefined}
             />
           ))}
         </div>
