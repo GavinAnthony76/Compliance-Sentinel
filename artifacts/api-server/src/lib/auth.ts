@@ -84,7 +84,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     .where(eq(usersTable.id, payload.userId))
     .limit(1)
     .then(([row]) => {
-      if (row?.passwordChangedAt && row.passwordChangedAt.getTime() > tokenIssuedAt) {
+      // JWT `iat` is floored to whole seconds, while `passwordChangedAt` carries
+      // millisecond precision. Allow a 1s tolerance so a token minted in the same
+      // second as a password change isn't wrongly rejected as "session expired".
+      if (row?.passwordChangedAt && row.passwordChangedAt.getTime() > tokenIssuedAt + 1000) {
         res.status(401).json({ error: "Unauthorized", message: "Session expired. Please sign in again." });
         return;
       }

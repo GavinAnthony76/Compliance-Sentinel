@@ -26,6 +26,8 @@
 - [Platform settings singleton](platform-settings-singleton.md) — admin-configurable settings live in a one-row platform_settings table (id=1, lazily created); stale-admin lockout days/sweep-enabled read from it.
 - [Portal appointment origin gating](portal-appointment-origin.md) — appointments.origin (default 'company'); customers may cancel only their own 'portal_request' visits; enforce in API (403) AND UI.
 - [Email delivery gating](email-delivery-gating.md) — sendEmail/sendInvoiceEmail return {delivered,reason}; never mark an invoice "sent" unless delivered===true (manual send 502s on failure).
+- [Drizzle constraint-add prompt](drizzle-constraint-add-prompt.md) — adding UNIQUE/NOT-NULL to a populated table hangs `push` even with --force; pre-apply via psql to NEON + local test DB so push sees no diff.
+- [Invoice number allocation](invoice-number-allocation.md) — `MAX(...) FOR UPDATE` is invalid (aggregate); generate via plain MAX+1 + UNIQUE(company_id,invoice_number) + 23505 retry loop in lib/invoice-number.ts.
 - [Tests must never hit real Resend/Twilio](test-sends-real-resend-twilio.md) — sendEmail/sendSMS must short-circuit on NODE_ENV==="test"; workspace has LIVE creds so mock-mode checks don't fire in CI; bounce flood wrecks domain reputation.
 - [Company notification recipient](company-notification-recipient.md) — never gate company-directed emails on company.email alone (often null); route through resolveCompanyNotificationEmail (owner-email fallback).
 - [Email case normalization](email-case-normalization.md) — login looks up email lowercased; every user-email write/lookup must lowercase too or accounts become un-loginable (401 despite existing).

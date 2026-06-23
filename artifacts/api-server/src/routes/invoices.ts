@@ -10,6 +10,7 @@ import { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from ".
 import { dispatchInvoiceEmail } from "../lib/invoice-email";
 import { logger } from "../lib/logger";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
+import { insertInvoiceWithNumber } from "../lib/invoice-number";
 
 const router = Router();
 router.use(requireAuth);
@@ -37,21 +38,6 @@ function fmtLineItem(li: any) {
   };
 }
 
-async function nextInvoiceNumber(companyId: number): Promise<string> {
-  // Use MAX + advisory lock so concurrent inserts can't read the same count.
-  // pg_try_advisory_xact_lock(hashtext) releases automatically at transaction end.
-  // We fall back to count(*) if the lock is momentarily contested (extremely rare
-  // for a single-tenant sequence; the advisory lock virtually eliminates the race).
-  const [result] = await db.execute(
-    sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(invoice_number, '[^0-9]', '', 'g') AS INTEGER)), 0) + 1 AS next_num
-        FROM invoices
-        WHERE company_id = ${companyId}
-        FOR UPDATE`
-  ) as any;
-  const rows = Array.isArray(result) ? result : (result?.rows ?? [result]);
-  const num = Number(rows[0]?.next_num ?? 1);
-  return `INV-${String(num).padStart(4, "0")}`;
-}
 
 async function upsertLineItems(invoiceId: number, lineItems: any[]) {
   await db.delete(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, invoiceId));
@@ -180,24 +166,21 @@ router.post("/", requireWithinPlanLimit("invoices"), async (req: any, res) => {
     total = calc.total;
   }
 
-  const invoiceNumber = await nextInvoiceNumber(companyId);
   // A "sent" status must reflect a real email send. Persist as "draft" first and
   // only promote to "sent" once the invoice email is actually delivered, so an
   // invoice can never surface as sent when no email ever went out.
   const requestedStatus = req.body.status ?? "draft";
   const initialStatus = requestedStatus === "sent" ? "draft" : requestedStatus;
-  const [inv] = await db.insert(invoicesTable).values({
-    companyId,
+  const inv = await insertInvoiceWithNumber(companyId, {
     customerId: req.body.customerId,
     appointmentId: req.body.appointmentId ?? null,
-    invoiceNumber,
     subtotal: String(subtotal),
     tax: String(tax),
     total: String(total),
     status: initialStatus,
     dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
     notes: req.body.notes ?? null,
-  }).returning();
+  });
 
   if (lineItems.length > 0) {
     await upsertLineItems(inv.id, lineItems);
