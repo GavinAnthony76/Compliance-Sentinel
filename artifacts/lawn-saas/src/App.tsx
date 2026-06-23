@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider, QueryCache } from "@tanstack/react-qu
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuthState, TOKEN_KEY, ADMIN_TOKEN_KEY } from "@/hooks/use-auth-state";
+import { OfflineBanner } from "@/components/offline-banner";
+import { PWAInstallPrompt } from "@/components/pwa-install-prompt";
 import { Suspense, lazy, useEffect } from "react";
 
 const NOINDEX_PATTERNS: RegExp[] = [
@@ -325,10 +327,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <OfflineBanner />
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Router />
         </WouterRouter>
         <Toaster />
+        <PWAInstallPrompt />
       </TooltipProvider>
     </QueryClientProvider>
   );

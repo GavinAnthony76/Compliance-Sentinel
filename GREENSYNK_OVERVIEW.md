@@ -262,7 +262,7 @@ Invite, update, and remove staff users, and manage their roles.
 Business performance analytics aggregated from operational data (revenue, jobs, customers, etc.). Pro unlocks advanced analytics.
 
 ### Settings (`/settings`)
-Company profile and **branding** (used on the public booking page and customer communications).
+Company profile and **branding** (used on the public booking page and customer communications). Tabs: Business Info, Branding, Payments, and **App & Notifications** (PWA install prompt + push notification placeholder).
 
 ### Billing (`/billing`)
 Self-service subscription management powered by Stripe — view current plan/status, see available plans, subscribe/upgrade, and open the Stripe customer portal.
@@ -567,7 +567,7 @@ The following are not bugs — they are missing features relative to what compet
 
 | Gap | Competitors that have it | Priority |
 |-----|--------------------------|----------|
-| **Native mobile app (iOS/Android)** | Jobber, HCP, ServiceTitan | High — field crews operate on phones; a mobile-responsive web app is a daily friction point |
+| **Native mobile app (iOS/Android)** | Jobber, HCP, ServiceTitan | Medium — ✅ PWA now installable on iOS/Android/desktop (June 2026); native app (Expo/React Native) remains longer-term goal |
 | **QuickBooks / Xero integration** | Jobber, HCP, ServiceTitan | High — the #1 integration request from any service business owner |
 | **Job photos attached to invoices/work orders** | Jobber, HCP | Medium — before/after photos currently exist but are not surfaced on customer-facing documents |
 | **Time tracking / clock-in/out** | Jobber, ServiceTitan | Medium — staff time on jobs is not tracked; required for payroll and labor cost reporting |
@@ -630,24 +630,42 @@ The following are not bugs — they are missing features relative to what compet
 
 ## 17. Future Iterations
 
-### PWA — Installable Web App (Tabled — Future Iteration)
+### PWA — Installable Web App ✅ Implemented (June 2026)
 
-GreenSynk is currently a standard React SPA. It is **not** a Progressive Web App and cannot be installed on a user's device. This is a known gap vs. Jobber and Housecall Pro, which offer native mobile apps.
+GreenSynk is now a **Progressive Web App** — installable on Android, iOS, and desktop. Field technicians and business owners can add it to their home screen for a native-app-like experience.
 
-**When this is prioritized, the implementation plan is:**
+**What was implemented:**
 
-1. Install `vite-plugin-pwa` (`pnpm --filter @workspace/lawn-saas add -D vite-plugin-pwa`)
-2. Add `VitePWA()` to `artifacts/lawn-saas/vite.config.ts` with a manifest pointing `start_url` to `/dashboard`
-3. Generate 192×192 and 512×512 maskable icon variants from the existing `logo-icon.png`
-4. Scope the Workbox service worker to cache static assets only — never authenticated API responses
+- `vite-plugin-pwa ^1.0.0` + `workbox-window ^7.4.0` added to `artifacts/lawn-saas`
+- `VitePWA()` configured in `vite.config.ts` with `generateSW` strategy
+- Web app manifest: `name: GreenSynk`, `start_url: /dashboard`, `theme_color: #059669`, `display: standalone`
+- SVG icons: 192×192, 512×512, and maskable variants (full-bleed emerald background) in `public/`
+- Apple PWA meta tags added to `index.html` (`apple-mobile-web-app-capable`, `apple-touch-icon`, `theme-color`)
 
-**What users would gain:**
-- **Android:** Install prompt, standalone launch, home screen icon, splash screen
-- **iOS:** "Add to Home Screen" via Safari share sheet, standalone mode (no browser chrome)
-- **Desktop (Chrome/Edge):** Address bar install button, launches as its own window
+**Caching strategy (security-first):**
+- Static assets (JS/CSS/fonts/images): `CacheFirst` via Workbox glob patterns
+- `/api/*`, `/admin/*`, `/portal/*`, `/dashboard/*`, and all authenticated routes: `NetworkOnly` — **never cached**
+- `navigateFallback: null` — no cached HTML fallback for any authenticated page
+- Google Fonts: `StaleWhileRevalidate` (stylesheet) + `CacheFirst` (font files, 1-year TTL)
 
-**Constraints to keep in mind:**
-- iOS does not auto-prompt for installation — users must use the Safari share sheet manually
-- The service worker must not cache `/api/*` routes or portal/dashboard routes
-- `start_url: "/dashboard"` ensures installed users land on the app, not the marketing page
-- A native iOS/Android app (Expo/React Native) remains the longer-term goal for field crews; the PWA is a stepping stone that closes the gap at low cost
+**New components:**
+- `src/hooks/use-pwa.ts` — `usePWAInstall()` (install prompt + iOS detection) and `useOfflineStatus()` hooks
+- `src/components/offline-banner.tsx` — amber banner displayed when network is unavailable
+- `src/components/pwa-install-prompt.tsx` — bottom-sheet install prompt on Chrome/Android; iOS share-sheet instructions on Safari
+
+**Settings → App & Notifications tab (new):**
+- Shows install prompt / installed status / iOS instructions
+- Push notification placeholder (Firebase Cloud Messaging — coming soon)
+- Required future env vars documented: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_VAPID_KEY`
+
+**Tech page (`/tech`) improvements:**
+- Service address displayed on each job card with **Open in Maps** link (Google Maps)
+- **Tap-to-call** link for customer phone number
+- `CompletionModal` replaces `window.prompt` for completion notes — proper textarea modal
+- Offline indicator banner specific to the technician view
+
+**Remaining limitations:**
+- Icons are SVG — most modern browsers support SVG PWA icons; if Lighthouse flags it, convert to PNG with `sharp`
+- iOS does not auto-prompt for installation — users must use Safari share sheet manually
+- Push notifications not yet wired — requires Firebase project setup
+- A native iOS/Android app (Expo/React Native) remains the longer-term goal for field crews; this PWA closes the gap at low cost

@@ -1,0 +1,8 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- maskable: safe zone is center 80% (409x409 centered). Full bleed emerald background. -->
+  <rect width="512" height="512" fill="#059669"/>
+  <path d="M256 104C256 104 164 178 164 276C164 330 203 374 256 374C309 374 348 330 348 276C348 178 256 104 256 104Z" fill="white"/>
+  <path d="M256 196V374" stroke="#059669" stroke-width="22" stroke-linecap="round"/>
+  <path d="M256 252C256 252 202 228 172 196" stroke="#059669" stroke-width="16" stroke-linecap="round"/>
+  <path d="M256 300C256 300 310 276 340 244" stroke="#059669" stroke-width="16" stroke-linecap="round"/>
+</svg>

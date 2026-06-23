@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useGetSettings, useUpdateSettings } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, CardContent, Button, Input } from '@/components/ui';
-import { Settings, Globe, Palette, CreditCard, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { Settings, Globe, Palette, CreditCard, CheckCircle, AlertCircle, ExternalLink, Bell, Download, Share } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetSettingsQueryKey } from '@workspace/api-client-react';
 import { useLocation } from 'wouter';
 import { useAuthState } from '@/hooks/use-auth-state';
+import { usePWAInstall } from '@/hooks/use-pwa';
 
 const PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash' },
@@ -49,7 +50,8 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const updateMut = useUpdateSettings();
   const [, setLocation] = useLocation();
-  const [tab, setTab] = useState<'business' | 'branding' | 'payments'>('business');
+  const [tab, setTab] = useState<'business' | 'branding' | 'payments' | 'notifications'>('business');
+  const { canInstall, isInstalled, isIOS, promptInstall } = usePWAInstall();
   const { user } = useAuthState();
   const plan = user?.company?.subscriptionPlan;
   const hasBranding = plan === 'growth' || plan === 'pro';
@@ -232,6 +234,7 @@ export function SettingsPage() {
           ['business', 'Business Info', Settings],
           ['branding', 'Branding', Palette],
           ['payments', 'Payments', CreditCard],
+          ['notifications', 'App & Notifications', Bell],
         ] as const).map(([id, label, Icon]) => (
           <button key={id} onClick={() => setTab(id as any)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === id ? 'bg-primary text-primary-foreground shadow-md' : 'bg-card border border-border hover:border-primary/50 text-muted-foreground'}`}>
@@ -337,7 +340,7 @@ export function SettingsPage() {
             )}
           </CardContent>
         </Card>
-      ) : (
+      ) : tab === 'payments' ? (
         <Card className="border-border/50">
           <CardContent className="p-6 space-y-8 max-w-2xl">
 
@@ -450,6 +453,73 @@ export function SettingsPage() {
             </form>
           </CardContent>
         </Card>
+      ) : (
+        /* ── Notifications & App tab ─────────────────────── */
+        <div className="space-y-6 max-w-2xl">
+
+          {/* Install GreenSynk PWA */}
+          <Card className="border-border/50">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-base font-semibold flex items-center gap-2">
+                <Download className="w-4 h-4" /> Install GreenSynk App
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Install GreenSynk on your device for faster access, especially useful for field technicians.
+              </p>
+
+              {isInstalled ? (
+                <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
+                  <CheckCircle className="w-4 h-4" /> GreenSynk is installed on this device
+                </div>
+              ) : isIOS ? (
+                <div className="rounded-xl border border-dashed p-4 space-y-2">
+                  <p className="text-sm font-medium">Add to Home Screen on iPhone/iPad</p>
+                  <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                    <li>Tap the <Share className="w-3.5 h-3.5 inline mx-0.5" /> <strong>Share</strong> button in Safari</li>
+                    <li>Scroll down and tap <strong>"Add to Home Screen"</strong></li>
+                    <li>Tap <strong>Add</strong> to confirm</li>
+                  </ol>
+                </div>
+              ) : canInstall ? (
+                <Button onClick={promptInstall} className="flex items-center gap-2">
+                  <Download className="w-4 h-4" /> Install GreenSynk
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  To install, open GreenSynk in Chrome on Android or Edge on desktop, then look for the install option in your browser menu.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Push Notifications — coming soon */}
+          <Card className="border-border/50">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-base font-semibold flex items-center gap-2">
+                <Bell className="w-4 h-4" /> Push Notifications
+                <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 ml-1">Coming Soon</span>
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Get notified about new appointments, job updates, and customer messages — even when the app is closed.
+              </p>
+              <div className="rounded-xl border border-dashed p-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Push notifications will be enabled in a future update. When available, you'll be able to:
+                </p>
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>Receive alerts for new bookings and appointment changes</li>
+                  <li>Get reminders before scheduled jobs</li>
+                  <li>Be notified when customers pay or send messages</li>
+                </ul>
+                <p className="text-xs text-muted-foreground pt-1">
+                  Required configuration: Firebase Cloud Messaging (FCM) with VAPID keys.
+                  Contact your account administrator to enable this feature.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+        </div>
       )}
     </AppLayout>
   );

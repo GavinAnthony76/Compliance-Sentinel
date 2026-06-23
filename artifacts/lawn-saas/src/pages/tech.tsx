@@ -3,9 +3,11 @@ import { useAuthState } from '@/hooks/use-auth-state';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui';
+import { useOfflineStatus } from '@/hooks/use-pwa';
 import {
   MapPin, Clock, CheckCircle2, Play, LogIn, RefreshCw, LogOut,
   Loader2, Navigation, User as UserIcon, Camera, ImageIcon, Trash2,
+  Phone, ExternalLink, WifiOff, FileText,
 } from 'lucide-react';
 
 const TOKEN = () => localStorage.getItem('greensync_token');
@@ -29,7 +31,12 @@ interface Appt {
   id: number;
   customerId: number;
   customerName?: string | null;
+  customerPhone?: string | null;
   serviceName?: string | null;
+  serviceAddress?: string | null;
+  serviceCity?: string | null;
+  serviceState?: string | null;
+  serviceZip?: string | null;
   status: string;
   scheduledStart: string;
   notes?: string | null;
@@ -218,13 +225,51 @@ function PhotoSection({ appointmentId }: { appointmentId: number }) {
   );
 }
 
-function JobCard({ appt, onAction, busy }: { appt: Appt; onAction: (a: Appt, action: 'check-in' | 'start' | 'complete') => void; busy: boolean }) {
+function CompletionModal({ onConfirm, onCancel }: { onConfirm: (notes: string) => void; onCancel: () => void }) {
+  const [notes, setNotes] = useState('');
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={onCancel}>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-emerald-600" /> Complete Job
+        </h2>
+        <textarea
+          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm min-h-[100px] resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          placeholder="Completion notes (optional) — what was done, any issues, follow-up needed…"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          autoFocus
+        />
+        <div className="flex gap-2">
+          <Button className="flex-1" onClick={() => onConfirm(notes)}>Mark Complete</Button>
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function JobCard({ appt, onAction, busy }: { appt: Appt; onAction: (a: Appt, action: 'check-in' | 'start' | 'complete', notes?: string) => void; busy: boolean }) {
   const done = appt.status === 'completed';
   const started = !!appt.actualStartedAt;
   const checkedIn = !!appt.checkedInByUserId;
+  const [showComplete, setShowComplete] = useState(false);
+
+  const addressParts = [appt.serviceAddress, appt.serviceCity, appt.serviceState, appt.serviceZip].filter(Boolean);
+  const fullAddress = addressParts.join(', ');
+  const mapsUrl = fullAddress
+    ? `https://maps.google.com/?q=${encodeURIComponent(fullAddress)}`
+    : null;
 
   return (
     <div className={`rounded-2xl border p-4 shadow-sm ${done ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-gray-200'}`}>
+      {showComplete && (
+        <CompletionModal
+          onConfirm={(notes) => { setShowComplete(false); onAction(appt, 'complete', notes); }}
+          onCancel={() => setShowComplete(false)}
+        />
+      )}
+
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-gray-900 flex items-center gap-1.5">
@@ -237,6 +282,37 @@ function JobCard({ appt, onAction, busy }: { appt: Appt; onAction: (a: Appt, act
           <Clock className="w-4 h-4" /> {timeStr(appt.scheduledStart)}
         </div>
       </div>
+
+      {/* Address + quick actions */}
+      {fullAddress && (
+        <div className="mt-2 flex items-start gap-2">
+          <MapPin className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-gray-600 truncate">{fullAddress}</p>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {mapsUrl && (
+                <a href={mapsUrl} target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-emerald-700 font-medium hover:underline">
+                  <ExternalLink className="w-3 h-3" /> Open in Maps
+                </a>
+              )}
+              {appt.customerPhone && (
+                <a href={`tel:${appt.customerPhone}`}
+                  className="inline-flex items-center gap-1 text-xs text-sky-700 font-medium hover:underline">
+                  <Phone className="w-3 h-3" /> {appt.customerPhone}
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!fullAddress && appt.customerPhone && (
+        <a href={`tel:${appt.customerPhone}`}
+          className="mt-2 inline-flex items-center gap-1 text-sm text-sky-700 font-medium hover:underline">
+          <Phone className="w-4 h-4" /> {appt.customerPhone}
+        </a>
+      )}
 
       {appt.notes && <p className="text-sm text-gray-600 mt-2 bg-gray-50 rounded-lg p-2">{appt.notes}</p>}
 
@@ -254,7 +330,7 @@ function JobCard({ appt, onAction, busy }: { appt: Appt; onAction: (a: Appt, act
           <Button variant="outline" size="sm" disabled={busy || started} onClick={() => onAction(appt, 'start')} className="gap-1.5">
             <Play className="w-4 h-4" /> Start
           </Button>
-          <Button size="sm" disabled={busy} onClick={() => onAction(appt, 'complete')} className="gap-1.5">
+          <Button size="sm" disabled={busy} onClick={() => setShowComplete(true)} className="gap-1.5">
             <CheckCircle2 className="w-4 h-4" /> Done
           </Button>
         </div>
@@ -278,6 +354,7 @@ export function TechPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const isOffline = useOfflineStatus();
 
   const load = useCallback(async () => {
     if (!user?.id) return;
@@ -307,15 +384,12 @@ export function TechPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const action = async (appt: Appt, kind: 'check-in' | 'start' | 'complete') => {
+  const action = async (appt: Appt, kind: 'check-in' | 'start' | 'complete', completionNotes?: string) => {
     setBusyId(appt.id);
     try {
       const pos = await getPosition();
-      let body: any = pos ?? {};
-      if (kind === 'complete') {
-        const note = window.prompt('Completion notes (optional):') ?? '';
-        body = { ...body, completionNotes: note || null };
-      }
+      const body: any = { ...(pos ?? {}) };
+      if (kind === 'complete') body.completionNotes = completionNotes || null;
       await api(`/appointments/${appt.id}/${kind}`, { method: 'POST', body: JSON.stringify(body) });
       toast({
         title: kind === 'check-in' ? 'Checked in' : kind === 'start' ? 'Job started' : 'Job completed',
@@ -333,6 +407,12 @@ export function TechPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {isOffline && (
+        <div className="flex items-center justify-center gap-2 bg-amber-500 text-white text-sm font-medium py-2 px-4">
+          <WifiOff className="w-4 h-4 shrink-0" />
+          <span>You're offline. Job updates will fail until you reconnect.</span>
+        </div>
+      )}
       <header className="sticky top-0 z-20 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <Logo className="h-7" />
         <div className="flex items-center gap-2">
