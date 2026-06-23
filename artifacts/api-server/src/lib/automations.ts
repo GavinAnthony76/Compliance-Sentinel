@@ -1,8 +1,9 @@
 import { db, automationRulesTable, reviewRequestsTable, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable, appointmentsTable, servicesTable } from "@workspace/db";
-import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { sendReviewRequestNotification, sendEmail, sendSMS } from "./notifications";
 import { dispatchInvoiceEmail } from "./invoice-email";
 import { logActivity } from "./activity";
+import { insertInvoiceWithNumber } from "./invoice-number";
 
 export interface AutomationContext {
   customerId: number;
@@ -198,29 +199,21 @@ async function executeAction(
         }
       }
 
-      const [seqResult] = await db
-        .update(companiesTable)
-        .set({ nextInvoiceSeq: sql`GREATEST(next_invoice_seq + 1, (SELECT COUNT(*) + 1 FROM invoices WHERE company_id = ${companyId}))` })
-        .where(eq(companiesTable.id, companyId))
-        .returning({ seq: companiesTable.nextInvoiceSeq });
-      const invoiceNum = `INV-${String(seqResult!.seq!).padStart(4, "0")}`;
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 14);
 
       // Create as "draft" first; only promote to "sent" once the branded
       // invoice email has actually been dispatched, so status reflects reality.
-      const [newInv] = await db.insert(invoicesTable).values({
-        companyId,
+      const newInv = await insertInvoiceWithNumber(companyId, {
         customerId,
         appointmentId,
-        invoiceNumber: invoiceNum,
         subtotal: String(price),
         tax: "0",
         total: String(price),
         status: "draft",
         dueDate,
         notes: `Auto-generated for appointment #${appointmentId}`,
-      }).returning();
+      });
 
       // Insert line item with service name
       await db.insert(invoiceLineItemsTable).values({

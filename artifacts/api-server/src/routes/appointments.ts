@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db, appointmentsTable, customersTable, servicesTable, usersTable, companiesTable, jobTrackingEventsTable } from "@workspace/db";
-import { eq, and, gte, lte, sql, desc, asc, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, sql, desc, asc, inArray, gt } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
-import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail } from "../lib/notifications";
+import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail, sendAppointmentRescheduledEmail } from "../lib/notifications";
 import { fireAutomations } from "../lib/automations";
 
 // ─── GPS job-tracking helpers ────────────────────────────────────────────────
@@ -164,6 +164,53 @@ async function sendAppointmentStatusNotification(appt: any, companyId: number, s
   }
 }
 
+// Notify the customer when their appointment is rescheduled to a new time
+// (no status change). Email + SMS where enabled.
+async function sendAppointmentRescheduleNotification(appt: any, companyId: number) {
+  try {
+    const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, appt.customerId)).limit(1);
+    if (!customer) return;
+    const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+    const [service] = appt.serviceId ? await db.select().from(servicesTable).where(eq(servicesTable.id, appt.serviceId)).limit(1) : [null];
+
+    const when = appt.scheduledStart ? new Date(appt.scheduledStart) : null;
+    if (!when) return;
+    const dateStr = when.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    const timeStr = when.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const companyName = company?.name || 'Your service provider';
+    const serviceName = service?.name || 'lawn care service';
+
+    const smsAllowed = hasFeature(company?.subscriptionPlan, "sms_notifications");
+    if (customer.phone && smsAllowed) {
+      await sendSMS({ to: customer.phone, body: `${companyName}: your ${serviceName} appointment has been rescheduled to ${dateStr} at ${timeStr}. Reply STOP to opt out.` });
+    }
+    if (customer.email) {
+      await sendAppointmentRescheduledEmail({
+        to: customer.email,
+        customerName: customer.firstName,
+        scheduledStart: when,
+        serviceName,
+        companyName,
+        companyEmail: company?.email || undefined,
+        logoUrl: company?.logoUrl,
+        primaryColor: company?.primaryColor,
+      });
+    }
+
+    await logCommunicationEvent({
+      companyId,
+      customerId: appt.customerId,
+      appointmentId: appt.id,
+      channel: customer.phone && smsAllowed ? "sms" : "email",
+      subject: `Appointment Rescheduled — ${serviceName}`,
+      bodyPreview: `${serviceName} rescheduled to ${dateStr} at ${timeStr}`,
+      status: "sent",
+    });
+  } catch (_err) {
+    // Non-fatal: notification failure must not block the reschedule
+  }
+}
+
 const router = Router();
 router.use(requireAuth);
 router.use(requireActiveSubscription);
@@ -177,6 +224,42 @@ function fmtAppt(a: any, customerName?: string, serviceName?: string, assignedUs
     assignedUserName: assignedUserName ?? null,
   };
 }
+
+// GET /appointments/unread-count — number of NEW customer-initiated bookings
+// (origin = "portal_request") created since this user last opened the
+// Appointments page. Drives the "new appointment" dot on the sidebar nav item.
+router.get("/unread-count", async (req: any, res) => {
+  const { companyId, userId } = req.user;
+  const [user] = await db
+    .select({ appointmentsSeenAt: usersTable.appointmentsSeenAt })
+    .from(usersTable)
+    .where(eq(usersTable.id, userId))
+    .limit(1);
+  const seenAt = user?.appointmentsSeenAt ?? null;
+
+  const conditions: any[] = [
+    eq(appointmentsTable.companyId, companyId),
+    eq(appointmentsTable.origin, "portal_request"),
+  ];
+  if (seenAt) conditions.push(gt(appointmentsTable.createdAt, seenAt));
+
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(appointmentsTable)
+    .where(and(...conditions));
+  return res.json({ unread: Number(row.count) });
+});
+
+// POST /appointments/mark-seen — mark the Appointments list as seen for the
+// current user, clearing the "new appointment" indicator.
+router.post("/mark-seen", async (req: any, res) => {
+  const { userId } = req.user;
+  await db
+    .update(usersTable)
+    .set({ appointmentsSeenAt: new Date(), updatedAt: new Date() })
+    .where(eq(usersTable.id, userId));
+  return res.json({ success: true, seenAt: new Date() });
+});
 
 router.get("/", async (req: any, res) => {
   const { companyId, userId, role } = req.user;
@@ -297,6 +380,15 @@ router.put("/:id", async (req: any, res) => {
   // If the status actually changed, notify the customer (email + SMS where enabled).
   if (updateData.status && updateData.status !== existing.status) {
     void sendAppointmentStatusNotification(updated, companyId, updateData.status);
+  } else if (
+    // Reschedule: the date/time moved but the status did NOT change. Status
+    // changes already carry their own copy (incl. the new time), so only send
+    // a dedicated "rescheduled" notice when there's no concurrent status change.
+    updateData.scheduledStart &&
+    existing.scheduledStart &&
+    new Date(updateData.scheduledStart).getTime() !== new Date(existing.scheduledStart).getTime()
+  ) {
+    void sendAppointmentRescheduleNotification(updated, companyId);
   }
   // If status changed to completed, fire appointment_completed automations
   if (updateData.status === "completed" && existing.status !== "completed") {

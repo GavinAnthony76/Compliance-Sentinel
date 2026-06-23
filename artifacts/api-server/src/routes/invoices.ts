@@ -10,6 +10,7 @@ import { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from ".
 import { dispatchInvoiceEmail } from "../lib/invoice-email";
 import { logger } from "../lib/logger";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
+import { insertInvoiceWithNumber } from "../lib/invoice-number";
 
 const router = Router();
 router.use(requireAuth);
@@ -35,17 +36,6 @@ function fmtLineItem(li: any) {
     unitPrice: Number(li.unitPrice),
     lineTotal: Number(li.lineTotal),
   };
-}
-
-async function nextInvoiceNumber(companyId: number): Promise<string> {
-  // Atomic per-company sequence — prevents duplicate invoice numbers under concurrent requests.
-  // GREATEST self-heals on first call by initialising from existing invoice count.
-  const [r] = await db
-    .update(companiesTable)
-    .set({ nextInvoiceSeq: sql`GREATEST(next_invoice_seq + 1, (SELECT COUNT(*) + 1 FROM invoices WHERE company_id = ${companyId}))` })
-    .where(eq(companiesTable.id, companyId))
-    .returning({ seq: companiesTable.nextInvoiceSeq });
-  return `INV-${String(r!.seq!).padStart(4, "0")}`;
 }
 
 async function upsertLineItems(invoiceId: number, lineItems: any[]) {
@@ -175,24 +165,21 @@ router.post("/", requireWithinPlanLimit("invoices"), async (req: any, res) => {
     total = calc.total;
   }
 
-  const invoiceNumber = await nextInvoiceNumber(companyId);
   // A "sent" status must reflect a real email send. Persist as "draft" first and
   // only promote to "sent" once the invoice email is actually delivered, so an
   // invoice can never surface as sent when no email ever went out.
   const requestedStatus = req.body.status ?? "draft";
   const initialStatus = requestedStatus === "sent" ? "draft" : requestedStatus;
-  const [inv] = await db.insert(invoicesTable).values({
-    companyId,
+  const inv = await insertInvoiceWithNumber(companyId, {
     customerId: req.body.customerId,
     appointmentId: req.body.appointmentId ?? null,
-    invoiceNumber,
     subtotal: String(subtotal),
     tax: String(tax),
     total: String(total),
     status: initialStatus,
     dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
     notes: req.body.notes ?? null,
-  }).returning();
+  });
 
   if (lineItems.length > 0) {
     await upsertLineItems(inv.id, lineItems);

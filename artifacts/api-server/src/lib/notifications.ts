@@ -1,7 +1,24 @@
-import { db, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable } from "@workspace/db";
+import { db, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "./logger";
 import { resolveEmailCredentials } from "./resend";
+
+// Resolve the address that company-directed notifications (booking requests,
+// cancellations, etc.) should go to. Companies don't always have their own
+// contact email set, so fall back to the company owner's email. Returns null
+// when neither is available, in which case the caller should skip the send.
+export async function resolveCompanyNotificationEmail(
+  companyId: number,
+  companyEmail?: string | null,
+): Promise<string | null> {
+  if (companyEmail && companyEmail.trim()) return companyEmail;
+  const [owner] = await db
+    .select({ email: usersTable.email })
+    .from(usersTable)
+    .where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "owner")))
+    .limit(1);
+  return owner?.email ?? null;
+}
 
 interface EmailPayload {
   to: string;
@@ -48,6 +65,17 @@ export function resolveBaseUrl(): string {
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
+  // Automated tests must NEVER hit the real Resend API. The e2e suites register
+  // throwaway "@example.com" accounts; sending to those addresses produces
+  // thousands of bounced / "delivery delayed" messages that destroy the
+  // domain's sending reputation (see the Resend dashboard spike). Short-circuit
+  // to a logged no-op that still reports success, so delivery-gated endpoints
+  // (e.g. manual invoice send) behave normally under test.
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ mock: true, to: payload.to, subject: payload.subject }, "[TEST EMAIL] suppressed (not sent to Resend)");
+    return { delivered: true };
+  }
+
   const creds = await resolveEmailCredentials();
   if (!creds) {
     const msg =
@@ -91,6 +119,12 @@ export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
 }
 
 export async function sendSMS(payload: SMSPayload): Promise<void> {
+  // Same rationale as sendEmail: never hit Twilio from automated tests, or the
+  // e2e suites would send real (and failing) texts to fake numbers.
+  if (process.env.NODE_ENV === "test") {
+    logger.info({ mock: true, to: payload.to }, "[TEST SMS] suppressed (not sent to Twilio)");
+    return;
+  }
   if (isSMSMockMode()) {
     logger.info({ mock: true, to: payload.to }, "[MOCK SMS] Would send SMS");
     return;
@@ -1009,6 +1043,140 @@ export async function sendWelcomeEmail(opts: {
   });
 }
 
+// Email-confirmation message sent to a new company signup. Until the user
+// clicks the verification link, login is hard-gated (see routes/auth.ts).
+export async function sendEmailVerificationEmail(opts: {
+  to: string;
+  firstName: string;
+  verifyUrl: string;
+}): Promise<EmailResult> {
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Thanks for signing up for GreenSynk! Please confirm your email address to activate your account. This link is valid for 24 hours.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: "Confirm your GreenSynk email",
+    companyName: "GreenSynk",
+    bodyHtml,
+    cta: { label: "Confirm my email", url: opts.verifyUrl },
+    footerHtml: `If you didn't create a GreenSynk account, you can safely ignore this email.<br /><br />— The GreenSynk Team`,
+  });
+
+  return sendEmail({
+    to: opts.to,
+    subject: "Confirm your GreenSynk email address",
+    body: [
+      `Hi ${opts.firstName},`,
+      ``,
+      `Thanks for signing up for GreenSynk! Please confirm your email address to activate your account.`,
+      ``,
+      `Click the link below (valid for 24 hours):`,
+      ``,
+      opts.verifyUrl,
+      ``,
+      `If you didn't create a GreenSynk account, you can safely ignore this email.`,
+      ``,
+      `— The GreenSynk Team`,
+    ].join("\n"),
+    html,
+  });
+}
+
+// Notify the company that a customer cancelled a portal-submitted booking.
+export async function sendPortalCancellationNotification(opts: {
+  companyEmail: string;
+  companyName: string;
+  customerName: string;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  serviceName?: string | null;
+  scheduledStart?: Date | null;
+}): Promise<void> {
+  const dateStr = opts.scheduledStart
+    ? new Date(opts.scheduledStart).toLocaleString("en-US", {
+        weekday: "long", year: "numeric", month: "long", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      })
+    : "an unspecified time";
+
+  await sendEmail({
+    to: opts.companyEmail,
+    subject: `Booking cancelled by ${opts.customerName}`,
+    body: [
+      `${opts.customerName} has cancelled their booking request through the customer portal.`,
+      ``,
+      `Service: ${opts.serviceName || "Not specified"}`,
+      `Was scheduled for: ${dateStr}`,
+      ``,
+      `Customer contact:`,
+      ...(opts.customerEmail ? [`  Email: ${opts.customerEmail}`] : []),
+      ...(opts.customerPhone ? [`  Phone: ${opts.customerPhone}`] : []),
+      ``,
+      `This appointment is now marked cancelled in your dashboard.`,
+    ].join("\n"),
+    replyTo: opts.customerEmail || undefined,
+  });
+}
+
+// Customer-facing notice when the company reschedules their appointment to a
+// new date/time (no status change).
+export async function sendAppointmentRescheduledEmail(opts: {
+  to: string;
+  customerName: string;
+  scheduledStart: Date;
+  serviceName?: string;
+  companyName?: string;
+  companyEmail?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): Promise<EmailResult> {
+  const dateStr = opts.scheduledStart.toLocaleDateString("en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+  const timeStr = opts.scheduledStart.toLocaleTimeString("en-US", {
+    hour: "2-digit", minute: "2-digit",
+  });
+  const serviceName = opts.serviceName || "Lawn Care";
+  const companyName = opts.companyName || "Your Service Provider";
+
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.customerName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Your appointment with ${escapeHtml(companyName)} has been rescheduled. Here are the new details:</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Service:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(serviceName)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">New date:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(dateStr)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">New time:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(timeStr)}</td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>`;
+  const html = buildBrandedEmailHtml({
+    title: `Appointment Rescheduled — ${serviceName}`,
+    companyName,
+    bodyHtml,
+    footerHtml: `If this new time doesn't work for you, just reply to this email.<br /><br />Thank you,<br /><strong>${escapeHtml(companyName)}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+  return sendEmail({
+    to: opts.to,
+    subject: `Appointment Rescheduled — ${serviceName} now on ${dateStr}`,
+    body: `Hi ${opts.customerName},\n\nYour ${serviceName} appointment with ${companyName} has been rescheduled.\n\nNew date: ${dateStr}\nNew time: ${timeStr}\n\nIf this new time doesn't work for you, just reply to this email.\n\nThank you!`,
+    html,
+    replyTo: opts.companyEmail,
+  });
+}
+
 // Customer-portal access email. Used both for the initial invite and for
 // "email me a login link". The link is a one-click magic link that signs the
 // customer in instantly; on first visit they're prompted to set a password so
@@ -1020,19 +1188,31 @@ export async function sendPortalAccessEmail(opts: {
   companyEmail?: string;
   loginUrl: string;
   portalUrl?: string;
-  intent: "invite" | "login";
+  intent: "invite" | "login" | "set" | "reset";
   expiresLabel: string;
   logoUrl?: string | null;
   primaryColor?: string | null;
 }): Promise<void> {
+  const isPasswordFlow = opts.intent === "set" || opts.intent === "reset";
   const subject =
     opts.intent === "invite"
       ? `${opts.companyName} invited you to your customer portal`
+      : opts.intent === "reset"
+      ? `Reset your ${opts.companyName} portal password`
+      : opts.intent === "set"
+      ? `Set your ${opts.companyName} portal password`
       : `Your ${opts.companyName} portal login link`;
 
   const customerName = escapeHtml(opts.customerName);
   const companyName = escapeHtml(opts.companyName);
-  const ctaLabel = opts.intent === "invite" ? "Get Started" : "Log In";
+  const ctaLabel =
+    opts.intent === "invite"
+      ? "Get Started"
+      : opts.intent === "reset"
+      ? "Reset Password"
+      : opts.intent === "set"
+      ? "Set Password"
+      : "Log In";
 
   const inviteBody = [
     `Hi ${opts.customerName},`,
@@ -1073,10 +1253,32 @@ export async function sendPortalAccessEmail(opts: {
             <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Here is your secure, one-click login link for the ${companyName} customer portal — no password needed. Just tap the button below.</p>
             ${opts.portalUrl ? `<p style="margin:0 0 8px;font-size:14px;color:#6b7280;line-height:1.5;">You can also log in with your email and password any time at:<br /><a href="${escapeHtml(opts.portalUrl)}" style="color:${resolveAccent(opts.primaryColor)};word-break:break-all;">${escapeHtml(opts.portalUrl)}</a></p>` : ""}`;
 
+  const passwordVerb = opts.intent === "reset" ? "reset" : "set";
+  const passwordBody = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `We received a request to ${passwordVerb} your password for the ${opts.companyName} customer portal.`,
+    ``,
+    `Click the secure link below to ${passwordVerb} your password and sign in:`,
+    opts.loginUrl,
+    ``,
+    `This link expires ${opts.expiresLabel}. If you didn't request it, you can safely ignore this email.`,
+    ``,
+    `Thank you,`,
+    opts.companyName,
+  ];
+
+  const passwordHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${customerName},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">We received a request to ${passwordVerb} your password for the ${companyName} customer portal. Tap the button below to ${passwordVerb} your password and sign in.</p>`;
+
+  const bodyHtml = opts.intent === "invite" ? inviteHtml : isPasswordFlow ? passwordHtml : loginHtml;
+  const textBody = opts.intent === "invite" ? inviteBody : isPasswordFlow ? passwordBody : loginBody;
+
   const html = buildBrandedEmailHtml({
     title: subject,
     companyName: opts.companyName,
-    bodyHtml: opts.intent === "invite" ? inviteHtml : loginHtml,
+    bodyHtml,
     cta: { label: ctaLabel, url: opts.loginUrl },
     footerHtml: `This link expires ${escapeHtml(opts.expiresLabel)}. If you didn't ${
       opts.intent === "invite" ? "expect this email" : "request it"
@@ -1088,7 +1290,75 @@ export async function sendPortalAccessEmail(opts: {
   await sendEmail({
     to: opts.to,
     subject,
-    body: (opts.intent === "invite" ? inviteBody : loginBody).join("\n"),
+    body: textBody.join("\n"),
+    html,
+    replyTo: opts.companyEmail,
+  });
+}
+
+// Confirmation sent after a customer successfully sets or changes their portal
+// password. Acts as a security notice ("if this wasn't you, contact us").
+export async function sendPortalPasswordChangedEmail(opts: {
+  to: string;
+  customerName: string;
+  companyName: string;
+  companyEmail?: string;
+  companyPhone?: string;
+  loginUrl?: string;
+  wasReset: boolean;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}): Promise<void> {
+  const action = opts.wasReset ? "changed" : "set";
+  const subject = `Your ${opts.companyName} portal password was ${action}`;
+
+  const customerName = escapeHtml(opts.customerName);
+  const companyName = escapeHtml(opts.companyName);
+
+  const contactParts = [
+    opts.companyEmail ? `email ${opts.companyEmail}` : null,
+    opts.companyPhone ? `call ${opts.companyPhone}` : null,
+  ].filter(Boolean);
+  const contactText = contactParts.length
+    ? `please contact ${opts.companyName} right away (${contactParts.join(" or ")}).`
+    : `please contact ${opts.companyName} right away.`;
+  const contactHtml = contactParts.length
+    ? `please contact ${companyName} right away (${escapeHtml(contactParts.join(" or "))}).`
+    : `please contact ${companyName} right away.`;
+
+  const textBody = [
+    `Hi ${opts.customerName},`,
+    ``,
+    `This is a confirmation that your password for the ${opts.companyName} customer portal was successfully ${action}.`,
+    ``,
+    ...(opts.loginUrl ? [`You can log in any time at:`, opts.loginUrl, ``] : []),
+    `If you made this change, no further action is needed.`,
+    ``,
+    `If you did NOT request this change, ${contactText} Your account security may be at risk.`,
+    ``,
+    `Thank you,`,
+    opts.companyName,
+  ];
+
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${customerName},</p>
+            <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.5;">This is a confirmation that your password for the ${companyName} customer portal was successfully <strong>${action}</strong>.</p>
+            <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.5;">If you made this change, no further action is needed.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: subject,
+    companyName: opts.companyName,
+    bodyHtml,
+    cta: opts.loginUrl ? { label: "Log In", url: opts.loginUrl } : null,
+    footerHtml: `<strong>Didn't make this change?</strong> If you did not request this, ${contactHtml} Your account security may be at risk.<br /><br />Thank you,<br /><strong>${companyName}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
+
+  await sendEmail({
+    to: opts.to,
+    subject,
+    body: textBody.join("\n"),
     html,
     replyTo: opts.companyEmail,
   });

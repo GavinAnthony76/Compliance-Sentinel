@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { VitePWA } from "vite-plugin-pwa";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { readFileSync, existsSync } from "node:fs";
@@ -156,6 +157,88 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     devMetaInjectionPlugin(),
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: "auto",
+      includeAssets: ["favicon.svg", "pwa-192.svg", "pwa-512.svg", "pwa-maskable-192.svg", "pwa-maskable-512.svg"],
+      manifest: {
+        name: "GreenSynk",
+        short_name: "GreenSynk",
+        description: "The Operating System for Outdoor Service Businesses",
+        start_url: "/dashboard",
+        scope: "/",
+        display: "standalone",
+        background_color: "#ffffff",
+        theme_color: "#059669",
+        orientation: "portrait",
+        icons: [
+          { src: "/pwa-192.svg",          sizes: "192x192",  type: "image/svg+xml" },
+          { src: "/pwa-512.svg",          sizes: "512x512",  type: "image/svg+xml", purpose: "any" },
+          { src: "/pwa-maskable-192.svg", sizes: "192x192",  type: "image/svg+xml", purpose: "maskable" },
+          { src: "/pwa-maskable-512.svg", sizes: "512x512",  type: "image/svg+xml", purpose: "maskable" },
+        ],
+      },
+      workbox: {
+        // Only cache static build assets — never API/auth/admin/portal/billing
+        globPatterns: ["**/*.{js,css,woff2,woff,ttf,svg,png,webp,jpg,jpeg,ico}"],
+        navigateFallback: null,
+        runtimeCaching: [
+          {
+            // Public static images in /public/images/
+            urlPattern: /^https?:\/\/[^/]+\/images\/.+$/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "greensynk-public-images",
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 7 },
+            },
+          },
+          {
+            // Google Fonts stylesheet
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/,
+            handler: "StaleWhileRevalidate",
+            options: { cacheName: "greensynk-google-fonts-style" },
+          },
+          {
+            // Google Fonts files
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "greensynk-google-fonts-files",
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
+        // Never cache these — all authenticated, tenant-sensitive, or payment routes
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/admin/,
+          /^\/portal/,
+          /^\/dashboard/,
+          /^\/calendar/,
+          /^\/customers/,
+          /^\/properties/,
+          /^\/services/,
+          /^\/appointments/,
+          /^\/invoices/,
+          /^\/recurring/,
+          /^\/estimates/,
+          /^\/routes/,
+          /^\/leads/,
+          /^\/follow-ups/,
+          /^\/reviews/,
+          /^\/automations/,
+          /^\/team/,
+          /^\/reporting/,
+          /^\/settings/,
+          /^\/billing/,
+          /^\/activity/,
+          /^\/tech/,
+        ],
+      },
+      devOptions: {
+        enabled: false,
+      },
+    }),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

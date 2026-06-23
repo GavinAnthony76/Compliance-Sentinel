@@ -70,6 +70,27 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface CompanyLoginRequest {
+  /** Email address or phone number */
+  identifier: string;
+  password: string;
+}
+
+export interface VerifyEmailRequest {
+  token: string;
+}
+
+export interface ResendConfirmationRequest {
+  email: string;
+}
+
+export interface RegisterResponse {
+  success: boolean;
+  requiresVerification: boolean;
+  email: string;
+  message: string;
+}
+
 export type AuthUserRole = (typeof AuthUserRole)[keyof typeof AuthUserRole];
 
 export const AuthUserRole = {

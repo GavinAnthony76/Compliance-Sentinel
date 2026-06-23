@@ -431,7 +431,7 @@ const createCompanySchema = z.object({
   plan: z.enum(["starter", "growth", "pro"]).default("starter"),
   ownerFirstName: z.string().min(1),
   ownerLastName: z.string().min(1),
-  ownerEmail: z.string().email(),
+  ownerEmail: z.string().email().transform((s) => s.trim().toLowerCase()),
   ownerPassword: z.string().min(8),
 });
 
@@ -465,7 +465,7 @@ router.post("/companies", async (req: any, res) => {
 const addCompanyUserSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().email().transform((s) => s.trim().toLowerCase()),
   password: z.string().min(8),
   role: z.enum(["admin", "staff"]).default("staff"),
 });
@@ -523,7 +523,8 @@ router.post("/companies/:id/owner/reset-password", async (req: any, res) => {
   const [owner] = await db.select().from(usersTable).where(and(eq(usersTable.companyId, companyId), eq(usersTable.role, "owner"))).limit(1);
   if (!owner) return res.status(404).json({ error: "NotFound", message: "Owner not found" });
   const passwordHash = await hashPassword(password);
-  await db.update(usersTable).set({ passwordHash, updatedAt: new Date() }).where(eq(usersTable.id, owner.id));
+  const now = new Date();
+  await db.update(usersTable).set({ passwordHash, passwordChangedAt: now, updatedAt: now }).where(eq(usersTable.id, owner.id));
   await logActivity({ adminId: req.admin.adminId, action: "admin.owner_password_reset", entityType: "user", entityId: owner.id, metadata: { companyId } });
   return res.json({ success: true });
 });
@@ -749,24 +750,24 @@ router.post("/seed", async (req: any, res) => {
     const existingDemo = await db.select().from(companiesTable).where(eq(companiesTable.slug, "greenscapes-demo")).limit(1);
     if (existingDemo.length > 0) return res.json({ success: true, message: "Demo data already seeded" });
 
-    const [company] = await db.insert(companiesTable).values({
-      name: "GreenScapes Pro", slug: "greenscapes-demo", phone: "555-123-4567", email: "demo@greenscapes.com",
-      address: "123 Lawn Lane", city: "Austin", state: "TX", zip: "78701",
-      subscriptionPlan: "growth", subscriptionStatus: "active", isActive: true,
-    }).returning();
+      const [company] = await db.insert(companiesTable).values({
+        name: "GreenScapes Pro", slug: "greenscapes-demo", phone: "555-123-4567", email: "demo@greenscapes.com",
+        address: "123 Lawn Lane", city: "Austin", state: "TX", zip: "78701",
+        subscriptionPlan: "growth", subscriptionStatus: "active", isActive: true,
+      }).returning();
 
-    const passwordHash = await hashPassword("Demo1234!");
-    const [owner] = await db.insert(usersTable).values({
-      companyId: company.id, firstName: "Alex", lastName: "Green", email: "alex@greenscapes.com",
-      passwordHash, role: "owner", isActive: true,
-    }).returning();
+      const passwordHash = await hashPassword("Demo1234!");
+      const [owner] = await db.insert(usersTable).values({
+        companyId: company.id, firstName: "Alex", lastName: "Green", email: "alex@greenscapes.com",
+        passwordHash, role: "owner", isActive: true,
+      }).returning();
 
-    logger.info({ companyId: company.id, userId: owner.id }, "Demo data seeded");
-    return res.json({ success: true, message: "Demo data seeded", credentials: { email: "alex@greenscapes.com", password: "Demo1234!" } });
-  } catch (err) {
-    logger.error({ err }, "Error seeding demo data");
-    return res.status(500).json({ error: "SeedError", message: "Failed to seed demo data" });
-  }
-});
+      logger.info({ companyId: company.id, userId: owner.id }, "Demo data seeded");
+      return res.json({ success: true, message: "Demo data seeded", credentials: { email: "alex@greenscapes.com", password: "Demo1234!" } });
+    } catch (err) {
+      logger.error({ err }, "Error seeding demo data");
+      return res.status(500).json({ error: "SeedError", message: "Failed to seed demo data" });
+    }
+  });
 
 export default router;

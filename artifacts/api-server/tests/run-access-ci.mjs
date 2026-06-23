@@ -172,6 +172,7 @@ async function main() {
   // --- Run the suites -------------------------------------------------------
   const suites = [
     "tests/billing-activity.test.mjs",
+    "tests/invoice-number.e2e.mjs",
     "tests/invoice-billing-access.e2e.mjs",
     "tests/appointment-customer-access.e2e.mjs",
     "tests/property-service-access.e2e.mjs",

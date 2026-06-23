@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, numeric, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { companiesTable } from "./companies";
@@ -24,7 +24,12 @@ export const invoicesTable = pgTable("invoices", {
   reminderCount: integer("reminder_count").default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  // Hard guard against duplicate invoice numbers within a tenant. Combined with
+  // the retry loop in lib/invoice-number.ts, this closes the race where two
+  // concurrent creates compute the same MAX+1 number.
+  unique("invoices_company_id_invoice_number_unique").on(t.companyId, t.invoiceNumber),
+]);
 
 export const invoiceLineItemsTable = pgTable("invoice_line_items", {
   id: serial("id").primaryKey(),

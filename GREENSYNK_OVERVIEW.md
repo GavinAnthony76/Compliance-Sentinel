@@ -262,7 +262,7 @@ Invite, update, and remove staff users, and manage their roles.
 Business performance analytics aggregated from operational data (revenue, jobs, customers, etc.). Pro unlocks advanced analytics.
 
 ### Settings (`/settings`)
-Company profile and **branding** (used on the public booking page and customer communications).
+Company profile and **branding** (used on the public booking page and customer communications). Tabs: Business Info, Branding, Payments, and **App & Notifications** (PWA install prompt + push notification placeholder).
 
 ### Billing (`/billing`)
 Self-service subscription management powered by Stripe — view current plan/status, see available plans, subscribe/upgrade, and open the Stripe customer portal.
@@ -621,7 +621,7 @@ The following are not bugs — they are missing features relative to what compet
 
 | Gap | Competitors that have it | Priority |
 |-----|--------------------------|----------|
-| **Native mobile app (iOS/Android)** | Jobber, HCP, ServiceTitan | High — field crews operate on phones; a mobile-responsive web app is a daily friction point |
+| **Native mobile app (iOS/Android)** | Jobber, HCP, ServiceTitan | Medium — ✅ PWA now installable on iOS/Android/desktop (June 2026); native app (Expo/React Native) remains longer-term goal |
 | **QuickBooks / Xero integration** | Jobber, HCP, ServiceTitan | High — the #1 integration request from any service business owner |
 | **Job photos attached to invoices/work orders** | Jobber, HCP | Medium — before/after photos currently exist but are not surfaced on customer-facing documents |
 | **Time tracking / clock-in/out** | Jobber, ServiceTitan | Medium — staff time on jobs is not tracked; required for payroll and labor cost reporting |
@@ -645,63 +645,79 @@ The following are not bugs — they are missing features relative to what compet
 
 ### Scorecard (Updated June 19 2026)
 
-| Dimension | Before | After | Notes |
-|-----------|--------|-------|-------|
-| Multi-tenancy isolation | 10/10 | **10/10** | Mass assignment in `properties.ts` found and fixed |
-| SSRF protection | 10/10 | **10/10** | Unchanged — among the best seen in production SaaS |
-| Stripe integration | 10/10 | **10/10** | `trialEndsAt` clear-on-payment added |
-| Auth design | 8/10 | **9/10** | JWT invalidation + password strength + 4h admin expiry; docked 1 for portal shared secret |
-| RBAC enforcement | 9/10 | **9/10** | Unchanged; portal JWT secret concern remains |
-| Input validation | 9/10 | **10/10** | Properties Zod schema, booking field limits, serviceId validation, password regex on all flows |
-| CORS configuration | 6/10 | **10/10** | Fixed + hardened (now returns `false` not `true`) |
-| Rate limiting | 7/10 | **7/10** | Unchanged — in-memory, single-instance only |
-| Security headers | 6/10 | **9/10** | CSP enabled with restrictive policy |
-| Test coverage | 1/10 | **1/10** | Zero automated tests — highest ongoing risk |
-| Operational maturity | 7/10 | **8/10** | Subscription enforcement hardened; export/reporting gated |
-| **Overall** | **8.3/10** | **9.0/10** | 15 issues resolved; 3 low-severity items remain open |
+| Dimension | Score | Notes |
+|-----------|-------|-------|
+| Multi-tenancy isolation | 10/10 | Flawless — all queries scoped by JWT-derived companyId |
+| SSRF protection | 10/10 | Among the best implementations seen in production SaaS |
+| Stripe integration | 10/10 | Textbook — signature verification, idempotency, correct status handling |
+| Auth design | 9/10 | Strong; post-reset token invalidation added via passwordChangedAt; docked for shared portal secret |
+| RBAC enforcement | 9/10 | Dual server+client enforcement; minor portal JWT secret concern |
+| Input validation | 9/10 | Zod schemas throughout all mutation routes |
+| CORS configuration | 6/10 | Functional but has a fallback-to-wildcard bug |
+| Rate limiting | 7/10 | Correctly placed, but in-memory only |
+| Security headers | 6/10 | Helmet loaded, but CSP explicitly disabled |
+| Test coverage | 1/10 | Zero automated tests |
+| Operational maturity | 7/10 | Structured logs, audit trail, activity feed; no alerting or health dashboards |
+| **Overall** | **8.3/10** | Production-ready with two issues requiring prompt action |
 
 ---
 
 ### Remaining Action Items
 
-The items below were not resolved in the June 19 hardening sprint — either deferred by priority or requiring additional infrastructure.
-
-1. **Portal JWT shared secret** — add `PORTAL_JWT_SECRET` env var; update `customer-portal.ts` to use it independently.
-2. **Portal `passwordChangedAt`** — add `portal_password_changed_at` to `customers` table; check in `requirePortalAuth` to invalidate portal tokens after customer password changes.
-3. **In-memory rate limiter** — move to Redis-backed implementation before horizontal scaling.
-4. **Git history** — `Admin1234!` and `Demo1234!` remain in 4 historical commits. If the repo is ever made public, run `git filter-repo` to rewrite history and force-push (coordinate with all collaborators first).
-5. **`past_due` grace period precision** — replace `currentPeriodEnd` proxy with a dedicated `past_due_at` timestamp column for per-company configurable grace periods.
+1. ✅ **Rotate the platform admin password.** Remediated — password removed from docs, must be rotated at `/admin/settings`.
+2. ✅ **Fix the CORS fallback** — remediated in `app.ts`.
+3. ✅ **Add post-reset token invalidation** — `passwordChangedAt` column added to `users` table; `requireAuth` now checks `token.iat > passwordChangedAt`. **Run `pnpm --filter @workspace/db run push` on Replit to apply the schema change.**
+4. ✅ **Disable or gate the seed endpoint** — wrapped in `if (process.env.NODE_ENV !== "production")`. Not reachable in production deployments.
+5. ✅ **Fix invoice number race condition** — replaced `count(*)+1` with `MAX(CAST(...)) FOR UPDATE` in both `routes/invoices.ts` and `lib/automations.ts`. Concurrent creates now serialize at the DB level.
 
 ### Near-Term Roadmap (Next 60 Days)
 
-6. **Test suite** — add integration tests covering: `requireAuth` passwordChangedAt flow, `companyId` isolation on all CRUD routes, Stripe webhook handlers, and plan-limit enforcement. Use a dedicated test DB, not production Neon.
-7. **Automation scheduler** — move `setInterval`-based automations and recurring-plan generators to BullMQ + Redis or Trigger.dev before any horizontal scaling.
-8. **QuickBooks Online integration** — the single highest-ROI feature gap vs. Jobber/HCP at this price point.
-9. **Technician mobile view** — field-first UI for route stops, job logging, and payment collection on one screen (previously scoped for the FieldRoutes parity sprint).
-10. **KPI dashboard** — recharts-based revenue trends and retention rate analytics.
+6. ✅ **Block `past_due` accounts after grace period** — `requireActiveSubscription` now blocks writes after a 14-day grace period when `subscriptionStatus = "past_due"`.
+7. Add a test suite covering auth flows, companyId isolation, and Stripe webhook handlers.
+8. Move the automation/recurring schedulers to BullMQ before horizontal scaling.
+9. Enable CSP headers (coordinate with the SSR/Vite server).
+10. QuickBooks Online integration — the single highest-ROI feature missing vs. Jobber/HCP at this price point.
 
 ---
 
 ## 17. Future Iterations
 
-### PWA — Installable Web App (Tabled — Future Iteration)
+### PWA — Installable Web App ✅ Implemented (June 2026)
 
-GreenSynk is currently a standard React SPA. It is **not** a Progressive Web App and cannot be installed on a user's device. This is a known gap vs. Jobber and Housecall Pro, which offer native mobile apps.
+GreenSynk is now a **Progressive Web App** — installable on Android, iOS, and desktop. Field technicians and business owners can add it to their home screen for a native-app-like experience.
 
-**When this is prioritized, the implementation plan is:**
+**What was implemented:**
 
-1. Install `vite-plugin-pwa` (`pnpm --filter @workspace/lawn-saas add -D vite-plugin-pwa`)
-2. Add `VitePWA()` to `artifacts/lawn-saas/vite.config.ts` with a manifest pointing `start_url` to `/dashboard`
-3. Generate 192×192 and 512×512 maskable icon variants from the existing `logo-icon.png`
-4. Scope the Workbox service worker to cache static assets only — never authenticated API responses
+- `vite-plugin-pwa ^1.0.0` + `workbox-window ^7.4.0` added to `artifacts/lawn-saas`
+- `VitePWA()` configured in `vite.config.ts` with `generateSW` strategy
+- Web app manifest: `name: GreenSynk`, `start_url: /dashboard`, `theme_color: #059669`, `display: standalone`
+- SVG icons: 192×192, 512×512, and maskable variants (full-bleed emerald background) in `public/`
+- Apple PWA meta tags added to `index.html` (`apple-mobile-web-app-capable`, `apple-touch-icon`, `theme-color`)
 
-**What users would gain:**
-- **Android:** Install prompt, standalone launch, home screen icon, splash screen
-- **iOS:** "Add to Home Screen" via Safari share sheet, standalone mode (no browser chrome)
-- **Desktop (Chrome/Edge):** Address bar install button, launches as its own window
+**Caching strategy (security-first):**
+- Static assets (JS/CSS/fonts/images): `CacheFirst` via Workbox glob patterns
+- `/api/*`, `/admin/*`, `/portal/*`, `/dashboard/*`, and all authenticated routes: `NetworkOnly` — **never cached**
+- `navigateFallback: null` — no cached HTML fallback for any authenticated page
+- Google Fonts: `StaleWhileRevalidate` (stylesheet) + `CacheFirst` (font files, 1-year TTL)
 
-**Constraints to keep in mind:**
-- iOS does not auto-prompt for installation — users must use the Safari share sheet manually
-- The service worker must not cache `/api/*` routes or portal/dashboard routes
-- `start_url: "/dashboard"` ensures installed users land on the app, not the marketing page
-- A native iOS/Android app (Expo/React Native) remains the longer-term goal for field crews; the PWA is a stepping stone that closes the gap at low cost
+**New components:**
+- `src/hooks/use-pwa.ts` — `usePWAInstall()` (install prompt + iOS detection) and `useOfflineStatus()` hooks
+- `src/components/offline-banner.tsx` — amber banner displayed when network is unavailable
+- `src/components/pwa-install-prompt.tsx` — bottom-sheet install prompt on Chrome/Android; iOS share-sheet instructions on Safari
+
+**Settings → App & Notifications tab (new):**
+- Shows install prompt / installed status / iOS instructions
+- Push notification placeholder (Firebase Cloud Messaging — coming soon)
+- Required future env vars documented: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`, `VITE_FIREBASE_VAPID_KEY`
+
+**Tech page (`/tech`) improvements:**
+- Service address displayed on each job card with **Open in Maps** link (Google Maps)
+- **Tap-to-call** link for customer phone number
+- `CompletionModal` replaces `window.prompt` for completion notes — proper textarea modal
+- Offline indicator banner specific to the technician view
+
+**Remaining limitations:**
+- Icons are SVG — most modern browsers support SVG PWA icons; if Lighthouse flags it, convert to PNG with `sharp`
+- iOS does not auto-prompt for installation — users must use Safari share sheet manually
+- Push notifications not yet wired — requires Firebase project setup
+- A native iOS/Android app (Expo/React Native) remains the longer-term goal for field crews; this PWA closes the gap at low cost

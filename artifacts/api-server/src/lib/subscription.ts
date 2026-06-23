@@ -28,11 +28,11 @@ export async function requireActiveSubscription(
 
     if (!company) { next(); return; }
 
+    const now = new Date();
     const isTrialing = company.subscriptionStatus === "trialing";
-    const trialExpired =
-      isTrialing && company.trialEndsAt
-        ? new Date(company.trialEndsAt) < new Date()
-        : false;
+    const trialExpired = isTrialing && company.trialEndsAt
+      ? new Date(company.trialEndsAt) < now
+      : false;
     const isCanceled = company.subscriptionStatus === "canceled";
 
     // past_due gets a 7-day grace period from the end of the billing period before writes are blocked.

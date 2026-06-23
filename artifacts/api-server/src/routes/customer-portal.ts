@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from "../lib/auth";
 import { hasFeature, getRequiredPlanForFeature } from "../lib/features";
 import { z } from "zod";
 import crypto from "crypto";
+import { logger } from "../lib/logger";
 
 const router = Router();
 
@@ -227,6 +228,8 @@ router.post("/auth/set-password", async (req, res) => {
     return res.status(400).json({ error: "ExpiredToken", message: "This invite link has expired" });
   }
 
+  const wasReset = !!customer.portalPasswordHash;
+
   const hash = await hashPassword(password);
   await db.update(customersTable).set({
     portalPasswordHash: hash,
@@ -234,6 +237,27 @@ router.post("/auth/set-password", async (req, res) => {
     portalInviteExpiresAt: null,
     updatedAt: new Date(),
   }).where(eq(customersTable.id, customer.id));
+
+  // Confirmation / security notice — don't block the response on email delivery.
+  if (customer.email) {
+    const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
+    const loginUrl = `${baseUrl}/portal/${company.slug}/login`;
+    import("../lib/notifications")
+      .then(({ sendPortalPasswordChangedEmail }) =>
+        sendPortalPasswordChangedEmail({
+          to: customer.email!,
+          customerName: customer.firstName || customer.email!,
+          companyName: company.name,
+          companyEmail: company.email ?? undefined,
+          companyPhone: company.phone ?? undefined,
+          loginUrl,
+          wasReset,
+          logoUrl: company.logoUrl,
+          primaryColor: company.primaryColor,
+        }),
+      )
+      .catch((err) => logger.error({ err, customerId: customer.id }, "Failed to send portal password-changed email"));
+  }
 
   const portalToken = signPortalToken({ customerId: customer.id, companyId: company.id });
   return res.json({
@@ -249,12 +273,18 @@ router.post("/auth/forgot-password", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
 
   const { email, companySlug } = parsed.data;
+  const genericResponse = { success: true, message: "If that email has a portal account, a reset link has been sent." };
   const [company] = await db.select().from(companiesTable).where(and(eq(companiesTable.slug, companySlug), eq(companiesTable.isActive, true))).limit(1);
-  if (!company) return res.json({ success: true }); // silent — avoid slug enumeration
+  if (!company) return res.json(genericResponse); // silent — avoid slug enumeration
 
   const [customer] = await db.select().from(customersTable).where(and(eq(customersTable.companyId, company.id), eq(customersTable.email, email))).limit(1);
 
-  if (customer && customer.portalPasswordHash) {
+  // Send the set/reset link to any portal customer with an email — not only
+  // those who already created a password. Customers who have only ever used
+  // magic links have no password hash yet, and must still be able to set one
+  // via "forgot password" (the set-password page handles both set and reset).
+  if (customer && customer.email) {
+    const hasPassword = !!customer.portalPasswordHash;
     const rawResetToken = crypto.randomBytes(32).toString("hex");
     const resetTokenHash = crypto.createHash("sha256").update(rawResetToken).digest("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -262,15 +292,21 @@ router.post("/auth/forgot-password", async (req, res) => {
 
     const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}` || "http://localhost:3000";
     const resetUrl = `${baseUrl}/portal/set-password?token=${rawResetToken}&slug=${companySlug}`;
-    const { sendEmail } = await import("../lib/notifications");
-    await sendEmail({
-      to: customer.email!,
-      subject: `Reset your ${company.name} portal password`,
-      body: `Hi ${customer.firstName},\n\nClick the link below to reset your portal password. This link expires in 1 hour.\n\n${resetUrl}\n\nIf you didn't request this, you can safely ignore this email.`,
+    const { sendPortalAccessEmail } = await import("../lib/notifications");
+    await sendPortalAccessEmail({
+      to: customer.email,
+      customerName: customer.firstName || customer.email,
+      companyName: company.name,
+      companyEmail: company.email ?? undefined,
+      loginUrl: resetUrl,
+      intent: hasPassword ? "reset" : "set",
+      expiresLabel: "in 1 hour",
+      logoUrl: company.logoUrl,
+      primaryColor: company.primaryColor,
     });
   }
 
-  return res.json({ success: true, message: "If that email has a portal account, a reset link has been sent." });
+  return res.json(genericResponse);
 });
 
 // GET /portal/auth/me
@@ -352,6 +388,50 @@ router.post("/appointments", requirePortalAuth, async (req: any, res) => {
     price: service.basePrice ?? null,
   }).returning();
 
+  // Notify the company of the new request AND confirm to the customer
+  // (fire-and-forget — never block the booking response on email).
+  void (async () => {
+    try {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+      if (!customer || !company) return;
+      const customerName = `${customer.firstName} ${customer.lastName}`.trim();
+      const { sendBookingRequestNotification, sendBookingConfirmationEmail, resolveCompanyNotificationEmail } = await import("../lib/notifications");
+
+      const companyNotifyEmail = await resolveCompanyNotificationEmail(companyId, company.email);
+      if (companyNotifyEmail) {
+        await sendBookingRequestNotification({
+          companyEmail: companyNotifyEmail,
+          companyName: company.name,
+          customerName,
+          customerEmail: customer.email,
+          customerPhone: customer.phone,
+          serviceName: service.name,
+          address: customer.addressLine1 ?? null,
+          preferredDate: scheduledDate,
+          notes: notes || null,
+        });
+      }
+
+      if (customer.email) {
+        await sendBookingConfirmationEmail({
+          to: customer.email,
+          customerName,
+          companyName: company.name,
+          companyEmail: company.email ?? undefined,
+          companyPhone: company.phone ?? null,
+          serviceName: service.name,
+          preferredDate: scheduledDate,
+          address: customer.addressLine1 ?? null,
+          logoUrl: company.logoUrl,
+          primaryColor: company.primaryColor,
+        });
+      }
+    } catch (err) {
+      logger.error({ err, companyId }, "Failed to send portal booking notifications");
+    }
+  })();
+
   return res.status(201).json({
     ...appointment,
     price: appointment.price ? Number(appointment.price) : null,
@@ -384,6 +464,32 @@ router.post("/appointments/:id/cancel", requirePortalAuth, async (req: any, res)
     .set({ status: "cancelled", updatedAt: new Date() })
     .where(eq(appointmentsTable.id, id))
     .returning();
+
+  // Notify the company that the customer cancelled (fire-and-forget).
+  void (async () => {
+    try {
+      const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
+      const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
+      if (!customer || !company) return;
+      const [service] = updated.serviceId
+        ? await db.select({ name: servicesTable.name }).from(servicesTable).where(eq(servicesTable.id, updated.serviceId)).limit(1)
+        : [null];
+      const { sendPortalCancellationNotification, resolveCompanyNotificationEmail } = await import("../lib/notifications");
+      const companyNotifyEmail = await resolveCompanyNotificationEmail(companyId, company.email);
+      if (!companyNotifyEmail) return;
+      await sendPortalCancellationNotification({
+        companyEmail: companyNotifyEmail,
+        companyName: company.name,
+        customerName: `${customer.firstName} ${customer.lastName}`.trim(),
+        customerEmail: customer.email,
+        customerPhone: customer.phone,
+        serviceName: service?.name ?? null,
+        scheduledStart: updated.scheduledStart,
+      });
+    } catch (err) {
+      logger.error({ err, companyId }, "Failed to send portal cancellation notification");
+    }
+  })();
 
   return res.json({ ...updated, price: updated.price ? Number(updated.price) : null });
 });

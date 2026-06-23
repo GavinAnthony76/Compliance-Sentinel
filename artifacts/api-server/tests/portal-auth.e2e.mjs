@@ -79,6 +79,15 @@ async function registerCompany(label) {
       selectedPlan: "pro",
     },
   });
+  // Self-serve owners register UNVERIFIED with no token; flip the verification
+  // gate in the test DB (mirrors clicking the emailed link), then log in.
+  if (reg.status === 201) {
+    const { markOwnerVerified } = await import("./verify-owner.mjs");
+    await markOwnerVerified(ownerEmail);
+    const ownerLogin = await req("POST", "/auth/login", { body: { identifier: ownerEmail, password: PASSWORD } });
+    reg.status = ownerLogin.status === 200 ? 201 : ownerLogin.status;
+    reg.json = ownerLogin.json;
+  }
   if (reg.status !== 201 || !reg.json?.token) {
     console.error(`Setup failed: could not register company ${label}`, reg.status, reg.json);
     process.exit(1);

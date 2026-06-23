@@ -33,9 +33,22 @@ router.get("/", async (req: any, res) => {
 router.post("/", requireRole("owner", "admin"), requireFeature("team_management"), requireWithinPlanLimit("users"), async (req: any, res) => {
   const { companyId, userId } = req.user;
 
-  const existing = await db.select().from(usersTable).where(eq(usersTable.email, req.body.email)).limit(1);
+  const email = String(req.body.email ?? "").trim().toLowerCase();
+  const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
   if (existing.length > 0) {
     return res.status(409).json({ error: "ConflictError", message: "Email already in use" });
+  }
+
+  // Phone (optional) must be unique across all users so it can serve as a login
+  // identifier — match on digits only.
+  if (req.body.phone && String(req.body.phone).trim()) {
+    const normalized = String(req.body.phone).replace(/\D/g, "");
+    if (normalized) {
+      const all = await db.select({ phone: usersTable.phone }).from(usersTable);
+      if (all.some(u => u.phone && u.phone.replace(/\D/g, "") === normalized)) {
+        return res.status(409).json({ error: "ConflictError", message: "Phone number is already in use" });
+      }
+    }
   }
 
   const temporaryPassword = req.body.password;
@@ -44,7 +57,7 @@ router.post("/", requireRole("owner", "admin"), requireFeature("team_management"
     companyId,
     firstName: req.body.firstName,
     lastName: req.body.lastName,
-    email: req.body.email,
+    email,
     passwordHash,
     role: req.body.role ?? "staff",
     phone: req.body.phone ?? null,
@@ -86,6 +99,18 @@ router.put("/:id", requireRole("owner", "admin"), requireFeature("team_managemen
   const id = Number(req.params.id);
   const [existing] = await db.select().from(usersTable).where(and(eq(usersTable.id, id), eq(usersTable.companyId, companyId))).limit(1);
   if (!existing) return res.status(404).json({ error: "NotFound" });
+
+  // Phone (optional) must stay unique across all users so it can serve as a
+  // login identifier — match on digits only, excluding this same user.
+  if (req.body.phone !== undefined && req.body.phone !== null && String(req.body.phone).trim()) {
+    const normalized = String(req.body.phone).replace(/\D/g, "");
+    if (normalized) {
+      const all = await db.select({ id: usersTable.id, phone: usersTable.phone }).from(usersTable);
+      if (all.some(u => u.id !== id && u.phone && u.phone.replace(/\D/g, "") === normalized)) {
+        return res.status(409).json({ error: "ConflictError", message: "Phone number is already in use" });
+      }
+    }
+  }
 
   const updates: any = { updatedAt: new Date() };
   if (req.body.firstName) updates.firstName = req.body.firstName;

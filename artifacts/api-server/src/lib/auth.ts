@@ -22,6 +22,7 @@ export interface UserJWTPayload {
   companyId: number;
   role: string;
   type: "user";
+  iat?: number;
 }
 
 export interface AdminJWTPayload {
