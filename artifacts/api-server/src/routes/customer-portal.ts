@@ -47,6 +47,21 @@ function requirePortalAuth(req: any, res: any, next: any): void {
   }
 }
 
+// POST /portal/auth/find-portal — public: given an email, return every active company
+// portal that customer belongs to (slug + name). Used by the generic /portal/login hub.
+router.post("/auth/find-portal", async (req, res) => {
+  const parsed = z.object({ email: z.string().email() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError" });
+
+  const rows = await db
+    .select({ slug: companiesTable.slug, name: companiesTable.name, logoUrl: companiesTable.logoUrl })
+    .from(customersTable)
+    .innerJoin(companiesTable, and(eq(customersTable.companyId, companiesTable.id), eq(companiesTable.isActive, true)))
+    .where(eq(customersTable.email, parsed.data.email));
+
+  return res.json({ portals: rows });
+});
+
 // POST /portal/auth/login
 router.post("/auth/login", async (req, res) => {
   const parsed = z.object({ identifier: z.string().min(1), password: z.string().min(1), companySlug: z.string().min(1) }).safeParse(req.body);

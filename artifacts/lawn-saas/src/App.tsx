@@ -78,6 +78,7 @@ const AdminForgotPasswordPage = lazy(() => import("@/pages/admin-forgot-password
 const AdminResetPasswordPage = lazy(() => import("@/pages/admin-reset-password").then(m => ({ default: m.AdminResetPasswordPage })));
 const AdminChangePasswordPage = lazy(() => import("@/pages/admin-change-password").then(m => ({ default: m.AdminChangePasswordPage })));
 const PortalForgotPasswordPage = lazy(() => import("@/pages/portal-forgot-password").then(m => ({ default: m.PortalForgotPasswordPage })));
+const PortalFindPage = lazy(() => import("@/pages/portal-find").then(m => ({ default: m.PortalFindPage })));
 const PortalLoginPage = lazy(() => import("@/pages/portal-login").then(m => ({ default: m.PortalLoginPage })));
 const PortalSetPasswordPage = lazy(() => import("@/pages/portal-set-password").then(m => ({ default: m.PortalSetPasswordPage })));
 const EstimateSignPage = lazy(() => import("@/pages/estimate-sign").then(m => ({ default: m.EstimateSignPage })));
@@ -269,6 +270,7 @@ function Router() {
           <Route path="/admin/change-password" component={AdminChangePasswordPage} />
 
           {/* Customer portal routes — lazy loaded */}
+          <Route path="/portal/login" component={PortalFindPage} />
           <Route path="/portal/set-password" component={PortalSetPasswordPage} />
           <Route path="/portal/:slug/forgot-password" component={PortalForgotPasswordPage} />
           <Route path="/portal/:slug/login" component={PortalLoginPage} />

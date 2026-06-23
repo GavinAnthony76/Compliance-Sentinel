@@ -122,6 +122,7 @@ GreenSynk runs **four separate authentication contexts**, each with its own cred
 ### Customer portal authentication
 
 - Customers log in with phone or email + password to a dedicated portal.
+- **Generic customer login hub (`/portal/login`)** — a slug-free entry point linked from the main sign-in page. Customers enter their email; the backend (`POST /api/portal/auth/find-portal`) looks up which active company portals they belong to. If exactly one match, they're redirected to `/portal/:slug/login` automatically. If multiple, a company picker is shown. If none, they're advised to contact their service provider.
 - **Passwordless magic-link login** — a customer can request a one-time login link by email (`POST /api/portal/auth/request-link`). Clicking it auto-signs them in via `POST /api/portal/auth/verify-link`. The link is single-use and short-lived; password login works alongside it. Anti-enumeration: requesting a link always returns success regardless of whether the email exists.
 - Includes a "set password" first-time flow and a portal-specific forgot-password flow.
 - When a customer is first created (Growth+), a **portal invite email** is automatically sent with a magic-link (or SMS if phone is on file).
@@ -280,7 +281,8 @@ A branded, public lead-intake page addressed by the company's slug. Prospective 
 ### Customer portal (Growth+)
 A self-service area for the business's end customers:
 
-- `portal-login` / `portal-set-password` / `portal-forgot-password` — portal authentication (password or magic-link)
+- `/portal/login` — **generic customer login hub** (no slug required); looks up the customer's portal by email and redirects to the correct company portal
+- `/portal/:slug/login` / `portal-set-password` / `portal-forgot-password` — portal authentication (password or magic-link)
 - `portal-dashboard` — overview
 - `portal-appointments` — view upcoming and past appointments
 - `portal-invoices` — view invoices and **pay online via Stripe**
@@ -411,6 +413,7 @@ All endpoints are mounted under `/api`.
 > **No-hardcoding principle:** Platform contact emails must NOT be hardcoded in the frontend. They live in `platform_settings` and are fetched at runtime via `/api/platform/contact-info` (React: `use-contact-info` hook + `ContactEmailLink`). SEO prerender/SSR resolve them at build/serve time via `site-config.mjs` (`getOrgContactEmail`), falling back to `DEFAULT_CONTACT_EMAIL` only when the API is unreachable during a build.
 
 ### Customer Portal (portal auth)
+- `POST /api/portal/auth/find-portal` — **public** lookup: given a customer email, returns all active company portals (slug + name) the customer belongs to; used by the generic `/portal/login` hub
 - `POST /api/portal/auth/login` — password login (phone or email + password)
 - `POST /api/portal/auth/request-link` — request a passwordless magic-link email
 - `POST /api/portal/auth/verify-link` — exchange magic-link token for portal session

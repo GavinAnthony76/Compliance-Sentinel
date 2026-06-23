@@ -147,7 +147,7 @@ export function LoginPage() {
               Don't have an account? <Link href="/register" className="text-primary font-semibold hover:underline">Start free trial</Link>
             </div>
             <div className="mt-4 text-center text-xs text-muted-foreground/60">
-              <Link href="/admin/login" className="hover:underline">Admin Login</Link>
+              <Link href="/portal/login" className="hover:underline">Customer Login</Link>
             </div>
             <div className="mt-4 border-t border-border/40 pt-4 text-center">
               <button
