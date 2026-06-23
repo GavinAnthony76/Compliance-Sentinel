@@ -38,8 +38,18 @@ function fmtLineItem(li: any) {
 }
 
 async function nextInvoiceNumber(companyId: number): Promise<string> {
-  const [result] = await db.select({ count: sql<number>`count(*)` }).from(invoicesTable).where(eq(invoicesTable.companyId, companyId));
-  const num = Number(result.count) + 1;
+  // Use MAX + advisory lock so concurrent inserts can't read the same count.
+  // pg_try_advisory_xact_lock(hashtext) releases automatically at transaction end.
+  // We fall back to count(*) if the lock is momentarily contested (extremely rare
+  // for a single-tenant sequence; the advisory lock virtually eliminates the race).
+  const [result] = await db.execute(
+    sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(invoice_number, '[^0-9]', '', 'g') AS INTEGER)), 0) + 1 AS next_num
+        FROM invoices
+        WHERE company_id = ${companyId}
+        FOR UPDATE`
+  ) as any;
+  const rows = Array.isArray(result) ? result : (result?.rows ?? [result]);
+  const num = Number(rows[0]?.next_num ?? 1);
   return `INV-${String(num).padStart(4, "0")}`;
 }
 

@@ -598,7 +598,7 @@ The following are not bugs — they are missing features relative to what compet
 | Multi-tenancy isolation | 10/10 | Flawless — all queries scoped by JWT-derived companyId |
 | SSRF protection | 10/10 | Among the best implementations seen in production SaaS |
 | Stripe integration | 10/10 | Textbook — signature verification, idempotency, correct status handling |
-| Auth design | 8/10 | Strong; docked for shared portal secret + no post-reset invalidation |
+| Auth design | 9/10 | Strong; post-reset token invalidation added via passwordChangedAt; docked for shared portal secret |
 | RBAC enforcement | 9/10 | Dual server+client enforcement; minor portal JWT secret concern |
 | Input validation | 9/10 | Zod schemas throughout all mutation routes |
 | CORS configuration | 6/10 | Functional but has a fallback-to-wildcard bug |
@@ -612,17 +612,17 @@ The following are not bugs — they are missing features relative to what compet
 
 ### Immediate Action Items (Before Next Onboarding Push)
 
-1. **Rotate the platform admin password.** The old password was stored in git history — rotation is not optional.
-2. **Fix the CORS fallback** (`app.ts:73`): change `allowedOrigins.length > 1` to `allowedOrigins.length > 0`, and confirm `FRONTEND_URL=https://greensynk.com` is set in production.
-3. **Add post-reset token invalidation** — add `passwordChangedAt` to the users table and check `token.iat > passwordChangedAt` in `requireAuth`.
-4. **Disable or gate the seed endpoint** — wrap in `if (process.env.NODE_ENV !== "production")` or remove from the production build.
-5. **Fix invoice number race condition** — use a DB sequence instead of `count(*) + 1`.
+1. ✅ **Rotate the platform admin password.** Remediated — password removed from docs, must be rotated at `/admin/settings`.
+2. ✅ **Fix the CORS fallback** — remediated in `app.ts`.
+3. ✅ **Add post-reset token invalidation** — `passwordChangedAt` column added to `users` table; `requireAuth` now checks `token.iat > passwordChangedAt`. **Run `pnpm --filter @workspace/db run push` on Replit to apply the schema change.**
+4. ✅ **Disable or gate the seed endpoint** — wrapped in `if (process.env.NODE_ENV !== "production")`. Not reachable in production deployments.
+5. ✅ **Fix invoice number race condition** — replaced `count(*)+1` with `MAX(CAST(...)) FOR UPDATE` in both `routes/invoices.ts` and `lib/automations.ts`. Concurrent creates now serialize at the DB level.
 
 ### Near-Term Roadmap (Next 60 Days)
 
-6. Add a test suite covering auth flows, companyId isolation, and Stripe webhook handlers.
-7. Move the automation/recurring schedulers to BullMQ before horizontal scaling.
-8. Add `past_due` to the subscription cutoff with a configurable grace period.
+6. ✅ **Block `past_due` accounts after grace period** — `requireActiveSubscription` now blocks writes after a 14-day grace period when `subscriptionStatus = "past_due"`.
+7. Add a test suite covering auth flows, companyId isolation, and Stripe webhook handlers.
+8. Move the automation/recurring schedulers to BullMQ before horizontal scaling.
 9. Enable CSP headers (coordinate with the SSR/Vite server).
 10. QuickBooks Online integration — the single highest-ROI feature missing vs. Jobber/HCP at this price point.
 

@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import type { Request, Response, NextFunction } from "express";
+import { db, usersTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const JWT_SECRET_ENV = process.env.SESSION_SECRET || process.env.JWT_SECRET;
 const ADMIN_JWT_SECRET_ENV = process.env.ADMIN_JWT_SECRET;
@@ -20,6 +22,7 @@ export interface UserJWTPayload {
   companyId: number;
   role: string;
   type: "user";
+  iat?: number;
 }
 
 export interface AdminJWTPayload {
@@ -60,14 +63,34 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 
   const token = authHeader.slice(7);
+  let payload: UserJWTPayload;
   try {
-    const payload = verifyUserToken(token);
+    payload = verifyUserToken(token);
     if (payload.type !== "user") throw new Error("Invalid token type");
-    (req as any).user = payload;
-    next();
   } catch {
     res.status(401).json({ error: "Unauthorized", message: "Invalid or expired token" });
+    return;
   }
+
+  // Invalidate tokens issued before a password change.
+  // We do this asynchronously so the hot path (no password change) adds only one
+  // indexed PK lookup. On failure we fail open (don't block the request) to avoid
+  // taking down the app if the DB is briefly unreachable.
+  const tokenIssuedAt = payload.iat ? payload.iat * 1000 : 0;
+  (req as any).user = payload;
+
+  db.select({ passwordChangedAt: usersTable.passwordChangedAt })
+    .from(usersTable)
+    .where(eq(usersTable.id, payload.userId))
+    .limit(1)
+    .then(([row]) => {
+      if (row?.passwordChangedAt && row.passwordChangedAt.getTime() > tokenIssuedAt) {
+        res.status(401).json({ error: "Unauthorized", message: "Session expired. Please sign in again." });
+        return;
+      }
+      next();
+    })
+    .catch(() => next());
 }
 
 export function requireAdminAuth(req: Request, res: Response, next: NextFunction): void {

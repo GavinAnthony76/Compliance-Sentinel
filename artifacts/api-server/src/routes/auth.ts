@@ -405,8 +405,9 @@ router.post("/reset-password", async (req, res) => {
   }
 
   const passwordHash = await hashPassword(password);
+  const now = new Date();
   await db.update(usersTable)
-    .set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, updatedAt: new Date() })
+    .set({ passwordHash, passwordResetToken: null, passwordResetExpiresAt: null, passwordChangedAt: now, updatedAt: now })
     .where(eq(usersTable.id, user.id));
 
   await logActivity({ companyId: user.companyId, userId: user.id, action: "user.password_reset", entityType: "user", entityId: user.id });

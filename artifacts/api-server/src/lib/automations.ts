@@ -198,11 +198,14 @@ async function executeAction(
         }
       }
 
-      const [countResult] = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(invoicesTable)
-        .where(eq(invoicesTable.companyId, companyId));
-      const invoiceNum = `INV-${String(Number(countResult.count) + 1).padStart(4, "0")}`;
+      const numResult = await db.execute(
+        sql`SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(invoice_number, '[^0-9]', '', 'g') AS INTEGER)), 0) + 1 AS next_num
+            FROM invoices
+            WHERE company_id = ${companyId}
+            FOR UPDATE`
+      ) as any;
+      const numRows = Array.isArray(numResult) ? numResult : (numResult?.rows ?? [numResult]);
+      const invoiceNum = `INV-${String(Number(numRows[0]?.next_num ?? 1)).padStart(4, "0")}`;
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 14);
 
