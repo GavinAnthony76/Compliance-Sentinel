@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useListAppointments, useCreateAppointment, useUpdateAppointment, useDeleteAppointment, useCompleteAppointment, useListCustomers, useListServices, useListTeam } from '@workspace/api-client-react';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
-import { Plus, Calendar, Filter, ChevronDown, Download, FileText } from 'lucide-react';
+import { Plus, Calendar, Download, FileText, Images, X, ImageIcon, Loader2 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { useLocation } from 'wouter';
 
@@ -26,6 +26,102 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getListAppointmentsQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 import { Link } from 'wouter';
+
+const TOKEN = () => localStorage.getItem('greensync_token');
+
+function AuthedImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let revoked: string | null = null;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(src, { headers: { Authorization: `Bearer ${TOKEN()}` } });
+        if (!res.ok) throw new Error();
+        const blob = await res.blob();
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        revoked = url;
+        setObjectUrl(url);
+      } catch { if (!cancelled) setFailed(true); }
+    })();
+    return () => { cancelled = true; if (revoked) URL.revokeObjectURL(revoked); };
+  }, [src]);
+  if (failed) return <div className={`flex items-center justify-center bg-muted text-muted-foreground ${className ?? ''}`}><ImageIcon className="w-5 h-5" /></div>;
+  if (!objectUrl) return <div className={`flex items-center justify-center bg-muted ${className ?? ''}`}><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>;
+  return <img src={objectUrl} alt={alt} className={className} loading="lazy" />;
+}
+
+function PhotoViewerModal({ appointment, onClose }: { appointment: any; onClose: () => void }) {
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/appointment-photos?appointmentId=${appointment.id}`, {
+      headers: { Authorization: `Bearer ${TOKEN()}` },
+    })
+      .then(r => r.json())
+      .then(data => setPhotos(data.photos ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [appointment.id]);
+
+  const before = photos.filter(p => p.type === 'before');
+  const after = photos.filter(p => p.type === 'after');
+  const general = photos.filter(p => p.type === 'general');
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-card rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div>
+            <h2 className="text-lg font-bold">Job Photos</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">{appointment.customerName} · {appointment.serviceName || 'Service'}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-full hover:bg-muted transition-colors"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-5 space-y-6">
+          {loading ? (
+            <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>
+          ) : photos.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <Images className="w-10 h-10 mx-auto mb-3 opacity-40" />
+              <p className="text-sm">No photos have been uploaded for this appointment yet.</p>
+            </div>
+          ) : (
+            <>
+              {before.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Before ({before.length})</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {before.map(p => <AuthedImage key={p.id} src={p.fileUrl} alt={p.caption || 'Before'} className="w-full aspect-square object-cover rounded-lg" />)}
+                  </div>
+                </div>
+              )}
+              {after.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">After ({after.length})</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {after.map(p => <AuthedImage key={p.id} src={p.fileUrl} alt={p.caption || 'After'} className="w-full aspect-square object-cover rounded-lg" />)}
+                  </div>
+                </div>
+              )}
+              {general.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">General ({general.length})</h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {general.map(p => <AuthedImage key={p.id} src={p.fileUrl} alt={p.caption || 'Photo'} className="w-full aspect-square object-cover rounded-lg" />)}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function EditAppointmentModal({ appointment, onClose }: { appointment: any; onClose: () => void }) {
   const [form, setForm] = useState({
@@ -237,6 +333,7 @@ function NewAppointmentModal({ onClose }: { onClose: () => void }) {
 export function AppointmentsPage() {
   const [showNew, setShowNew] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [viewingPhotos, setViewingPhotos] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [creatingInvoice, setCreatingInvoice] = useState<number | null>(null);
   const { user } = useAuthState();
@@ -285,6 +382,7 @@ export function AppointmentsPage() {
     <AppLayout>
       {showNew && <NewAppointmentModal onClose={() => setShowNew(false)} />}
       {editing && <EditAppointmentModal appointment={editing} onClose={() => setEditing(null)} />}
+      {viewingPhotos && <PhotoViewerModal appointment={viewingPhotos} onClose={() => setViewingPhotos(null)} />}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-display font-bold">Appointments</h1>
@@ -353,15 +451,25 @@ export function AppointmentsPage() {
                             Edit
                           </Button>
                           {apt.status === 'completed' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              isLoading={creatingInvoice === apt.id}
-                              onClick={() => handleCreateInvoice(apt.id)}
-                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                            >
-                              <FileText className="w-3.5 h-3.5 mr-1" />Invoice
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setViewingPhotos(apt)}
+                                className="text-violet-600 border-violet-200 hover:bg-violet-50"
+                              >
+                                <Images className="w-3.5 h-3.5 mr-1" />Photos
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                isLoading={creatingInvoice === apt.id}
+                                onClick={() => handleCreateInvoice(apt.id)}
+                                className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                              >
+                                <FileText className="w-3.5 h-3.5 mr-1" />Invoice
+                              </Button>
+                            </>
                           )}
                           {apt.status !== 'completed' && apt.status !== 'cancelled' && (
                             <Button

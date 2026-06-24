@@ -1,12 +1,16 @@
 import { Router } from "express";
-import { db, customersTable, invoicesTable, invoiceLineItemsTable, appointmentsTable, estimatesTable, companiesTable, servicesTable } from "@workspace/db";
+import { Readable } from "stream";
+import { db, customersTable, invoicesTable, invoiceLineItemsTable, appointmentsTable, estimatesTable, companiesTable, servicesTable, appointmentPhotosTable } from "@workspace/db";
 import { eq, and, ne, desc } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { hasFeature, getRequiredPlanForFeature } from "../lib/features";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { z } from "zod";
 import crypto from "crypto";
 import { logger } from "../lib/logger";
+
+const objectStorage = new ObjectStorageService();
 
 const router = Router();
 
@@ -623,6 +627,58 @@ router.get("/invoices/:id/receipt-pdf", requirePortalAuth, async (req: any, res)
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="receipt-${invoice.invoiceNumber}.pdf"`);
   return res.send(pdfBuffer);
+});
+
+// GET /portal/appointments/:id/photos — before/after photos for a completed appointment
+router.get("/appointments/:id/photos", requirePortalAuth, async (req: any, res) => {
+  const { companyId, customerId } = req.portal;
+  const appointmentId = Number(req.params.id);
+  if (!Number.isInteger(appointmentId) || appointmentId <= 0)
+    return res.status(400).json({ error: "ValidationError" });
+
+  const [appt] = await db.select().from(appointmentsTable)
+    .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.companyId, companyId), eq(appointmentsTable.customerId, customerId)))
+    .limit(1);
+  if (!appt) return res.status(404).json({ error: "NotFound" });
+
+  const photos = await db.select().from(appointmentPhotosTable)
+    .where(and(eq(appointmentPhotosTable.appointmentId, appointmentId), eq(appointmentPhotosTable.companyId, companyId)))
+    .orderBy(appointmentPhotosTable.createdAt);
+
+  return res.json({
+    photos: photos
+      .filter(p => p.type === "before" || p.type === "after")
+      .map(p => ({ id: p.id, type: p.type, caption: p.caption })),
+  });
+});
+
+// GET /portal/photos/:id/image — serve a before/after photo to an authenticated portal customer
+router.get("/photos/:id/image", requirePortalAuth, async (req: any, res) => {
+  const { companyId } = req.portal;
+  const photoId = Number(req.params.id);
+  if (!Number.isInteger(photoId) || photoId <= 0)
+    return res.status(400).json({ error: "ValidationError" });
+
+  const [photo] = await db.select().from(appointmentPhotosTable)
+    .where(and(eq(appointmentPhotosTable.id, photoId), eq(appointmentPhotosTable.companyId, companyId)))
+    .limit(1);
+  if (!photo) return res.status(404).json({ error: "NotFound" });
+  if (photo.type !== "before" && photo.type !== "after")
+    return res.status(403).json({ error: "Forbidden" });
+
+  try {
+    const objectFile = await objectStorage.getObjectEntityFile(photo.fileKey);
+    const response = await objectStorage.downloadObject(objectFile);
+    res.status(response.status);
+    response.headers.forEach((value: string, key: string) => res.setHeader(key, value));
+    if (response.body) {
+      Readable.fromWeb(response.body as any).pipe(res);
+    } else {
+      res.end();
+    }
+  } catch {
+    res.status(500).json({ error: "Failed to serve image" });
+  }
 });
 
 // GET /portal/estimates

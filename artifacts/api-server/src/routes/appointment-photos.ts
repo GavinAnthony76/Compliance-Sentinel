@@ -3,11 +3,13 @@ import { z } from "zod";
 import { db, appointmentPhotosTable, appointmentsTable, usersTable } from "@workspace/db";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { ObjectStorageService } from "../lib/objectStorage";
 
 const router = Router();
 router.use(requireAuth);
+router.use(requireFeature("before_after_photos"));
 
 const objectStorage = new ObjectStorageService();
 

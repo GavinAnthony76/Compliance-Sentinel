@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link, useLocation, useSearch } from 'wouter';
 import { usePortalAuth } from '@/hooks/use-portal-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Button, Card, CardContent } from '@/components/ui';
-import { ArrowLeft, Calendar, Clock, Leaf, Plus, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, Leaf, Plus, X, Images, ImageIcon, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
@@ -226,6 +226,91 @@ export function PortalAppointmentsPage() {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
   }
 
+  function PortalAuthedImage({ photoId, alt, className }: { photoId: number; alt: string; className?: string }) {
+    const [objectUrl, setObjectUrl] = useState<string | null>(null);
+    const [failed, setFailed] = useState(false);
+    useEffect(() => {
+      let revoked: string | null = null;
+      let cancelled = false;
+      portalFetch(`/api/portal/photos/${photoId}/image`)
+        .then(r => { if (!r.ok) throw new Error(); return r.blob(); })
+        .then(blob => {
+          if (cancelled) return;
+          const url = URL.createObjectURL(blob);
+          revoked = url;
+          setObjectUrl(url);
+        })
+        .catch(() => { if (!cancelled) setFailed(true); });
+      return () => { cancelled = true; if (revoked) URL.revokeObjectURL(revoked); };
+    }, [photoId]);
+    if (failed) return <div className={`flex items-center justify-center bg-muted text-muted-foreground ${className ?? ''}`}><ImageIcon className="w-4 h-4" /></div>;
+    if (!objectUrl) return <div className={`flex items-center justify-center bg-muted ${className ?? ''}`}><Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" /></div>;
+    return <img src={objectUrl} alt={alt} className={className} loading="lazy" />;
+  }
+
+  function PhotoStrip({ appointmentId }: { appointmentId: number }) {
+    const [photos, setPhotos] = useState<{ id: number; type: string; caption: string | null }[] | null>(null);
+    const [open, setOpen] = useState(false);
+    const [loading, setLoading] = useState(false);
+
+    const load = useCallback(() => {
+      if (photos !== null) { setOpen(o => !o); return; }
+      setLoading(true);
+      setOpen(true);
+      portalFetch(`/api/portal/appointments/${appointmentId}/photos`)
+        .then(r => r.json())
+        .then(data => setPhotos(data.photos ?? []))
+        .catch(() => setPhotos([]))
+        .finally(() => setLoading(false));
+    }, [appointmentId, photos]);
+
+    const before = photos?.filter(p => p.type === 'before') ?? [];
+    const after = photos?.filter(p => p.type === 'after') ?? [];
+    const hasPhotos = photos !== null && photos.length > 0;
+    const isEmpty = photos !== null && photos.length === 0;
+
+    return (
+      <div className="mt-3 pt-3 border-t border-border/50">
+        <button
+          onClick={load}
+          className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+        >
+          <Images className="w-3.5 h-3.5" />
+          {photos === null ? 'View job photos' : open ? 'Hide photos' : `${photos.length} photo${photos.length !== 1 ? 's' : ''}`}
+          {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        </button>
+        {open && (
+          <div className="mt-3">
+            {loading ? (
+              <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+            ) : isEmpty ? (
+              <p className="text-xs text-muted-foreground py-2">No photos for this visit.</p>
+            ) : (
+              <div className="space-y-3">
+                {before.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-1.5">Before</p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {before.map(p => <PortalAuthedImage key={p.id} photoId={p.id} alt={p.caption || 'Before'} className="w-full aspect-square object-cover rounded-md" />)}
+                    </div>
+                  </div>
+                )}
+                {after.length > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium mb-1.5">After</p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {after.map(p => <PortalAuthedImage key={p.id} photoId={p.id} alt={p.caption || 'After'} className="w-full aspect-square object-cover rounded-md" />)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   function AppointmentCard({ apt }: { apt: any }) {
     const canCancel = apt.origin === 'portal_request' && (apt.status === 'pending' || apt.status === 'confirmed');
     const isConfirming = confirmCancelId === apt.id;
@@ -263,6 +348,8 @@ export function PortalAppointmentsPage() {
               )}
             </div>
           </div>
+
+          {apt.status === 'completed' && <PhotoStrip appointmentId={apt.id} />}
 
           {/* Inline cancel confirmation */}
           {isConfirming && (
