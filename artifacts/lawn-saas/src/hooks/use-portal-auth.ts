@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
+import { hexToHsl } from '@/lib/utils';
 
 export const PORTAL_TOKEN_KEY = 'greensync_portal_token';
 
@@ -52,6 +53,19 @@ export function usePortalAuth() {
       })
       .finally(() => setIsLoading(false));
   }, [token]);
+
+  // Inject the company's brand color as --primary so all Tailwind classes
+  // (text-primary, bg-primary, etc.) pick it up on every portal page.
+  useEffect(() => {
+    const color = session?.company.primaryColor;
+    if (!color) return;
+    const hsl = hexToHsl(color);
+    if (!hsl) return;
+    const root = document.documentElement;
+    const original = root.style.getPropertyValue('--primary');
+    root.style.setProperty('--primary', hsl);
+    return () => { root.style.setProperty('--primary', original); };
+  }, [session?.company.primaryColor]);
 
   const login = useCallback((newToken: string, newSession: PortalSession) => {
     localStorage.setItem(PORTAL_TOKEN_KEY, newToken);

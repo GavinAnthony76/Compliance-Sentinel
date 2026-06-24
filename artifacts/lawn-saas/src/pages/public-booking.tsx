@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useGetBookingPage, useSubmitBookingRequest } from '@workspace/api-client-react';
 import { useParams } from 'wouter';
 import { Button, Input, Card, CardContent } from '@/components/ui';
-import { Leaf, Check, MapPin, Phone, Star, ShieldCheck, Clock } from 'lucide-react';
+import { Leaf, Check, MapPin, Phone, Star, ShieldCheck, Clock, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePageMeta } from '@/hooks/use-page-meta';
 
@@ -165,11 +165,18 @@ export function PublicBookingPage() {
           </p>
         )}
         <p className="text-muted-foreground mt-2">Professional Lawn Care Services</p>
-        {data.phone && (
-          <a href={`tel:${data.phone}`} className="inline-flex items-center gap-2 text-sm mt-3 hover:underline" style={{ color: primaryColor }}>
-            <Phone className="w-4 h-4" />{data.phone}
-          </a>
-        )}
+        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 mt-3">
+          {data.phone && (
+            <a href={`tel:${data.phone}`} className="inline-flex items-center gap-2 text-sm hover:underline" style={{ color: primaryColor }}>
+              <Phone className="w-4 h-4" />{data.phone}
+            </a>
+          )}
+          {data.website && (
+            <a href={data.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-sm hover:underline" style={{ color: primaryColor }}>
+              <Globe className="w-4 h-4" />Visit our website
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Business intro + trust signals */}

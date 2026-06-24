@@ -47,6 +47,19 @@ function requirePortalAuth(req: any, res: any, next: any): void {
   }
 }
 
+// GET /portal/auth/company/:slug — public: returns minimal branding info so the
+// login page can apply the company's color before the customer authenticates.
+router.get("/auth/company/:slug", async (req, res) => {
+  const { slug } = req.params;
+  const [company] = await db
+    .select({ name: companiesTable.name, logoUrl: companiesTable.logoUrl, primaryColor: companiesTable.primaryColor })
+    .from(companiesTable)
+    .where(and(eq(companiesTable.slug, slug), eq(companiesTable.isActive, true)))
+    .limit(1);
+  if (!company) return res.status(404).json({ error: "NotFound" });
+  return res.json(company);
+});
+
 // POST /portal/auth/find-portal — public: given an email, return every active company
 // portal that customer belongs to (slug + name). Used by the generic /portal/login hub.
 router.post("/auth/find-portal", async (req, res) => {

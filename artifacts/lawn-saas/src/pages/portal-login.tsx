@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { Mail, Phone, Lock, Leaf, Loader2 } from 'lucide-react';
 import { usePageMeta } from '@/hooks/use-page-meta';
+import { hexToHsl } from '@/lib/utils';
 
 type Mode = 'link' | 'password';
 
@@ -16,6 +17,23 @@ export function PortalLoginPage() {
     noIndex: true,
   });
   const [mode, setMode] = useState<Mode>('link');
+  const [companyBranding, setCompanyBranding] = useState<{ name: string; logoUrl: string | null; primaryColor: string | null } | null>(null);
+
+  // Fetch company branding before authentication so the login page reflects
+  // the company's brand color rather than the default GreenSynk green.
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`/api/portal/auth/company/${encodeURIComponent(slug)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        setCompanyBranding(data);
+        const hsl = data.primaryColor ? hexToHsl(data.primaryColor) : null;
+        if (hsl) document.documentElement.style.setProperty('--primary', hsl);
+      })
+      .catch(() => {});
+    return () => { document.documentElement.style.removeProperty('--primary'); };
+  }, [slug]);
   const [email, setEmail] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -103,8 +121,11 @@ export function PortalLoginPage() {
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <div className="flex items-center gap-2 text-primary font-display font-bold text-3xl">
-            <Leaf className="w-8 h-8 fill-primary" />
-            Customer Portal
+            {companyBranding?.logoUrl
+              ? <img src={companyBranding.logoUrl} alt={companyBranding.name} className="h-10 w-auto object-contain" />
+              : <Leaf className="w-8 h-8 fill-primary" />
+            }
+            {companyBranding?.name ?? 'Customer Portal'}
           </div>
         </div>
         <Card className="border-border/50 shadow-2xl shadow-black/5 bg-white/80 backdrop-blur-xl">
