@@ -25,6 +25,7 @@ background promise completes; the runtime suspends the instance, abandoning it.
 - Don't let a send failure roll back the primary mutation: create the row first,
   then `await` the send in a try/catch, log delivery result, and still return
   success (the entity already exists).
-- Known remaining fire-and-forget sends with this latent risk: auth.ts
-  registration email-verification and post-verify welcome email. Convert to
-  awaited (or a durable outbox/job worker) if they prove flaky in production.
+- Fixed call sites (all now awaited + logged, never throw): team invite (POST
+  /team), registration email-verification (issueEmailVerification, used by
+  register + resend-confirmation), and post-verify welcome email. If you add a
+  NEW email/SMS send, await it the same way — never reintroduce `void send()`.

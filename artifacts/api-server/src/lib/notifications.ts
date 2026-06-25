@@ -995,7 +995,7 @@ export async function sendWelcomeEmail(opts: {
   firstName: string;
   companyName: string;
   loginUrl: string;
-}): Promise<void> {
+}): Promise<EmailResult> {
   const bodyHtml = `
             <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
             <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">Welcome to GreenSynk! Your company <strong>${escapeHtml(opts.companyName)}</strong> is all set up and your 14-day free trial has started.</p>
@@ -1018,7 +1018,7 @@ export async function sendWelcomeEmail(opts: {
     footerHtml: `If you have any questions, just reply to this email — we're happy to help.<br /><br />Welcome aboard,<br /><strong>The GreenSynk Team</strong>`,
   });
 
-  await sendEmail({
+  return sendEmail({
     to: opts.to,
     subject: `Welcome to GreenSynk, ${opts.firstName}!`,
     body: [

@@ -45,8 +45,11 @@ function looksLikeEmail(identifier: string): boolean {
   return identifier.includes("@");
 }
 
-// Issue a fresh email-verification token and email it. Returns nothing; callers
-// treat delivery as fire-and-forget (never block signup/resend on email).
+// Issue a fresh email-verification token and email it. The send is AWAITED (not
+// fire-and-forget): on the autoscale deployment the instance CPU is throttled
+// right after the response is flushed, which silently drops any unawaited
+// background promise, so the verification email would never actually be sent. A
+// delivery failure is logged but never thrown, so signup/resend still succeed.
 async function issueEmailVerification(user: { id: number; email: string; firstName: string }): Promise<void> {
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -55,8 +58,14 @@ async function issueEmailVerification(user: { id: number; email: string; firstNa
     .set({ emailVerificationToken: tokenHash, emailVerificationExpiresAt: expiresAt, updatedAt: new Date() })
     .where(eq(usersTable.id, user.id));
   const verifyUrl = `${resolveBaseUrl()}/verify-email?token=${rawToken}`;
-  void sendEmailVerificationEmail({ to: user.email, firstName: user.firstName, verifyUrl })
-    .catch((err) => logger.error({ err, to: user.email }, "Failed to send verification email"));
+  try {
+    const result = await sendEmailVerificationEmail({ to: user.email, firstName: user.firstName, verifyUrl });
+    if (!result.delivered) {
+      logger.error({ to: user.email, reason: result.reason }, "Verification email not delivered");
+    }
+  } catch (err) {
+    logger.error({ err, to: user.email }, "Failed to send verification email");
+  }
 }
 
 // Simple in-memory rate limit for resend-confirmation: at most 3 sends per email
@@ -271,13 +280,23 @@ router.post("/verify-email", async (req, res) => {
   await logActivity({ companyId: user.companyId, userId: user.id, action: "user.email_verified", entityType: "user", entityId: user.id });
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, user.companyId)).limit(1);
-  // Now that the address is confirmed, send the welcome email (fire-and-forget).
-  void sendWelcomeEmail({
-    to: user.email,
-    firstName: user.firstName,
-    companyName: company?.name ?? "your company",
-    loginUrl: `${resolveBaseUrl()}/login`,
-  }).catch(() => { /* logged inside sendEmail */ });
+  // Now that the address is confirmed, send the welcome email. Await it (not
+  // fire-and-forget) so the autoscale instance doesn't get throttled before the
+  // send completes and silently drop it. A delivery failure must not fail the
+  // verification response, so we log and continue.
+  try {
+    const result = await sendWelcomeEmail({
+      to: user.email,
+      firstName: user.firstName,
+      companyName: company?.name ?? "your company",
+      loginUrl: `${resolveBaseUrl()}/login`,
+    });
+    if (!result.delivered) {
+      logger.error({ to: user.email, reason: result.reason }, "Welcome email not delivered");
+    }
+  } catch (err) {
+    logger.error({ err, to: user.email }, "Failed to send welcome email");
+  }
 
   return res.json({ success: true, message: "Your email has been confirmed. You can now sign in." });
 });
