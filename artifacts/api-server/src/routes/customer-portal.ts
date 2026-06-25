@@ -654,7 +654,7 @@ router.get("/appointments/:id/photos", requirePortalAuth, async (req: any, res) 
 
 // GET /portal/photos/:id/image — serve a before/after photo to an authenticated portal customer
 router.get("/photos/:id/image", requirePortalAuth, async (req: any, res) => {
-  const { companyId } = req.portal;
+  const { companyId, customerId } = req.portal;
   const photoId = Number(req.params.id);
   if (!Number.isInteger(photoId) || photoId <= 0)
     return res.status(400).json({ error: "ValidationError" });
@@ -665,6 +665,18 @@ router.get("/photos/:id/image", requirePortalAuth, async (req: any, res) => {
   if (!photo) return res.status(404).json({ error: "NotFound" });
   if (photo.type !== "before" && photo.type !== "after")
     return res.status(403).json({ error: "Forbidden" });
+
+  // Enforce object-level ownership: the photo's appointment must belong to the
+  // logged-in portal customer. Without this a customer could enumerate photo IDs
+  // and read another customer's before/after images within the same company.
+  const [ownerAppt] = await db.select({ id: appointmentsTable.id }).from(appointmentsTable)
+    .where(and(
+      eq(appointmentsTable.id, photo.appointmentId),
+      eq(appointmentsTable.companyId, companyId),
+      eq(appointmentsTable.customerId, customerId),
+    ))
+    .limit(1);
+  if (!ownerAppt) return res.status(404).json({ error: "NotFound" });
 
   try {
     const objectFile = await objectStorage.getObjectEntityFile(photo.fileKey);

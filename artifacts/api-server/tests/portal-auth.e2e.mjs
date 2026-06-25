@@ -190,7 +190,7 @@ async function main() {
   const custA1 = await createCustomer(companyA.ownerToken, "A", 1);
   const custA2 = await createCustomer(companyA.ownerToken, "A", 2);
   const portalA1 = await provisionPortalCustomer(companyA.ownerToken, custA1.id);
-  await provisionPortalCustomer(companyA.ownerToken, custA2.id);
+  const portalA2 = await provisionPortalCustomer(companyA.ownerToken, custA2.id);
   const invoiceA1 = await createInvoice(companyA.ownerToken, custA1.id);
   const invoiceA2 = await createInvoice(companyA.ownerToken, custA2.id);
 
@@ -304,6 +304,37 @@ async function main() {
       allowed.status === 200,
       `got ${allowed.status}`,
     );
+  }
+
+  // --- Portal photo image endpoint is gated by object-level ownership -------
+  // A customer must only retrieve before/after photos belonging to THEIR OWN
+  // appointments. Without the appointment.customerId check a customer could
+  // enumerate photo IDs and read another customer's images in the same company.
+  console.log("\nPortal photo image object-level ownership:");
+  {
+    const apptForA1 = await createCompanyAppointment(companyA.ownerToken, custA1.id);
+    const photo = await req("POST", "/appointment-photos", {
+      token: companyA.ownerToken,
+      body: { appointmentId: apptForA1, objectPath: `/objects/portal-photo-${stamp}.jpg`, type: "before" },
+    });
+    if (photo.status !== 201 || !photo.json?.id) {
+      console.error("Setup failed: could not create appointment photo", photo.status, photo.json);
+      process.exit(1);
+    }
+    const photoId = photo.json.id;
+
+    // Same company, DIFFERENT customer -> must be denied (the regression guard).
+    const foreign = await req("GET", `/portal/photos/${photoId}/image`, { token: portalA2.portalToken });
+    check("portal photo image of another customer (same company) -> 404", foreign.status === 404, `got ${foreign.status}`);
+
+    // Different company -> must be denied.
+    const crossCompany = await req("GET", `/portal/photos/${photoId}/image`, { token: portalB1.portalToken });
+    check("portal photo image cross-company -> 404", crossCompany.status === 404, `got ${crossCompany.status}`);
+
+    // Owner customer -> authorization passes. The placeholder object isn't really
+    // stored so the object fetch may 500, but it must NOT be an authz block (404/403).
+    const own = await req("GET", `/portal/photos/${photoId}/image`, { token: portalA1.portalToken });
+    check("portal photo image for OWN appointment passes authz (not 404/403)", own.status !== 404 && own.status !== 403, `got ${own.status}`);
   }
 
   // --- Summary --------------------------------------------------------------

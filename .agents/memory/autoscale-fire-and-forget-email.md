@@ -25,7 +25,6 @@ background promise completes; the runtime suspends the instance, abandoning it.
 - Don't let a send failure roll back the primary mutation: create the row first,
   then `await` the send in a try/catch, log delivery result, and still return
   success (the entity already exists).
-- Fixed call sites (all now awaited + logged, never throw): team invite (POST
-  /team), registration email-verification (issueEmailVerification, used by
-  register + resend-confirmation), and post-verify welcome email. If you add a
-  NEW email/SMS send, await it the same way — never reintroduce `void send()`.
+- Grep for `void send` / `.catch(` after `res.json`/`res.send` before assuming a
+  send is safe — any unawaited email/SMS is the same latent bug. When you add a
+  new delivery-critical send, await it; never reintroduce `void send()`.
