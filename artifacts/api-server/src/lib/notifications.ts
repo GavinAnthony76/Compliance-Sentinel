@@ -1719,8 +1719,8 @@ export async function sendTeamInviteEmail(opts: {
   companyName: string;
   temporaryPassword: string;
   loginUrl: string;
-}): Promise<void> {
-  await sendEmail({
+}): Promise<EmailResult> {
+  return sendEmail({
     to: opts.to,
     subject: `You've been invited to join ${opts.companyName} on GreenSynk`,
     body: `Hi ${opts.firstName},\n\nYou have been added as a team member at ${opts.companyName} on GreenSynk.\n\nHere are your login credentials:\n\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword}\n\nLogin here: ${opts.loginUrl}\n\nPlease change your password after your first login.\n\nThank you,\nThe GreenSynk Team`,

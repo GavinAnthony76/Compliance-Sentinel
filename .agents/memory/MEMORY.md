@@ -33,3 +33,4 @@
 - [Email case normalization](email-case-normalization.md) — login looks up email lowercased; every user-email write/lookup must lowercase too or accounts become un-loginable (401 despite existing).
 - [Portal forgot-password gating](portal-forgot-password-gating.md) — never gate access-recovery emails on portalPasswordHash; magic-link-only customers have none, so forgot-password silently sent nothing. Email anyone with an email.
 - [PWA precache size limit](pwa-precache-size-limit.md) — lawn-saas build aborts if any png/webp/jpg in public/ exceeds workbox's 2MiB precache limit; keep large/unused images out of public/.
+- [Autoscale drops fire-and-forget email](autoscale-fire-and-forget-email.md) — on Cloud Run autoscale, async sends started AFTER res.json() get CPU-throttled away & silently never deliver; await all critical external I/O before responding.

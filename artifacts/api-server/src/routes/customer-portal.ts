@@ -673,11 +673,11 @@ router.get("/photos/:id/image", requirePortalAuth, async (req: any, res) => {
     response.headers.forEach((value: string, key: string) => res.setHeader(key, value));
     if (response.body) {
       Readable.fromWeb(response.body as any).pipe(res);
-    } else {
-      res.end();
+      return;
     }
+    return res.end();
   } catch {
-    res.status(500).json({ error: "Failed to serve image" });
+    return res.status(500).json({ error: "Failed to serve image" });
   }
 });
 

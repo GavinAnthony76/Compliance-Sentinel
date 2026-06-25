@@ -67,18 +67,29 @@ router.post("/", requireRole("owner", "admin"), requireFeature("team_management"
   await logActivity({ companyId, userId, action: "team.member_invited", entityType: "user", entityId: member.id });
 
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
-  sendTeamInviteEmail({
-    to: member.email,
-    firstName: member.firstName,
-    lastName: member.lastName,
-    companyName: company?.name ?? "your company",
-    temporaryPassword,
-    loginUrl: resolveBaseUrl(),
-  }).catch((err) => {
-    import("../lib/logger").then(({ logger }) => {
-      logger.error({ err, to: member.email }, "Failed to send team invite email");
+  // Await the invite email so it actually completes before the response is
+  // flushed. On the autoscale (Cloud Run) deployment the instance CPU is
+  // throttled right after the response, which silently drops any fire-and-forget
+  // background promise — so the email must be awaited here. A delivery failure
+  // must NOT fail member creation (the user already exists), so we log and move on.
+  const { logger } = await import("../lib/logger");
+  try {
+    const result = await sendTeamInviteEmail({
+      to: member.email,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      companyName: company?.name ?? "your company",
+      temporaryPassword,
+      loginUrl: resolveBaseUrl(),
     });
-  });
+    if (result.delivered) {
+      logger.info({ to: member.email }, "Team invite email sent");
+    } else {
+      logger.error({ to: member.email, reason: result.reason }, "Team invite email not delivered");
+    }
+  } catch (err) {
+    logger.error({ err, to: member.email }, "Failed to send team invite email");
+  }
 
   return res.status(201).json({
     id: member.id,
