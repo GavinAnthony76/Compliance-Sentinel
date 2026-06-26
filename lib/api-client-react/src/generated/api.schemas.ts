@@ -1060,6 +1060,69 @@ export interface CreateAdminRequest {
   role?: string;
 }
 
+export type SmsPreferencesResponseCategories = {
+  appointments: boolean;
+  estimates: boolean;
+  invoices: boolean;
+  serviceUpdates: boolean;
+};
+
+export interface SmsPreferencesResponse {
+  smsEnabled: boolean;
+  categories: SmsPreferencesResponseCategories;
+}
+
+export interface SmsPreferencesUpdateRequest {
+  appointments?: boolean;
+  estimates?: boolean;
+  invoices?: boolean;
+  serviceUpdates?: boolean;
+}
+
+export interface SmsConsentEventRecord {
+  id: number;
+  subjectType: string;
+  subjectId: number;
+  phone?: string | null;
+  eventType: string;
+  keyword?: string | null;
+  source: string;
+  prefCategory?: string | null;
+  prefValue?: string | null;
+  ipAddress?: string | null;
+  createdAt: string;
+}
+
+export type AdminSmsComplianceResponseCustomers = {
+  totalOptIn: number;
+  totalOptOut: number;
+  total: number;
+};
+
+export type AdminSmsComplianceResponseCompanies = {
+  totalOptIn: number;
+  totalOptOut: number;
+  total: number;
+};
+
+export type AdminSmsComplianceResponseKeywordCountsItem = {
+  keyword: string;
+  count: number;
+};
+
+export type AdminSmsComplianceResponseEventTypeCountsItem = {
+  eventType: string;
+  count: number;
+};
+
+export interface AdminSmsComplianceResponse {
+  customers: AdminSmsComplianceResponseCustomers;
+  companies: AdminSmsComplianceResponseCompanies;
+  keywordCounts: AdminSmsComplianceResponseKeywordCountsItem[];
+  eventTypeCounts: AdminSmsComplianceResponseEventTypeCountsItem[];
+  recentEvents: SmsConsentEventRecord[];
+}
+
 export type ListCustomersParams = {
   search?: string;
   page?: number;
@@ -1148,4 +1211,25 @@ export type AdminUpdateCompanyNotesBody = {
 export type AdminListActivityParams = {
   page?: number;
   limit?: number;
+};
+
+export type UpdateSmsPortalPreferences200 = {
+  ok: boolean;
+};
+
+export type SmsPortalOptIn200 = {
+  ok: boolean;
+};
+
+export type SmsPortalOptOut200 = {
+  ok: boolean;
+};
+
+export type SmsCompanyOptIn200 = {
+  ok: boolean;
+};
+
+export type TwilioSmsWebhookBody = {
+  From?: string;
+  Body?: string;
 };

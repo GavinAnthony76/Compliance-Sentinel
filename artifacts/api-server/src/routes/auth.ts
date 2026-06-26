@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { signUserToken, hashPassword, verifyPassword, requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
 import { sendEmail, sendWelcomeEmail, sendEmailVerificationEmail, resolveBaseUrl } from "../lib/notifications";
+import { appendSmsConsentEvent } from "../lib/sms-consent";
 import { logger } from "../lib/logger";
 import { z } from "zod";
 import crypto from "crypto";
@@ -22,6 +23,8 @@ const registerSchema = z.object({
   // subscription. Converting to a paid plan still requires a confirmed
   // Stripe checkout/webhook (see routes/billing.ts).
   selectedPlan: z.enum(["starter", "growth", "pro"]).optional(),
+  // Optional SMS consent from the registration form checkbox
+  smsConsent: z.boolean().optional(),
 });
 
 // Login accepts EITHER an email or a phone number as the identifier. Phone login
@@ -91,7 +94,7 @@ router.post("/register", async (req, res) => {
     return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
   }
 
-  const { firstName, lastName, email, password, companyName, phone, selectedPlan } = parsed.data;
+  const { firstName, lastName, email, password, companyName, phone, selectedPlan, smsConsent } = parsed.data;
 
   if (!PASSWORD_REGEX.test(password)) {
     return res.status(400).json({
@@ -159,6 +162,22 @@ router.post("/register", async (req, res) => {
     entityId: company.id,
     metadata: { selectedPlan: company.subscriptionPlan },
   });
+
+  // Record SMS consent if the owner checked the box at signup (non-fatal)
+  if (smsConsent) {
+    try {
+      await db.update(companiesTable).set({ smsOptIn: true, smsOptInAt: new Date(), smsOptInSource: "registration_form", updatedAt: new Date() }).where(eq(companiesTable.id, company.id));
+      await appendSmsConsentEvent({
+        subjectType: "company",
+        subjectId: company.id,
+        phone: phone ?? null,
+        eventType: "opt_in",
+        source: "registration_form",
+        ipAddress: (req as any).ip ?? null,
+        userAgent: (req as any).headers?.["user-agent"] ?? null,
+      });
+    } catch (_err) { /* non-fatal */ }
+  }
 
   // Send the email-confirmation link (non-fatal — must never block signup).
   await issueEmailVerification(user);

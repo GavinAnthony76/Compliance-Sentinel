@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useRegister, useResendConfirmation } from '@workspace/api-client-react';
 import { Button, Input, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
-import { User, Mail, Lock, Building2, Check, ChevronRight, MailCheck } from 'lucide-react';
+import { User, Mail, Lock, Building2, Check, ChevronRight, MailCheck, MessageSquare } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Link } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
@@ -48,6 +48,7 @@ export function RegisterPage() {
     phone: '',
   });
   const [registered, setRegistered] = useState(false);
+  const [smsConsent, setSmsConsent] = useState(false);
   const { toast } = useToast();
   const registerMutation = useRegister();
   const resendMutation = useResendConfirmation();
@@ -56,7 +57,7 @@ export function RegisterPage() {
     e.preventDefault();
     if (step < 3) { setStep(s => s + 1); return; }
     try {
-      await registerMutation.mutateAsync({ data: { ...form, selectedPlan: selectedPlan as any } });
+      await registerMutation.mutateAsync({ data: { ...form, selectedPlan: selectedPlan as any, smsConsent } });
       setRegistered(true);
     } catch (err: any) {
       toast({ title: 'Registration failed', description: err.message || 'Please try again', variant: 'destructive' });
@@ -218,6 +219,28 @@ export function RegisterPage() {
                   <label className="text-sm font-medium pl-1">Business Phone</label>
                   <Input type="tel" placeholder="(555) 000-0000" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
                 </div>
+
+                {/* SMS consent — required for A2P 10DLC; checkbox must be unchecked by default */}
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <input
+                      id="sms-consent-reg"
+                      type="checkbox"
+                      checked={smsConsent}
+                      onChange={e => setSmsConsent(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    <label htmlFor="sms-consent-reg" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                      <span className="flex items-center gap-1 font-semibold text-foreground text-sm mb-1">
+                        <MessageSquare className="w-3.5 h-3.5" /> SMS Alerts (optional)
+                      </span>
+                      By checking this box, I agree to receive text messages from GreenSynk at the business phone number provided above. Messages may include account alerts, platform updates, and service notifications. Message & data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel, <strong>HELP</strong> for help. See our{' '}
+                      <a href="/sms-policy" target="_blank" rel="noopener noreferrer" className="underline text-primary">SMS Policy</a> and{' '}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-primary">Privacy Policy</a>.
+                    </label>
+                  </div>
+                </div>
+
                 <Button type="submit" className="w-full h-12" isLoading={registerMutation.isPending}>
                   Create Account & Start Free Trial
                 </Button>

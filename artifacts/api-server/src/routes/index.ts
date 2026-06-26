@@ -34,6 +34,8 @@ import appointmentPhotosRouter from "./appointment-photos";
 import contactRouter from "./contact";
 import plansRouter from "./plans";
 import platformRouter from "./platform";
+import smsConsentRouter from "./sms-consent";
+import smsWebhookRouter from "./sms-webhook";
 
 const router: IRouter = Router();
 
@@ -72,5 +74,7 @@ router.use("/appointment-photos", appointmentPhotosRouter);
 router.use("/contact", contactRouter);
 router.use("/plans", plansRouter);
 router.use("/platform", platformRouter);
+router.use("/sms-consent", smsConsentRouter);
+router.use("/sms", smsWebhookRouter);
 
 export default router;

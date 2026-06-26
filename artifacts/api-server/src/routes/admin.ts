@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, companiesTable, usersTable, customersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable, leadsTable, followUpCampaignsTable, followUpLogsTable, communicationEventsTable } from "@workspace/db";
+import { db, companiesTable, usersTable, customersTable, platformAdminsTable, appointmentsTable, invoicesTable, activityLogsTable, leadsTable, followUpCampaignsTable, followUpLogsTable, communicationEventsTable, smsConsentEventsTable } from "@workspace/db";
 import { eq, sql, desc, ilike, and, inArray, or } from "drizzle-orm";
 import { requireAdminAuth, hashPassword } from "../lib/auth";
 import { logActivity } from "../lib/activity";
@@ -742,6 +742,61 @@ router.delete("/admins/:id", async (req: any, res) => {
 });
 
 // ─── Seed ─────────────────────────────────────────────────────────────────────
+// ─── SMS Compliance ───────────────────────────────────────────────────────────
+router.get("/sms-compliance", async (_req, res) => {
+  try {
+    const [customerStats] = await db
+      .select({
+        totalOptIn: sql<number>`count(*) filter (where ${customersTable.smsOptIn} = true)`,
+        totalOptOut: sql<number>`count(*) filter (where ${customersTable.smsOptOut} = true)`,
+        total: sql<number>`count(*)`,
+      })
+      .from(customersTable);
+
+    const [companyStats] = await db
+      .select({
+        totalOptIn: sql<number>`count(*) filter (where ${companiesTable.smsOptIn} = true)`,
+        totalOptOut: sql<number>`count(*) filter (where ${companiesTable.smsOptOut} = true)`,
+        total: sql<number>`count(*)`,
+      })
+      .from(companiesTable);
+
+    const keywordCounts = await db
+      .select({
+        keyword: smsConsentEventsTable.keyword,
+        count: sql<number>`count(*)`,
+      })
+      .from(smsConsentEventsTable)
+      .where(sql`${smsConsentEventsTable.keyword} is not null`)
+      .groupBy(smsConsentEventsTable.keyword);
+
+    const eventTypeCounts = await db
+      .select({
+        eventType: smsConsentEventsTable.eventType,
+        count: sql<number>`count(*)`,
+      })
+      .from(smsConsentEventsTable)
+      .groupBy(smsConsentEventsTable.eventType);
+
+    const recentEvents = await db
+      .select()
+      .from(smsConsentEventsTable)
+      .orderBy(desc(smsConsentEventsTable.createdAt))
+      .limit(50);
+
+    return res.json({
+      customers: customerStats,
+      companies: companyStats,
+      keywordCounts,
+      eventTypeCounts,
+      recentEvents,
+    });
+  } catch (err) {
+    logger.error({ err }, "Error fetching SMS compliance stats");
+    return res.status(500).json({ error: "InternalError", message: "Failed to fetch SMS compliance data" });
+  }
+});
+
 router.post("/seed", async (req: any, res) => {
   if (process.env.NODE_ENV === "production") {
     return res.status(404).json({ error: "NotFound" });

@@ -36,6 +36,13 @@ export const companiesTable = pgTable("companies", {
   checkPayableTo: text("check_payable_to"),
   stripeConnectAccountId: text("stripe_connect_account_id"),
   nextInvoiceSeq: integer("next_invoice_seq").notNull().default(0),
+  // SMS A2P consent — captured from the owner at company signup
+  smsOptIn: boolean("sms_opt_in").notNull().default(false),
+  smsOptInAt: timestamp("sms_opt_in_at"),
+  smsOptInSource: text("sms_opt_in_source"), // "registration_form" | "manual"
+  smsOptOut: boolean("sms_opt_out").notNull().default(false),
+  smsOptOutAt: timestamp("sms_opt_out_at"),
+  smsOptOutReason: text("sms_opt_out_reason"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

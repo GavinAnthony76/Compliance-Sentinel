@@ -1,6 +1,7 @@
 import { db, automationRulesTable, reviewRequestsTable, invoicesTable, invoiceLineItemsTable, customersTable, companiesTable, appointmentsTable, servicesTable } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
-import { sendReviewRequestNotification, sendEmail, sendSMS } from "./notifications";
+import { sendReviewRequestNotification, sendEmail } from "./notifications";
+import { sendSMSWithConsent } from "./sms-consent";
 import { dispatchInvoiceEmail } from "./invoice-email";
 import { logActivity } from "./activity";
 import { insertInvoiceWithNumber } from "./invoice-number";
@@ -156,7 +157,7 @@ async function executeAction(
         }
       }
 
-      await sendSMS({ to: customer.phone, body: message });
+      await sendSMSWithConsent({ to: customer.phone, body: message, category: "appointments", subject: { type: "customer", id: customer.id, companyId } });
 
       await logActivity({
         companyId,

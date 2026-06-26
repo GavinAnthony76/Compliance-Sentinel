@@ -3,6 +3,7 @@ import { db, companiesTable, servicesTable, customersTable, propertiesTable, app
 import { eq, and, isNotNull } from "drizzle-orm";
 import { logActivity } from "../lib/activity";
 import { hasFeature, checkPlanLimit } from "../lib/features";
+import { appendSmsConsentEvent } from "../lib/sms-consent";
 import { enqueueFollowUps } from "../lib/follow-ups";
 import { sendBookingRequestNotification, sendBookingConfirmationEmail } from "../lib/notifications";
 import { logger } from "../lib/logger";
@@ -59,6 +60,7 @@ const bookingSchema = z.object({
   notes: z.string().max(2000).optional(),
   gateNotes: z.string().max(500).optional(),
   yardSize: z.string().max(50).optional(),
+  smsConsent: z.boolean().optional(),
 });
 
 router.post("/book/:slug/submit", async (req, res) => {
@@ -110,7 +112,33 @@ router.post("/book/:slug/submit", async (req, res) => {
       zip: data.zip ?? null,
       leadSource: "booking_page",
       tags: [],
+      ...(data.smsConsent ? { smsOptIn: true, smsOptInAt: new Date(), smsOptInSource: "booking_form" } : {}),
     }).returning();
+
+    // Record SMS consent audit event if the checkbox was checked
+    if (data.smsConsent) {
+      await appendSmsConsentEvent({
+        subjectType: "customer",
+        subjectId: customer.id,
+        phone: data.phone,
+        eventType: "opt_in",
+        source: "booking_form",
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers["user-agent"] ?? null,
+      });
+    }
+  } else if (data.smsConsent && !customer.smsOptIn) {
+    // Existing customer who newly checked the SMS consent box
+    await db.update(customersTable).set({ smsOptIn: true, smsOptInAt: new Date(), smsOptInSource: "booking_form", smsOptOut: false, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
+    await appendSmsConsentEvent({
+      subjectType: "customer",
+      subjectId: customer.id,
+      phone: data.phone,
+      eventType: "opt_in",
+      source: "booking_form",
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+    });
   }
 
   const [property] = await db.insert(propertiesTable).values({

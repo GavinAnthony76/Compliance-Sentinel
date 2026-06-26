@@ -9,7 +9,8 @@ import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
-import { sendEmail, sendSMS, dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from "../lib/notifications";
+import { sendEmail, dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from "../lib/notifications";
+import { sendSMSWithConsent } from "../lib/sms-consent";
 
 const router = Router();
 router.use(requireAuth);
@@ -284,7 +285,7 @@ router.post("/invoices/send-reminders", async (req: any, res) => {
       });
     }
     if (customer.phone) {
-      await sendSMS({ to: customer.phone, body: message });
+      await sendSMSWithConsent({ to: customer.phone, body: message, category: "invoices", subject: { type: "customer", id: customer.id, companyId: invoice.companyId } });
     }
 
     await db.update(invoicesTable).set({

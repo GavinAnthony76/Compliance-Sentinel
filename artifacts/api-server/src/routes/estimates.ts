@@ -192,7 +192,8 @@ router.post("/:id/send-for-signature", async (req: any, res) => {
   await db.update(estimatesTable).set({ publicToken: tokenHash, status: "sent", updatedAt: new Date() }).where(eq(estimatesTable.id, id));
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, est.customerId)).limit(1);
-  const { sendEmail, sendSMS } = await import("../lib/notifications");
+  const { sendEmail } = await import("../lib/notifications");
+  const { sendSMSWithConsent } = await import("../lib/sms-consent");
   const { companiesTable } = await import("@workspace/db");
   const { eq: deq } = await import("drizzle-orm");
   const [company] = await db.select().from(companiesTable).where(deq(companiesTable.id, companyId)).limit(1);
@@ -208,7 +209,7 @@ router.post("/:id/send-for-signature", async (req: any, res) => {
     });
   }
   if (customer?.phone && hasFeature(company?.subscriptionPlan, "sms_notifications")) {
-    await sendSMS({ to: customer.phone, body: `${company?.name || "Your service provider"} sent estimate ${est.estimateNumber} for $${Number(est.total).toFixed(2)}. Review & sign: ${signUrl}` });
+    await sendSMSWithConsent({ to: customer.phone, body: `${company?.name || "Your service provider"} sent estimate ${est.estimateNumber} for $${Number(est.total).toFixed(2)}. Review & sign: ${signUrl}`, category: "estimates", subject: { type: "customer", id: customer.id, companyId } });
   }
 
   await logActivity({ companyId, userId, action: "estimate.sent_for_signature", entityType: "estimate", entityId: id });

@@ -29,6 +29,17 @@ export const customersTable = pgTable("customers", {
   // Communication preferences (opt-out)
   emailOptOut: boolean("email_opt_out").notNull().default(false),
   smsOptOut: boolean("sms_opt_out").notNull().default(false),
+  // SMS A2P consent — explicit opt-in captured at booking or portal invite
+  smsOptIn: boolean("sms_opt_in").notNull().default(false),
+  smsOptInAt: timestamp("sms_opt_in_at"),
+  smsOptInSource: text("sms_opt_in_source"), // "booking_form" | "portal_invite" | "manual" | "import"
+  smsOptOutAt: timestamp("sms_opt_out_at"),
+  smsOptOutReason: text("sms_opt_out_reason"), // "STOP" | "STOPALL" | "UNSUBSCRIBE" | "CANCEL" | "END" | "QUIT" | "manual"
+  // Per-category SMS preferences (all enabled by default when opted in)
+  smsPrefAppointments: boolean("sms_pref_appointments").notNull().default(true),
+  smsPrefEstimates: boolean("sms_pref_estimates").notNull().default(true),
+  smsPrefInvoices: boolean("sms_pref_invoices").notNull().default(true),
+  smsPrefServiceUpdates: boolean("sms_pref_service_updates").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -88,7 +88,8 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
     if (company) {
       const baseUrl = process.env.APP_BASE_URL || `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-      const { sendSMS, sendPortalAccessEmail, sendCustomerWelcomeBookingEmail } = await import("../lib/notifications");
+      const { sendPortalAccessEmail, sendCustomerWelcomeBookingEmail } = await import("../lib/notifications");
+      const { sendSMSWithConsent } = await import("../lib/sms-consent");
       if (hasFeature(company.subscriptionPlan, "customer_portal") && (customer.email || customer.phone)) {
         const inviteToken = crypto.randomBytes(32).toString("hex");
         // Store only the SHA-256 hash; the raw token lives solely in the emailed/SMS
@@ -103,7 +104,7 @@ router.post("/", requireWithinPlanLimit("customers"), async (req: any, res) => {
           await sendPortalAccessEmail({ to: customer.email, customerName: customer.firstName || customer.email, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days", logoUrl: company.logoUrl, primaryColor: company.primaryColor });
         }
         if (customer.phone && hasFeature(company.subscriptionPlan, "sms_notifications")) {
-          await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Create your password here: ${portalUrl}` });
+          await sendSMSWithConsent({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Create your password here: ${portalUrl}`, category: "service_updates", subject: { type: "customer", id: customer.id, companyId: company.id } });
         }
       } else if (customer.email && company.slug && hasFeature(company.subscriptionPlan, "public_booking")) {
         const bookingUrl = `${baseUrl}/book/${company.slug}`;

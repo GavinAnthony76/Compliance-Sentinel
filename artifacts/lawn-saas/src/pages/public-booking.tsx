@@ -25,6 +25,7 @@ export function PublicBookingPage() {
     firstName: '', lastName: '', email: '', phone: '', addressLine1: '',
     city: '', state: '', zip: '', notes: '', gateNotes: '', yardSize: '', preferredDate: '',
   });
+  const [smsConsent, setSmsConsent] = useState(false);
 
   useEffect(() => {
     if (!isLoading && (error || !data)) {
@@ -105,6 +106,7 @@ export function PublicBookingPage() {
           ...form,
           serviceId: selectedService,
           preferredDate: form.preferredDate ? new Date(form.preferredDate).toISOString() : undefined,
+          smsConsent,
         } as any,
       });
       setSubmitted(true);
@@ -301,6 +303,25 @@ export function PublicBookingPage() {
           <div>
             <label className="text-sm font-medium">Additional Notes</label>
             <Input className="mt-1" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Anything else we should know?" />
+          </div>
+
+          {/* SMS consent — required for A2P 10DLC; must be unchecked by default */}
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <div className="flex items-start gap-3">
+              <input
+                id="sms-consent-booking"
+                type="checkbox"
+                checked={smsConsent}
+                onChange={e => setSmsConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 cursor-pointer"
+              />
+              <label htmlFor="sms-consent-booking" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                <span className="block font-semibold text-foreground text-sm mb-1">SMS Appointment Alerts (optional)</span>
+                By checking this box, I agree to receive text messages from {data.companyName} via GreenSynk at the phone number provided above. Messages may include appointment reminders, confirmations, and service updates. Message & data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel at any time, <strong>HELP</strong> for help. View{' '}
+                <a href="/sms-policy" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: primaryColor }}>SMS Policy</a> and{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: primaryColor }}>Privacy Policy</a>.
+              </label>
+            </div>
           </div>
 
           <Button type="submit" className="w-full h-14 text-lg" isLoading={submitMut.isPending} style={{ backgroundColor: primaryColor }}>

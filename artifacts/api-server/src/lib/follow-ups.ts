@@ -1,6 +1,7 @@
 import { db, followUpCampaignsTable, followUpLogsTable, customersTable, leadsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { sendEmail, sendSMS } from "./notifications";
+import { sendEmail } from "./notifications";
+import { sendSMSWithConsent } from "./sms-consent";
 import { logCommunicationEvent } from "./communications";
 
 export const FOLLOW_UP_TRIGGERS = [
@@ -103,7 +104,14 @@ async function processLog(
     if (campaign.channel === "sms") {
       if (!recipient.phone) return { status: "failed", error: "No phone number" };
       if (recipient.smsOptOut) return { status: "skipped", error: "Recipient opted out of SMS" };
-      await sendSMS({ to: recipient.phone, body });
+      // customerId may be null for lead-only recipients; fall back to raw sendSMS for leads
+      if (log.customerId) {
+        const result = await sendSMSWithConsent({ to: recipient.phone, body, category: "service_updates", subject: { type: "customer", id: log.customerId, companyId: log.companyId } });
+        if (!result.sent) return { status: "skipped", error: result.reason ?? "consent_blocked" };
+      } else {
+        const { sendSMS } = await import("./notifications");
+        await sendSMS({ to: recipient.phone, body });
+      }
     } else {
       if (!recipient.email) return { status: "failed", error: "No email address" };
       if (recipient.emailOptOut) return { status: "skipped", error: "Recipient opted out of email" };

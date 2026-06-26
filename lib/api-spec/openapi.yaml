@@ -47,6 +47,10 @@ tags:
     description: Activity logs
   - name: storage
     description: Object storage upload and serving endpoints
+  - name: sms-consent
+    description: SMS opt-in/opt-out and per-category preferences (portal + company)
+  - name: sms-webhook
+    description: Twilio inbound SMS keyword webhook
 
 paths:
   /healthz:
@@ -1945,6 +1949,179 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  # ── SMS Consent (portal) ──────────────────────────────────────────────────
+  /sms-consent/portal/preferences:
+    get:
+      operationId: getSmsPortalPreferences
+      tags: [sms-consent]
+      summary: Get SMS preferences for the authenticated portal customer
+      security:
+        - portalAuth: []
+      responses:
+        "200":
+          description: Current SMS opt-in state and per-category preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsPreferencesResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateSmsPortalPreferences
+      tags: [sms-consent]
+      summary: Update per-category SMS preferences for the authenticated portal customer
+      security:
+        - portalAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsPreferencesUpdateRequest"
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sms-consent/portal/opt-in:
+    post:
+      operationId: smsPortalOptIn
+      tags: [sms-consent]
+      summary: Opt in the authenticated portal customer to SMS alerts
+      security:
+        - portalAuth: []
+      responses:
+        "200":
+          description: Opted in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sms-consent/portal/opt-out:
+    post:
+      operationId: smsPortalOptOut
+      tags: [sms-consent]
+      summary: Opt out the authenticated portal customer from SMS alerts
+      security:
+        - portalAuth: []
+      responses:
+        "200":
+          description: Opted out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /sms-consent/company/opt-in:
+    post:
+      operationId: smsCompanyOptIn
+      tags: [sms-consent]
+      summary: Record SMS consent for the authenticated company owner
+      security:
+        - companyAuth: []
+      responses:
+        "200":
+          description: Company SMS consent recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── SMS Webhook (Twilio inbound) ──────────────────────────────────────────
+  /sms/webhook:
+    post:
+      operationId: twilioSmsWebhook
+      tags: [sms-webhook]
+      summary: Twilio inbound SMS webhook for STOP/START/HELP keyword processing
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                From:
+                  type: string
+                Body:
+                  type: string
+      responses:
+        "200":
+          description: TwiML response
+          content:
+            text/xml:
+              schema:
+                type: string
+
+  # ── Admin SMS Compliance ──────────────────────────────────────────────────
+  /admin/sms-compliance:
+    get:
+      operationId: adminGetSmsCompliance
+      tags: [admin]
+      summary: Aggregate SMS opt-in/opt-out stats and audit log for A2P compliance monitoring
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: SMS compliance dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSmsComplianceResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -3764,3 +3941,116 @@ components:
           minLength: 8
         role:
           type: string
+
+    SmsPreferencesResponse:
+      type: object
+      properties:
+        smsEnabled:
+          type: boolean
+        categories:
+          type: object
+          properties:
+            appointments:
+              type: boolean
+            estimates:
+              type: boolean
+            invoices:
+              type: boolean
+            serviceUpdates:
+              type: boolean
+          required: [appointments, estimates, invoices, serviceUpdates]
+      required: [smsEnabled, categories]
+
+    SmsPreferencesUpdateRequest:
+      type: object
+      properties:
+        appointments:
+          type: boolean
+        estimates:
+          type: boolean
+        invoices:
+          type: boolean
+        serviceUpdates:
+          type: boolean
+
+    SmsConsentEventRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        subjectType:
+          type: string
+        subjectId:
+          type: integer
+        phone:
+          type: string
+          nullable: true
+        eventType:
+          type: string
+        keyword:
+          type: string
+          nullable: true
+        source:
+          type: string
+        prefCategory:
+          type: string
+          nullable: true
+        prefValue:
+          type: string
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, subjectType, subjectId, eventType, source, createdAt]
+
+    AdminSmsComplianceResponse:
+      type: object
+      properties:
+        customers:
+          type: object
+          properties:
+            totalOptIn:
+              type: integer
+            totalOptOut:
+              type: integer
+            total:
+              type: integer
+          required: [totalOptIn, totalOptOut, total]
+        companies:
+          type: object
+          properties:
+            totalOptIn:
+              type: integer
+            totalOptOut:
+              type: integer
+            total:
+              type: integer
+          required: [totalOptIn, totalOptOut, total]
+        keywordCounts:
+          type: array
+          items:
+            type: object
+            properties:
+              keyword:
+                type: string
+              count:
+                type: integer
+            required: [keyword, count]
+        eventTypeCounts:
+          type: array
+          items:
+            type: object
+            properties:
+              eventType:
+                type: string
+              count:
+                type: integer
+            required: [eventType, count]
+        recentEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/SmsConsentEventRecord"
+      required: [customers, companies, keywordCounts, eventTypeCounts, recentEvents]

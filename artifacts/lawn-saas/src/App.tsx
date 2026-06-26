@@ -16,7 +16,7 @@ const NOINDEX_PATTERNS: RegExp[] = [
   /^\/reset-password$/,
   /^\/admin(\/.*)?$/,
   /^\/portal\/set-password$/,
-  /^\/portal\/[^/]+(\/forgot-password|\/login|\/invoices|\/appointments|\/estimates)?$/,
+  /^\/portal\/[^/]+(\/forgot-password|\/login|\/invoices|\/appointments|\/estimates|\/sms-preferences)?$/,
   /^\/estimates\/[^/]+\/sign$/,
   /^\/review\/[^/]+$/,
   /^\/(dashboard|calendar|customers|properties|services|appointments|invoices|recurring|routes|reviews|automations|follow-ups|team|reporting|settings|billing|activity|leads|tech)(\/.*)?$/,
@@ -65,6 +65,9 @@ const ContactPage = lazy(() => import("@/pages/contact").then(m => ({ default: m
 const PrivacyPage = lazy(() => import("@/pages/privacy").then(m => ({ default: m.PrivacyPage })));
 const TermsPage = lazy(() => import("@/pages/terms").then(m => ({ default: m.TermsPage })));
 const CookiesPage = lazy(() => import("@/pages/cookies").then(m => ({ default: m.CookiesPage })));
+const SmsPage = lazy(() => import("@/pages/sms").then(m => ({ default: m.SmsPage })));
+const SmsPolicyPage = lazy(() => import("@/pages/sms-policy").then(m => ({ default: m.SmsPolicyPage })));
+const AdminSmsCompliancePage = lazy(() => import("@/pages/admin-sms-compliance").then(m => ({ default: m.AdminSmsCompliancePage })));
 
 // Auth / misc public pages — lazy loaded
 const LoginPage = lazy(() => import("@/pages/login").then(m => ({ default: m.LoginPage })));
@@ -90,6 +93,7 @@ const PortalDashboardPage = lazy(() => import("@/pages/portal-dashboard").then(m
 const PortalInvoicesPage = lazy(() => import("@/pages/portal-invoices").then(m => ({ default: m.PortalInvoicesPage })));
 const PortalAppointmentsPage = lazy(() => import("@/pages/portal-appointments").then(m => ({ default: m.PortalAppointmentsPage })));
 const PortalEstimatesPage = lazy(() => import("@/pages/portal-estimates").then(m => ({ default: m.PortalEstimatesPage })));
+const PortalSmsPreferencesPage = lazy(() => import("@/pages/portal-sms-preferences").then(m => ({ default: m.PortalSmsPreferencesPage })));
 
 // Company dashboard pages — lazy loaded
 const DashboardPage = lazy(() => import("@/pages/dashboard").then(m => ({ default: m.DashboardPage })));
@@ -256,6 +260,8 @@ function Router() {
           <Route path="/privacy" component={PrivacyPage} />
           <Route path="/terms" component={TermsPage} />
           <Route path="/cookies" component={CookiesPage} />
+          <Route path="/sms" component={SmsPage} />
+          <Route path="/sms-policy" component={SmsPolicyPage} />
 
           {/* Auth routes — lazy loaded */}
           <Route path="/login" component={LoginPage} />
@@ -277,6 +283,7 @@ function Router() {
           <Route path="/portal/:slug/invoices" component={PortalInvoicesPage} />
           <Route path="/portal/:slug/appointments" component={PortalAppointmentsPage} />
           <Route path="/portal/:slug/estimates" component={PortalEstimatesPage} />
+          <Route path="/portal/:slug/sms-preferences" component={PortalSmsPreferencesPage} />
           <Route path="/portal/:slug" component={PortalDashboardPage} />
 
           {/* Public e-signature — lazy loaded */}
@@ -317,6 +324,7 @@ function Router() {
           <Route path="/admin/beta-readiness"><ProtectedRoute component={AdminBetaReadinessPage} adminOnly /></Route>
           <Route path="/admin/admins"><ProtectedRoute component={AdminAdminsPage} adminOnly /></Route>
           <Route path="/admin/settings"><ProtectedRoute component={AdminSettingsPage} adminOnly /></Route>
+          <Route path="/admin/sms-compliance"><ProtectedRoute component={AdminSmsCompliancePage} adminOnly /></Route>
 
           <Route component={NotFound} />
         </Switch>

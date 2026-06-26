@@ -168,14 +168,15 @@ router.post("/auth/send-invite", async (req: any, res) => {
   const portalUrl = `${baseUrl}/portal/set-password?token=${rawInviteToken}&slug=${company.slug}`;
   const customerName = customer.firstName || customer.email || "there";
 
-  const { sendSMS, sendPortalAccessEmail } = await import("../lib/notifications");
+  const { sendPortalAccessEmail } = await import("../lib/notifications");
+  const { sendSMSWithConsent } = await import("../lib/sms-consent");
   const sentTo: string[] = [];
   if (customer.email) {
     await sendPortalAccessEmail({ to: customer.email, customerName, companyName: company.name, companyEmail: company.email ?? undefined, loginUrl: portalUrl, intent: "invite", expiresLabel: "in 7 days", logoUrl: company.logoUrl, primaryColor: company.primaryColor });
     sentTo.push(customer.email);
   }
   if (customer.phone && hasFeature(businessCompany?.subscriptionPlan, "sms_notifications")) {
-    await sendSMS({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Sign in here (no password needed): ${portalUrl} (link expires in 7 days)` });
+    await sendSMSWithConsent({ to: customer.phone, body: `${company.name} has invited you to your customer portal. Sign in here (no password needed): ${portalUrl} (link expires in 7 days)`, category: "service_updates", subject: { type: "customer", id: customer.id, companyId: businessCompanyId } });
     sentTo.push(customer.phone);
   }
 

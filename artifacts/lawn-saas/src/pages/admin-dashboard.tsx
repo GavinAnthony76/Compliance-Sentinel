@@ -1,7 +1,7 @@
 import { useAdminGetDashboard } from '@workspace/api-client-react';
 import { useAuthState } from '@/hooks/use-auth-state';
 import { Link, useLocation } from 'wouter';
-import { Building2, Users, CreditCard, TrendingUp, LogOut, Shield, Activity, DollarSign, Settings, UserCheck, AlertTriangle, BarChart2, Rocket } from 'lucide-react';
+import { Building2, Users, CreditCard, TrendingUp, LogOut, Shield, Activity, DollarSign, Settings, UserCheck, AlertTriangle, BarChart2, Rocket, MessageSquare } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +14,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
     { href: '/admin/billing', label: 'Revenue & Billing', icon: DollarSign },
     { href: '/admin/activity', label: 'Activity Logs', icon: Activity },
     { href: '/admin/beta-readiness', label: 'Beta Readiness', icon: Rocket },
+    { href: '/admin/sms-compliance', label: 'SMS Compliance', icon: MessageSquare },
     { href: '/admin/admins', label: 'Admin Users', icon: Users },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
   ];

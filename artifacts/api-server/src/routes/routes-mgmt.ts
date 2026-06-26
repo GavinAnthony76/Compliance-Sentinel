@@ -4,7 +4,8 @@ import { eq, and, sql, desc, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
-import { sendSMS, sendEmail } from "../lib/notifications";
+import { sendEmail } from "../lib/notifications";
+import { sendSMSWithConsent } from "../lib/sms-consent";
 
 const router = Router();
 router.use(requireAuth);
@@ -249,11 +250,11 @@ router.post("/:routeId/stops/:stopId/on-my-way", async (req: any, res) => {
   const etaMinutes = req.body.etaMinutes ? Number(req.body.etaMinutes) : null;
   const etaText = etaMinutes ? ` in approximately ${etaMinutes} minutes` : " shortly";
 
-  const smsMsg = `Hi ${customer.firstName}! Your ${companyName} technician is on the way${etaText} for your ${serviceName} appointment. Reply STOP to opt out.`;
+  const smsMsg = `Hi ${customer.firstName}! Your ${companyName} technician is on the way${etaText} for your ${serviceName} appointment.`;
 
   let notified = false;
   if (customer.phone) {
-    await sendSMS({ to: customer.phone, body: smsMsg });
+    await sendSMSWithConsent({ to: customer.phone, body: smsMsg, category: "appointments", subject: { type: "customer", id: customer.id, companyId } });
     notified = true;
   }
   if (customer.email) {

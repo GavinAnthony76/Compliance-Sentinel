@@ -2426,3 +2426,94 @@ export const GetStorageObjectParams = zod.object({
       "Object path within the private object dir (e.g. `uploads\/some-uuid`).",
     ),
 });
+
+/**
+ * @summary Get SMS preferences for the authenticated portal customer
+ */
+export const GetSmsPortalPreferencesResponse = zod.object({
+  smsEnabled: zod.boolean(),
+  categories: zod.object({
+    appointments: zod.boolean(),
+    estimates: zod.boolean(),
+    invoices: zod.boolean(),
+    serviceUpdates: zod.boolean(),
+  }),
+});
+
+/**
+ * @summary Update per-category SMS preferences for the authenticated portal customer
+ */
+export const UpdateSmsPortalPreferencesBody = zod.object({
+  appointments: zod.boolean().optional(),
+  estimates: zod.boolean().optional(),
+  invoices: zod.boolean().optional(),
+  serviceUpdates: zod.boolean().optional(),
+});
+
+export const UpdateSmsPortalPreferencesResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Opt in the authenticated portal customer to SMS alerts
+ */
+export const SmsPortalOptInResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Opt out the authenticated portal customer from SMS alerts
+ */
+export const SmsPortalOptOutResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Record SMS consent for the authenticated company owner
+ */
+export const SmsCompanyOptInResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Aggregate SMS opt-in/opt-out stats and audit log for A2P compliance monitoring
+ */
+export const AdminGetSmsComplianceResponse = zod.object({
+  customers: zod.object({
+    totalOptIn: zod.number(),
+    totalOptOut: zod.number(),
+    total: zod.number(),
+  }),
+  companies: zod.object({
+    totalOptIn: zod.number(),
+    totalOptOut: zod.number(),
+    total: zod.number(),
+  }),
+  keywordCounts: zod.array(
+    zod.object({
+      keyword: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  eventTypeCounts: zod.array(
+    zod.object({
+      eventType: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  recentEvents: zod.array(
+    zod.object({
+      id: zod.number(),
+      subjectType: zod.string(),
+      subjectId: zod.number(),
+      phone: zod.string().nullish(),
+      eventType: zod.string(),
+      keyword: zod.string().nullish(),
+      source: zod.string(),
+      prefCategory: zod.string().nullish(),
+      prefValue: zod.string().nullish(),
+      ipAddress: zod.string().nullish(),
+      createdAt: zod.date(),
+    }),
+  ),
+});

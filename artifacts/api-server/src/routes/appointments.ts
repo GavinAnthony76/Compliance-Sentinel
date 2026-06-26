@@ -7,7 +7,8 @@ import { requireActiveSubscription } from "../lib/subscription";
 import { requireFeature, requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logCommunicationEvent } from "../lib/communications";
-import { sendReminder, sendSMS, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail, sendAppointmentRescheduledEmail } from "../lib/notifications";
+import { sendReminder, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail, sendAppointmentRescheduledEmail } from "../lib/notifications";
+import { sendSMSWithConsent } from "../lib/sms-consent";
 import { fireAutomations } from "../lib/automations";
 
 // ─── GPS job-tracking helpers ────────────────────────────────────────────────
@@ -73,8 +74,8 @@ async function sendAppointmentNotification(appt: any, companyId: number, channel
     const smsAllowed = hasFeature(company?.subscriptionPlan, "sms_notifications");
 
     if (channel === 'confirmation') {
-      const msg = `Hi ${customer.firstName}! Your ${serviceName} appointment with ${companyName} is confirmed for ${dateStr} at ${timeStr}. Reply STOP to opt out.`;
-      if (customer.phone && smsAllowed) await sendSMS({ to: customer.phone, body: msg });
+      const msg = `Hi ${customer.firstName}! Your ${serviceName} appointment with ${companyName} is confirmed for ${dateStr} at ${timeStr}.`;
+      if (customer.phone && smsAllowed) await sendSMSWithConsent({ to: customer.phone, body: msg, category: "appointments", subject: { type: "customer", id: customer.id, companyId } });
       if (customer.email) await sendAppointmentConfirmationEmail({
         customerName: customer.firstName,
         customerEmail: customer.email,
@@ -137,7 +138,7 @@ async function sendAppointmentStatusNotification(appt: any, companyId: number, s
     if (!copy) return;
 
     const smsAllowed = hasFeature(company?.subscriptionPlan, "sms_notifications");
-    if (customer.phone && smsAllowed) await sendSMS({ to: customer.phone, body: `${copy.sms} Reply STOP to opt out.` });
+    if (customer.phone && smsAllowed) await sendSMSWithConsent({ to: customer.phone, body: copy.sms, category: "appointments", subject: { type: "customer", id: customer.id, companyId } });
     if (customer.email) await sendAppointmentStatusEmail({
       to: customer.email,
       customerName: customer.firstName,
@@ -182,7 +183,7 @@ async function sendAppointmentRescheduleNotification(appt: any, companyId: numbe
 
     const smsAllowed = hasFeature(company?.subscriptionPlan, "sms_notifications");
     if (customer.phone && smsAllowed) {
-      await sendSMS({ to: customer.phone, body: `${companyName}: your ${serviceName} appointment has been rescheduled to ${dateStr} at ${timeStr}. Reply STOP to opt out.` });
+      await sendSMSWithConsent({ to: customer.phone, body: `${companyName}: your ${serviceName} appointment has been rescheduled to ${dateStr} at ${timeStr}.`, category: "appointments", subject: { type: "customer", id: customer.id, companyId } });
     }
     if (customer.email) {
       await sendAppointmentRescheduledEmail({

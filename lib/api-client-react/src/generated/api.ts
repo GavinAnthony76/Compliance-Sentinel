@@ -25,6 +25,7 @@ import type {
   AdminListActivityParams,
   AdminListCompaniesParams,
   AdminListResponse,
+  AdminSmsComplianceResponse,
   AdminUpdateCompanyNotesBody,
   AdminUpdateCompanyPlanBody,
   AdminUser,
@@ -95,13 +96,20 @@ import type {
   RouteStop,
   Service,
   ServiceListResponse,
+  SmsCompanyOptIn200,
+  SmsPortalOptIn200,
+  SmsPortalOptOut200,
+  SmsPreferencesResponse,
+  SmsPreferencesUpdateRequest,
   SuccessResponse,
   TeamListResponse,
   TeamMember,
+  TwilioSmsWebhookBody,
   UpdateAppointmentRequest,
   UpdateEstimateRequest,
   UpdateInvoiceRequest,
   UpdateSettingsRequest,
+  UpdateSmsPortalPreferences200,
   UpdateTeamMemberRequest,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -7911,6 +7919,590 @@ export function useGetStorageObject<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetStorageObjectQueryOptions(objectPath, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get SMS preferences for the authenticated portal customer
+ */
+export const getGetSmsPortalPreferencesUrl = () => {
+  return `/api/sms-consent/portal/preferences`;
+};
+
+export const getSmsPortalPreferences = async (
+  options?: RequestInit,
+): Promise<SmsPreferencesResponse> => {
+  return customFetch<SmsPreferencesResponse>(getGetSmsPortalPreferencesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSmsPortalPreferencesQueryKey = () => {
+  return [`/api/sms-consent/portal/preferences`] as const;
+};
+
+export const getGetSmsPortalPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSmsPortalPreferences>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSmsPortalPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetSmsPortalPreferencesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSmsPortalPreferences>>
+  > = ({ signal }) => getSmsPortalPreferences({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSmsPortalPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSmsPortalPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSmsPortalPreferences>>
+>;
+export type GetSmsPortalPreferencesQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get SMS preferences for the authenticated portal customer
+ */
+
+export function useGetSmsPortalPreferences<
+  TData = Awaited<ReturnType<typeof getSmsPortalPreferences>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSmsPortalPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSmsPortalPreferencesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update per-category SMS preferences for the authenticated portal customer
+ */
+export const getUpdateSmsPortalPreferencesUrl = () => {
+  return `/api/sms-consent/portal/preferences`;
+};
+
+export const updateSmsPortalPreferences = async (
+  smsPreferencesUpdateRequest: SmsPreferencesUpdateRequest,
+  options?: RequestInit,
+): Promise<UpdateSmsPortalPreferences200> => {
+  return customFetch<UpdateSmsPortalPreferences200>(
+    getUpdateSmsPortalPreferencesUrl(),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(smsPreferencesUpdateRequest),
+    },
+  );
+};
+
+export const getUpdateSmsPortalPreferencesMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSmsPortalPreferences>>,
+    TError,
+    { data: BodyType<SmsPreferencesUpdateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSmsPortalPreferences>>,
+  TError,
+  { data: BodyType<SmsPreferencesUpdateRequest> },
+  TContext
+> => {
+  const mutationKey = ["updateSmsPortalPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSmsPortalPreferences>>,
+    { data: BodyType<SmsPreferencesUpdateRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateSmsPortalPreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSmsPortalPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSmsPortalPreferences>>
+>;
+export type UpdateSmsPortalPreferencesMutationBody =
+  BodyType<SmsPreferencesUpdateRequest>;
+export type UpdateSmsPortalPreferencesMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update per-category SMS preferences for the authenticated portal customer
+ */
+export const useUpdateSmsPortalPreferences = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSmsPortalPreferences>>,
+    TError,
+    { data: BodyType<SmsPreferencesUpdateRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSmsPortalPreferences>>,
+  TError,
+  { data: BodyType<SmsPreferencesUpdateRequest> },
+  TContext
+> => {
+  return useMutation(getUpdateSmsPortalPreferencesMutationOptions(options));
+};
+
+/**
+ * @summary Opt in the authenticated portal customer to SMS alerts
+ */
+export const getSmsPortalOptInUrl = () => {
+  return `/api/sms-consent/portal/opt-in`;
+};
+
+export const smsPortalOptIn = async (
+  options?: RequestInit,
+): Promise<SmsPortalOptIn200> => {
+  return customFetch<SmsPortalOptIn200>(getSmsPortalOptInUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSmsPortalOptInMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof smsPortalOptIn>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof smsPortalOptIn>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["smsPortalOptIn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof smsPortalOptIn>>,
+    void
+  > = () => {
+    return smsPortalOptIn(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SmsPortalOptInMutationResult = NonNullable<
+  Awaited<ReturnType<typeof smsPortalOptIn>>
+>;
+
+export type SmsPortalOptInMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Opt in the authenticated portal customer to SMS alerts
+ */
+export const useSmsPortalOptIn = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof smsPortalOptIn>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof smsPortalOptIn>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSmsPortalOptInMutationOptions(options));
+};
+
+/**
+ * @summary Opt out the authenticated portal customer from SMS alerts
+ */
+export const getSmsPortalOptOutUrl = () => {
+  return `/api/sms-consent/portal/opt-out`;
+};
+
+export const smsPortalOptOut = async (
+  options?: RequestInit,
+): Promise<SmsPortalOptOut200> => {
+  return customFetch<SmsPortalOptOut200>(getSmsPortalOptOutUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSmsPortalOptOutMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof smsPortalOptOut>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof smsPortalOptOut>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["smsPortalOptOut"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof smsPortalOptOut>>,
+    void
+  > = () => {
+    return smsPortalOptOut(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SmsPortalOptOutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof smsPortalOptOut>>
+>;
+
+export type SmsPortalOptOutMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Opt out the authenticated portal customer from SMS alerts
+ */
+export const useSmsPortalOptOut = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof smsPortalOptOut>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof smsPortalOptOut>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSmsPortalOptOutMutationOptions(options));
+};
+
+/**
+ * @summary Record SMS consent for the authenticated company owner
+ */
+export const getSmsCompanyOptInUrl = () => {
+  return `/api/sms-consent/company/opt-in`;
+};
+
+export const smsCompanyOptIn = async (
+  options?: RequestInit,
+): Promise<SmsCompanyOptIn200> => {
+  return customFetch<SmsCompanyOptIn200>(getSmsCompanyOptInUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSmsCompanyOptInMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof smsCompanyOptIn>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof smsCompanyOptIn>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["smsCompanyOptIn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof smsCompanyOptIn>>,
+    void
+  > = () => {
+    return smsCompanyOptIn(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SmsCompanyOptInMutationResult = NonNullable<
+  Awaited<ReturnType<typeof smsCompanyOptIn>>
+>;
+
+export type SmsCompanyOptInMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Record SMS consent for the authenticated company owner
+ */
+export const useSmsCompanyOptIn = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof smsCompanyOptIn>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof smsCompanyOptIn>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSmsCompanyOptInMutationOptions(options));
+};
+
+/**
+ * @summary Twilio inbound SMS webhook for STOP/START/HELP keyword processing
+ */
+export const getTwilioSmsWebhookUrl = () => {
+  return `/api/sms/webhook`;
+};
+
+export const twilioSmsWebhook = async (
+  twilioSmsWebhookBody: TwilioSmsWebhookBody,
+  options?: RequestInit,
+): Promise<string> => {
+  const formUrlEncoded = new URLSearchParams();
+  if (twilioSmsWebhookBody.From !== undefined) {
+    formUrlEncoded.append(`From`, twilioSmsWebhookBody.From);
+  }
+  if (twilioSmsWebhookBody.Body !== undefined) {
+    formUrlEncoded.append(`Body`, twilioSmsWebhookBody.Body);
+  }
+
+  return customFetch<string>(getTwilioSmsWebhookUrl(), {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...options?.headers,
+    },
+    body: formUrlEncoded,
+  });
+};
+
+export const getTwilioSmsWebhookMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof twilioSmsWebhook>>,
+    TError,
+    { data: BodyType<TwilioSmsWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof twilioSmsWebhook>>,
+  TError,
+  { data: BodyType<TwilioSmsWebhookBody> },
+  TContext
+> => {
+  const mutationKey = ["twilioSmsWebhook"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof twilioSmsWebhook>>,
+    { data: BodyType<TwilioSmsWebhookBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return twilioSmsWebhook(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TwilioSmsWebhookMutationResult = NonNullable<
+  Awaited<ReturnType<typeof twilioSmsWebhook>>
+>;
+export type TwilioSmsWebhookMutationBody = BodyType<TwilioSmsWebhookBody>;
+export type TwilioSmsWebhookMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Twilio inbound SMS webhook for STOP/START/HELP keyword processing
+ */
+export const useTwilioSmsWebhook = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof twilioSmsWebhook>>,
+    TError,
+    { data: BodyType<TwilioSmsWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof twilioSmsWebhook>>,
+  TError,
+  { data: BodyType<TwilioSmsWebhookBody> },
+  TContext
+> => {
+  return useMutation(getTwilioSmsWebhookMutationOptions(options));
+};
+
+/**
+ * @summary Aggregate SMS opt-in/opt-out stats and audit log for A2P compliance monitoring
+ */
+export const getAdminGetSmsComplianceUrl = () => {
+  return `/api/admin/sms-compliance`;
+};
+
+export const adminGetSmsCompliance = async (
+  options?: RequestInit,
+): Promise<AdminSmsComplianceResponse> => {
+  return customFetch<AdminSmsComplianceResponse>(
+    getAdminGetSmsComplianceUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAdminGetSmsComplianceQueryKey = () => {
+  return [`/api/admin/sms-compliance`] as const;
+};
+
+export const getAdminGetSmsComplianceQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminGetSmsCompliance>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetSmsCompliance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdminGetSmsComplianceQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminGetSmsCompliance>>
+  > = ({ signal }) => adminGetSmsCompliance({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetSmsCompliance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminGetSmsComplianceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminGetSmsCompliance>>
+>;
+export type AdminGetSmsComplianceQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Aggregate SMS opt-in/opt-out stats and audit log for A2P compliance monitoring
+ */
+
+export function useAdminGetSmsCompliance<
+  TData = Awaited<ReturnType<typeof adminGetSmsCompliance>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetSmsCompliance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminGetSmsComplianceQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
