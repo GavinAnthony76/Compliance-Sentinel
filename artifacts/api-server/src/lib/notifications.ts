@@ -155,6 +155,7 @@ export async function sendReminder(opts: {
   companyEmail?: string;
   logoUrl?: string | null;
   primaryColor?: string | null;
+  consent?: { customerId: number; companyId: number };
 }): Promise<void> {
   const dateStr = opts.scheduledStart.toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
@@ -203,10 +204,18 @@ export async function sendReminder(opts: {
       replyTo: opts.companyEmail,
     });
   } else if (opts.channel === "sms" && opts.customerPhone) {
-    await sendSMS({
-      to: opts.customerPhone,
-      body: `Reminder: Your ${opts.serviceName || "lawn care"} appointment is on ${dateStr} at ${timeStr}. Reply STOP to opt out.`,
-    });
+    const smsBody = `Reminder: Your ${opts.serviceName || "lawn care"} appointment is on ${dateStr} at ${timeStr}.`;
+    if (opts.consent) {
+      const { sendSMSWithConsent } = await import("./sms-consent");
+      await sendSMSWithConsent({
+        to: opts.customerPhone,
+        body: smsBody,
+        category: "appointments",
+        subject: { type: "customer", id: opts.consent.customerId, companyId: opts.consent.companyId },
+      });
+    } else {
+      await sendSMS({ to: opts.customerPhone, body: `${smsBody} Reply STOP to opt out.` });
+    }
   }
 }
 
@@ -277,6 +286,7 @@ export async function sendReviewRequestNotification(opts: {
   companyEmail?: string;
   logoUrl?: string | null;
   primaryColor?: string | null;
+  consent?: { customerId: number; companyId: number };
 }): Promise<void> {
   if (opts.channel === "email" && opts.customerEmail) {
     const bodyHtml = `
@@ -300,10 +310,18 @@ export async function sendReviewRequestNotification(opts: {
       replyTo: opts.companyEmail,
     });
   } else if (opts.channel === "sms" && opts.customerPhone) {
-    await sendSMS({
-      to: opts.customerPhone,
-      body: `Hi ${opts.customerName}! Thanks for using ${opts.companyName}. Please leave us a review: ${opts.reviewUrl}`,
-    });
+    const smsBody = `Hi ${opts.customerName}! Thanks for using ${opts.companyName}. Please leave us a review: ${opts.reviewUrl}`;
+    if (opts.consent) {
+      const { sendSMSWithConsent } = await import("./sms-consent");
+      await sendSMSWithConsent({
+        to: opts.customerPhone,
+        body: smsBody,
+        category: "service_updates",
+        subject: { type: "customer", id: opts.consent.customerId, companyId: opts.consent.companyId },
+      });
+    } else {
+      await sendSMS({ to: opts.customerPhone, body: smsBody });
+    }
   }
 }
 

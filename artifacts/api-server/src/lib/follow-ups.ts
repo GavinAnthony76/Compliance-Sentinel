@@ -1,6 +1,6 @@
 import { db, followUpCampaignsTable, followUpLogsTable, customersTable, leadsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { sendEmail } from "./notifications";
+import { sendEmail, sendSMS } from "./notifications";
 import { sendSMSWithConsent } from "./sms-consent";
 import { logCommunicationEvent } from "./communications";
 

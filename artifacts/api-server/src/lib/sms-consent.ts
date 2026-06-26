@@ -14,7 +14,7 @@
  */
 
 import { db, customersTable, smsConsentEventsTable } from "@workspace/db";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { sendSMS } from "./notifications";
 import { logger } from "./logger";
 
@@ -27,7 +27,10 @@ export type SmsCategory =
 const STOP_FOOTER = "\nReply STOP to opt out.";
 
 // Maps category string → customer table preference column name
-const CATEGORY_PREF: Record<SmsCategory, keyof typeof customersTable.$inferSelect> = {
+const CATEGORY_PREF: Record<
+  SmsCategory,
+  "smsPrefAppointments" | "smsPrefEstimates" | "smsPrefInvoices" | "smsPrefServiceUpdates"
+> = {
   appointments: "smsPrefAppointments",
   estimates: "smsPrefEstimates",
   invoices: "smsPrefInvoices",
@@ -137,6 +140,28 @@ export async function appendSmsConsentEvent(event: {
 }
 
 /**
+ * SQL predicate matching customersTable.phone against an inbound phone number,
+ * comparing on the trailing 10 digits so stored formats like "(555) 123-4567",
+ * "+15551234567", and "555-123-4567" all match. Returns a never-match predicate
+ * when the inbound number has fewer than 10 digits.
+ */
+function customerPhoneMatches(phone: string) {
+  const last10 = phone.replace(/\D/g, "").slice(-10);
+  if (last10.length < 10) return sql`1 = 0`;
+  return sql`right(regexp_replace(${customersTable.phone}, '[^0-9]', '', 'g'), 10) = ${last10}`;
+}
+
+/** Find all customer records whose phone matches the inbound number. */
+export async function findCustomersByPhone(
+  phone: string,
+): Promise<{ id: number; companyId: number }[]> {
+  return db
+    .select({ id: customersTable.id, companyId: customersTable.companyId })
+    .from(customersTable)
+    .where(customerPhoneMatches(phone));
+}
+
+/**
  * Opt a phone number out across ALL customer and company records that share it.
  * Used by the inbound STOP keyword handler to fan out without knowing which
  * specific record the sender belongs to.
@@ -146,14 +171,13 @@ export async function optOutByPhone(
   keyword: string,
   source: string,
 ): Promise<number> {
-  const normalised = normalizePhone(phone);
   let count = 0;
 
-  // Fan out across customers matching this phone
+  // Fan out across customers matching this phone (trailing-10-digit comparison)
   const customers = await db
     .select({ id: customersTable.id, companyId: customersTable.companyId, smsOptOut: customersTable.smsOptOut })
     .from(customersTable)
-    .where(or(eq(customersTable.phone, normalised), eq(customersTable.phone, phone)));
+    .where(customerPhoneMatches(phone));
 
   for (const c of customers) {
     if (!c.smsOptOut) {
@@ -184,13 +208,12 @@ export async function reSubscribeByPhone(
   keyword: string,
   source: string,
 ): Promise<number> {
-  const normalised = normalizePhone(phone);
   let count = 0;
 
   const customers = await db
     .select({ id: customersTable.id, companyId: customersTable.companyId, smsOptOut: customersTable.smsOptOut })
     .from(customersTable)
-    .where(or(eq(customersTable.phone, normalised), eq(customersTable.phone, phone)));
+    .where(customerPhoneMatches(phone));
 
   for (const c of customers) {
     if (c.smsOptOut) {

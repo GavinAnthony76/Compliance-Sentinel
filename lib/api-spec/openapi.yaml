@@ -2202,6 +2202,9 @@ components:
         selectedPlan:
           type: string
           enum: [starter, growth, pro]
+        smsConsent:
+          type: boolean
+          description: Whether the company owner consented to SMS at registration
 
     LoginRequest:
       type: object

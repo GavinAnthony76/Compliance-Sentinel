@@ -99,6 +99,7 @@ async function executeAction(
         reviewUrl,
         companyName,
         channel: customer.phone ? "sms" : "email",
+        consent: { customerId: customer.id, companyId },
         logoUrl: companyLogoUrl,
         primaryColor: companyPrimaryColor,
       });

@@ -63,6 +63,8 @@ export interface RegisterRequest {
   companyName: string;
   phone?: string;
   selectedPlan?: RegisterRequestSelectedPlan;
+  /** Whether the company owner consented to SMS at registration */
+  smsConsent?: boolean;
 }
 
 export interface LoginRequest {

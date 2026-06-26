@@ -24,6 +24,13 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+// Portal tokens are signed in customer-portal.ts with this exact secret.
+// Keep the derivation identical or token verification silently breaks.
+const PORTAL_JWT_SECRET = process.env.SESSION_SECRET || process.env.JWT_SECRET;
+if (!PORTAL_JWT_SECRET) {
+  throw new Error("Missing required environment variable: SESSION_SECRET or JWT_SECRET");
+}
+
 // ─── Portal (customer) endpoints ─────────────────────────────────────────────
 
 // Minimal portal auth middleware: validates Bearer token against portal sessions.
@@ -34,7 +41,7 @@ async function requirePortalAuth(req: any, res: any, next: any) {
   const token = auth.slice(7);
   try {
     const jwt = await import("jsonwebtoken");
-    const secret = (process.env.SESSION_SECRET || "dev_session_secret") + "portal:";
+    const secret = PORTAL_JWT_SECRET + "portal:";
     const payload = jwt.default.verify(token, secret) as any;
     if (payload.type !== "portal") return res.status(401).json({ error: "Unauthorized" });
     req.portalCustomerId = payload.customerId;

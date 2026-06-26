@@ -305,6 +305,7 @@ router.post("/send-appointment-reminders", async (req: any, res) => {
         channel: customer.phone ? "sms" : "email",
         companyName: company?.name || undefined,
         companyEmail: company?.email || undefined,
+        consent: { customerId: customer.id, companyId },
         logoUrl: company?.logoUrl ?? null,
         primaryColor: company?.primaryColor ?? null,
       });

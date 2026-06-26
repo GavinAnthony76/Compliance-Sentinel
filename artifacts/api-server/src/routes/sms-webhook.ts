@@ -17,7 +17,7 @@
 
 import { Router } from "express";
 import { logger } from "../lib/logger";
-import { optOutByPhone, reSubscribeByPhone, appendSmsConsentEvent, normalizePhone } from "../lib/sms-consent";
+import { optOutByPhone, reSubscribeByPhone, appendSmsConsentEvent, findCustomersByPhone } from "../lib/sms-consent";
 
 const router = Router();
 
@@ -54,8 +54,14 @@ async function validateTwilioSignature(req: any): Promise<boolean> {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
   const baseUrl = process.env.APP_BASE_URL;
   if (!authToken || !baseUrl) {
-    // In dev/mock mode without credentials, skip signature validation but log a warning.
-    logger.warn("[SMS Webhook] Skipping Twilio signature validation — TWILIO_AUTH_TOKEN or APP_BASE_URL not set");
+    // Fail CLOSED in production: an unsigned/unverifiable request must never be
+    // allowed to mutate consent state. Only skip validation in dev/test where
+    // Twilio credentials are intentionally absent.
+    if (process.env.NODE_ENV === "production") {
+      logger.error("[SMS Webhook] Rejecting inbound SMS — TWILIO_AUTH_TOKEN or APP_BASE_URL not configured in production");
+      return false;
+    }
+    logger.warn("[SMS Webhook] Skipping Twilio signature validation — TWILIO_AUTH_TOKEN or APP_BASE_URL not set (non-production)");
     return true;
   }
   try {
@@ -131,13 +137,7 @@ router.post("/webhook", async (req, res) => {
 
   if (HELP_KEYWORDS.has(keyword)) {
     // Log the HELP event — fan out across all matching customer records
-    const { db, customersTable } = await import("@workspace/db");
-    const { or, eq } = await import("drizzle-orm");
-    const normalised = normalizePhone(from);
-    const customers = await db
-      .select({ id: customersTable.id })
-      .from(customersTable)
-      .where(or(eq(customersTable.phone, normalised), eq(customersTable.phone, from)));
+    const customers = await findCustomersByPhone(from);
     if (customers.length > 0) {
       for (const c of customers) {
         await appendSmsConsentEvent({ subjectType: "customer", subjectId: c.id, phone: from, eventType: "help", keyword, source });

@@ -62,6 +62,7 @@ router.post("/", async (req: any, res) => {
     companyName: company?.name ?? "Lawn Care",
     companyEmail: company?.email ?? undefined,
     channel,
+    consent: { customerId: customer.id, companyId },
     logoUrl: company?.logoUrl ?? null,
     primaryColor: company?.primaryColor ?? null,
   });

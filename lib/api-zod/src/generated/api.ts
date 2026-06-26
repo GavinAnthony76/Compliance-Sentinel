@@ -27,6 +27,10 @@ export const RegisterBody = zod.object({
   companyName: zod.string(),
   phone: zod.string().optional(),
   selectedPlan: zod.enum(["starter", "growth", "pro"]).optional(),
+  smsConsent: zod
+    .boolean()
+    .optional()
+    .describe("Whether the company owner consented to SMS at registration"),
 });
 
 /**
