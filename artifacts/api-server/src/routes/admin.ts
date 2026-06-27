@@ -412,6 +412,37 @@ router.put("/companies/:id/plan", async (req: any, res) => {
   return res.json({ success: true });
 });
 
+const extendTrialSchema = z.object({ days: z.number().int().min(1).max(365) });
+
+router.post("/companies/:id/extend-trial", async (req: any, res) => {
+  const id = Number(req.params.id);
+  const parsed = extendTrialSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  const { days } = parsed.data;
+  const [existing] = await db
+    .select({ trialEndsAt: companiesTable.trialEndsAt, subscriptionStatus: companiesTable.subscriptionStatus })
+    .from(companiesTable)
+    .where(eq(companiesTable.id, id))
+    .limit(1);
+  if (!existing) return res.status(404).json({ error: "NotFound" });
+  const now = new Date();
+  // Extend from the existing trial end if it's still in the future, otherwise grant a fresh window from now.
+  const base = existing.trialEndsAt && existing.trialEndsAt > now ? existing.trialEndsAt : now;
+  const newTrialEndsAt = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+  await db
+    .update(companiesTable)
+    .set({ trialEndsAt: newTrialEndsAt, subscriptionStatus: "trialing", updatedAt: new Date() })
+    .where(eq(companiesTable.id, id));
+  await logActivity({
+    adminId: req.admin.adminId,
+    action: "admin.company_trial_extended",
+    entityType: "company",
+    entityId: id,
+    metadata: { days, fromTrialEndsAt: existing.trialEndsAt?.toISOString() ?? null, toTrialEndsAt: newTrialEndsAt.toISOString() },
+  });
+  return res.json({ success: true, trialEndsAt: newTrialEndsAt.toISOString() });
+});
+
 router.put("/companies/:id/notes", async (req: any, res) => {
   const id = Number(req.params.id);
   const notes = req.body?.notes ?? null;

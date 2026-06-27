@@ -455,6 +455,8 @@ export function AdminCompanyDetailPage() {
   const [deletingUser, setDeletingUser] = useState<number | null>(null);
   const [notes, setNotes] = useState<string | null>(null);
   const [savingNotes, setSavingNotes] = useState(false);
+  const [trialDays, setTrialDays] = useState(14);
+  const [extendingTrial, setExtendingTrial] = useState(false);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: [`/api/admin/companies/${params.id}`] });
@@ -667,6 +669,44 @@ export function AdminCompanyDetailPage() {
                   <option value="past_due">Past Due</option>
                   <option value="canceled">Canceled</option>
                 </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-slate-400">Extend Trial</label>
+                <p className="text-xs text-slate-500">
+                  {(company as any).trialEndsAt
+                    ? `Trial ends ${new Date((company as any).trialEndsAt).toLocaleDateString()}`
+                    : 'No trial end date set'}
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={trialDays}
+                    onChange={e => setTrialDays(Math.max(1, Math.min(365, Number(e.target.value) || 0)))}
+                    className="w-20 h-9 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={extendingTrial || trialDays < 1}
+                    onClick={async () => {
+                      setExtendingTrial(true);
+                      try {
+                        const res = await adminFetch(`/api/admin/companies/${company.id}/extend-trial`, { method: 'POST', body: JSON.stringify({ days: trialDays }) });
+                        if (!res.ok) throw new Error('Failed to extend trial');
+                        invalidate();
+                        toast({ title: `Trial extended ${trialDays} day${trialDays === 1 ? '' : 's'}` });
+                      } catch (err: any) {
+                        toast({ title: 'Could not extend trial', description: err?.message, variant: 'destructive' });
+                      } finally {
+                        setExtendingTrial(false);
+                      }
+                    }}
+                    className="flex-1 h-9 px-3 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-60"
+                  >
+                    {extendingTrial ? 'Extending...' : `Add ${trialDays}d`}
+                  </button>
+                </div>
               </div>
               <div className="flex items-center justify-between rounded-lg bg-slate-800 border border-slate-700 px-3 py-2">
                 <div>
