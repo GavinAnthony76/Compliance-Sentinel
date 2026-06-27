@@ -429,18 +429,27 @@ router.post("/companies/:id/extend-trial", async (req: any, res) => {
   // Extend from the existing trial end if it's still in the future, otherwise grant a fresh window from now.
   const base = existing.trialEndsAt && existing.trialEndsAt > now ? existing.trialEndsAt : now;
   const newTrialEndsAt = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+  // Never downgrade a paying (active) company to trialing — Stripe owns its billing state.
+  // For trialing/past_due/canceled/unset accounts, put them back into trialing so the extension grants access.
+  const newStatus = existing.subscriptionStatus === "active" ? existing.subscriptionStatus : "trialing";
   await db
     .update(companiesTable)
-    .set({ trialEndsAt: newTrialEndsAt, subscriptionStatus: "trialing", updatedAt: new Date() })
+    .set({ trialEndsAt: newTrialEndsAt, subscriptionStatus: newStatus, updatedAt: new Date() })
     .where(eq(companiesTable.id, id));
   await logActivity({
     adminId: req.admin.adminId,
     action: "admin.company_trial_extended",
     entityType: "company",
     entityId: id,
-    metadata: { days, fromTrialEndsAt: existing.trialEndsAt?.toISOString() ?? null, toTrialEndsAt: newTrialEndsAt.toISOString() },
+    metadata: {
+      days,
+      fromTrialEndsAt: existing.trialEndsAt?.toISOString() ?? null,
+      toTrialEndsAt: newTrialEndsAt.toISOString(),
+      fromStatus: existing.subscriptionStatus ?? null,
+      toStatus: newStatus,
+    },
   });
-  return res.json({ success: true, trialEndsAt: newTrialEndsAt.toISOString() });
+  return res.json({ success: true, trialEndsAt: newTrialEndsAt.toISOString(), subscriptionStatus: newStatus });
 });
 
 router.put("/companies/:id/notes", async (req: any, res) => {
