@@ -2128,6 +2128,12 @@ export const AdminListCompaniesQueryParams = zod.object({
   search: zod.coerce.string().optional(),
   plan: zod.coerce.string().optional(),
   status: zod.coerce.string().optional(),
+  verified: zod
+    .enum(["true", "false"])
+    .optional()
+    .describe(
+      'Filter by owner email verification state (\"true\" or \"false\")',
+    ),
   page: zod.coerce.number().default(adminListCompaniesQueryPageDefault),
   limit: zod.coerce.number().default(adminListCompaniesQueryLimitDefault),
 });
@@ -2148,6 +2154,7 @@ export const AdminListCompaniesResponse = zod.object({
       appointmentsCount: zod.number().nullish(),
       ownerName: zod.string().nullish(),
       ownerEmail: zod.string().nullish(),
+      ownerEmailVerified: zod.boolean().nullish(),
       createdAt: zod.date(),
     }),
   ),
@@ -2178,6 +2185,7 @@ export const AdminGetCompanyResponse = zod.object({
     appointmentsCount: zod.number().nullish(),
     ownerName: zod.string().nullish(),
     ownerEmail: zod.string().nullish(),
+    ownerEmailVerified: zod.boolean().nullish(),
     createdAt: zod.date(),
   }),
   usage: zod

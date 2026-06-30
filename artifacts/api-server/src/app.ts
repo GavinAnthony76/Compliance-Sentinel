@@ -17,8 +17,11 @@ function rateLimit(maxRequests: number, windowMs: number) {
       next();
       return;
     }
-    // Use originalUrl so the key is stable regardless of where middleware is mounted
-    const key = `${req.ip}:${req.originalUrl.split("?")[0]}`;
+    // Use originalUrl so the key is stable regardless of where middleware is mounted.
+    // Include the limiter's own max/window so multiple limiters can be layered on
+    // the same path (e.g. a short burst cap + a longer sustained cap) without
+    // their counters colliding in the shared store.
+    const key = `${req.ip}:${req.originalUrl.split("?")[0]}:${maxRequests}:${windowMs}`;
     const now = Date.now();
     const entry = _rateLimitStore.get(key);
     if (!entry || now > entry.resetAt) {
@@ -98,7 +101,11 @@ app.use(cors({
 
 // Rate limiting: only on mutation auth endpoints, not /me (which is called on every page load)
 app.use("/api/auth/login", rateLimit(20, 60_000));
+// Registration is the most-abused endpoint (junk/bot signups). Layer a short
+// burst cap with a stricter sustained hourly cap per IP to throttle bulk abuse
+// while leaving headroom for legitimate retries.
 app.use("/api/auth/register", rateLimit(10, 60_000));
+app.use("/api/auth/register", rateLimit(15, 60 * 60_000));
 app.use("/api/auth/forgot-password", rateLimit(10, 60_000));
 app.use("/api/auth/reset-password", rateLimit(10, 60_000));
 app.use("/api/admin/auth/login", rateLimit(10, 60_000));

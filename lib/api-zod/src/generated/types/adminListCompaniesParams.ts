@@ -5,11 +5,16 @@
  * GreenSynk Outdoor Service SaaS API
  * OpenAPI spec version: 1.0.0
  */
+import type { AdminListCompaniesVerified } from "./adminListCompaniesVerified";
 
 export type AdminListCompaniesParams = {
   search?: string;
   plan?: string;
   status?: string;
+  /**
+   * Filter by owner email verification state ("true" or "false")
+   */
+  verified?: AdminListCompaniesVerified;
   page?: number;
   limit?: number;
 };

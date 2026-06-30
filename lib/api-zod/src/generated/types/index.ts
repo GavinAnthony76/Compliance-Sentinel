@@ -21,6 +21,7 @@ export * from "./adminCompanyUsageLimits";
 export * from "./adminDashboard";
 export * from "./adminListActivityParams";
 export * from "./adminListCompaniesParams";
+export * from "./adminListCompaniesVerified";
 export * from "./adminListResponse";
 export * from "./adminSmsComplianceResponse";
 export * from "./adminSmsComplianceResponseCompanies";

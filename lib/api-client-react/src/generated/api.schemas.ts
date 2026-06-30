@@ -992,6 +992,7 @@ export interface AdminCompany {
   appointmentsCount?: number | null;
   ownerName?: string | null;
   ownerEmail?: string | null;
+  ownerEmailVerified?: boolean | null;
   createdAt: string;
 }
 
@@ -1189,9 +1190,21 @@ export type AdminListCompaniesParams = {
   search?: string;
   plan?: string;
   status?: string;
+  /**
+   * Filter by owner email verification state ("true" or "false")
+   */
+  verified?: AdminListCompaniesVerified;
   page?: number;
   limit?: number;
 };
+
+export type AdminListCompaniesVerified =
+  (typeof AdminListCompaniesVerified)[keyof typeof AdminListCompaniesVerified];
+
+export const AdminListCompaniesVerified = {
+  true: "true",
+  false: "false",
+} as const;
 
 export type AdminUpdateCompanyPlanBodyPlan =
   (typeof AdminUpdateCompanyPlanBodyPlan)[keyof typeof AdminUpdateCompanyPlanBodyPlan];

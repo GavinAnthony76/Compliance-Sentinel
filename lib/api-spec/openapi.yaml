@@ -1631,6 +1631,12 @@ paths:
           in: query
           schema:
             type: string
+        - name: verified
+          in: query
+          description: Filter by owner email verification state ("true" or "false")
+          schema:
+            type: string
+            enum: ["true", "false"]
         - name: page
           in: query
           schema:
@@ -3840,6 +3846,9 @@ components:
           nullable: true
         ownerEmail:
           type: string
+          nullable: true
+        ownerEmailVerified:
+          type: boolean
           nullable: true
         createdAt:
           type: string

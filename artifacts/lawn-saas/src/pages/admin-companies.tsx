@@ -342,8 +342,9 @@ export function AdminCompaniesPage() {
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [verifiedFilter, setVerifiedFilter] = useState('');
   const [showCreate, setShowCreate] = useState(false);
-  const { data, isLoading, refetch } = useAdminListCompanies({ search: search || undefined, plan: planFilter || undefined, status: statusFilter || undefined, page: 1, limit: 50 } as any);
+  const { data, isLoading, refetch } = useAdminListCompanies({ search: search || undefined, plan: planFilter || undefined, status: statusFilter || undefined, verified: verifiedFilter || undefined, page: 1, limit: 50 } as any);
   const [, setLocation] = useLocation();
 
   return (
@@ -381,6 +382,15 @@ export function AdminCompaniesPage() {
             <option value="past_due">Past Due</option>
             <option value="canceled">Canceled</option>
           </select>
+          <select
+            className="h-11 px-3 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 text-sm focus:outline-none focus:border-primary"
+            value={verifiedFilter}
+            onChange={e => setVerifiedFilter(e.target.value)}
+          >
+            <option value="">All Signups</option>
+            <option value="true">Email Verified</option>
+            <option value="false">Unverified</option>
+          </select>
         </div>
       </div>
 
@@ -410,7 +420,17 @@ export function AdminCompaniesPage() {
                       <div className="font-medium text-white">{company.name}</div>
                       <div className="text-xs text-slate-500">{company.email || company.slug}</div>
                     </td>
-                    <td className="p-4 text-sm text-slate-300">{company.ownerName || '—'}</td>
+                    <td className="p-4 text-sm text-slate-300">
+                      <div className="flex items-center gap-2">
+                        <span>{company.ownerName || '—'}</span>
+                        {company.ownerEmailVerified === false && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30 whitespace-nowrap">Unverified</span>
+                        )}
+                        {company.ownerEmailVerified === true && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 whitespace-nowrap">Verified</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="p-4">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${PLAN_COLORS[company.subscriptionPlan] || 'bg-slate-700 text-slate-400'}`}>
                         {company.subscriptionPlan || 'None'}

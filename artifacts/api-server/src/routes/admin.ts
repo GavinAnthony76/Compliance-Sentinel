@@ -274,11 +274,20 @@ router.get("/companies", async (req, res) => {
   const search = req.query.search as string;
   const plan = req.query.plan as string;
   const status = req.query.status as string;
+  const verified = req.query.verified as string;
 
   const conditions: any[] = [];
   if (search) conditions.push(ilike(companiesTable.name, `%${search}%`));
   if (plan) conditions.push(eq(companiesTable.subscriptionPlan, plan));
   if (status) conditions.push(eq(companiesTable.subscriptionStatus, status));
+  // Filter by the owner's email-verification state. Unverified signups can't log
+  // in (auth gate), so this lets admins hide junk/unconfirmed companies.
+  if (verified === "true" || verified === "false") {
+    const want = verified === "true";
+    conditions.push(
+      sql`EXISTS (SELECT 1 FROM users u WHERE u.company_id = ${companiesTable.id} AND u.role = 'owner' AND u.email_verified = ${want})`,
+    );
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -297,6 +306,7 @@ router.get("/companies", async (req, res) => {
       ...c,
       ownerName: owner[0] ? `${owner[0].firstName} ${owner[0].lastName}` : null,
       ownerEmail: owner[0]?.email ?? null,
+      ownerEmailVerified: owner[0]?.emailVerified ?? null,
       customersCount: Number(custCount[0].count),
       appointmentsCount: Number(apptCount[0].count),
     };

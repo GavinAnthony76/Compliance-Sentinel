@@ -20,5 +20,6 @@ export interface AdminCompany {
   appointmentsCount?: number | null;
   ownerName?: string | null;
   ownerEmail?: string | null;
+  ownerEmailVerified?: boolean | null;
   createdAt: Date;
 }
