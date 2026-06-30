@@ -33,6 +33,7 @@
 - [Email case normalization](email-case-normalization.md) — login looks up email lowercased; every user-email write/lookup must lowercase too or accounts become un-loginable (401 despite existing).
 - [Portal forgot-password gating](portal-forgot-password-gating.md) — never gate access-recovery emails on portalPasswordHash; magic-link-only customers have none, so forgot-password silently sent nothing. Email anyone with an email.
 - [PWA precache size limit](pwa-precache-size-limit.md) — lawn-saas build aborts if any png/webp/jpg in public/ exceeds workbox's 2MiB precache limit; keep large/unused images out of public/.
+- [A2P 10DLC CTA opt-in visibility](a2p-cta-opt-in-visibility.md) — Twilio Error 30909: opt-in checkbox must be visible at submitted URL before any pricing/payment; keep consent on /register step 1 + dedicated /sms-opt-in page.
 - [Layered rate-limit key](rate-limit-layered-key.md) — app.ts rateLimit keys by ip:path:max:windowMs so you can stack multiple limiters (burst + sustained) on one route without counter collision.
 - [SMS consent surfaces](sms-consent-surfaces.md) — every reminder/review SMS caller (incl. routes-mgmt cron) must pass `consent` or it falls back to raw sendSMS; phone-match on trailing-10 digits; portal JWT secret must equal customer-portal's.
 - [Admin billing-status override](admin-billing-status-override.md) — admin writes to companies.subscriptionStatus must never flip an `active` (Stripe-paying) company; only move non-active states into trialing (e.g. extend-trial).

@@ -67,6 +67,7 @@ const TermsPage = lazy(() => import("@/pages/terms").then(m => ({ default: m.Ter
 const CookiesPage = lazy(() => import("@/pages/cookies").then(m => ({ default: m.CookiesPage })));
 const SmsPage = lazy(() => import("@/pages/sms").then(m => ({ default: m.SmsPage })));
 const SmsPolicyPage = lazy(() => import("@/pages/sms-policy").then(m => ({ default: m.SmsPolicyPage })));
+const SmsOptInPage = lazy(() => import("@/pages/sms-opt-in").then(m => ({ default: m.SmsOptInPage })));
 const AdminSmsCompliancePage = lazy(() => import("@/pages/admin-sms-compliance").then(m => ({ default: m.AdminSmsCompliancePage })));
 
 // Auth / misc public pages — lazy loaded
@@ -262,6 +263,7 @@ function Router() {
           <Route path="/cookies" component={CookiesPage} />
           <Route path="/sms" component={SmsPage} />
           <Route path="/sms-policy" component={SmsPolicyPage} />
+          <Route path="/sms-opt-in" component={SmsOptInPage} />
 
           {/* Auth routes — lazy loaded */}
           <Route path="/login" component={LoginPage} />

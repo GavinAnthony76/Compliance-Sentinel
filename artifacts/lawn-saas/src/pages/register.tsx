@@ -55,7 +55,7 @@ export function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (step < 3) { setStep(s => s + 1); return; }
+    if (step < 2) { setStep(s => s + 1); return; }
     try {
       await registerMutation.mutateAsync({ data: { ...form, selectedPlan: selectedPlan as any, smsConsent } });
       setRegistered(true);
@@ -73,7 +73,7 @@ export function RegisterPage() {
     }
   };
 
-  const steps = ['Account Info', 'Choose Plan', 'Business Details'];
+  const steps = ['Account Info', 'Choose Plan'];
 
   if (registered) {
     return (
@@ -164,6 +164,34 @@ export function RegisterPage() {
                   <label className="text-sm font-medium pl-1">Password</label>
                   <Input type="password" icon={<Lock className="w-4 h-4" />} placeholder="Min 8 characters" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} required minLength={8} />
                 </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium pl-1">Business Phone <span className="text-muted-foreground font-normal">(optional)</span></label>
+                  <Input type="tel" placeholder="(555) 000-0000" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+                </div>
+
+                {/* SMS consent — required for A2P 10DLC; shown before plan selection so the opt-in is visible up front. Checkbox unchecked by default. */}
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <input
+                      id="sms-consent-reg"
+                      type="checkbox"
+                      checked={smsConsent}
+                      onChange={e => setSmsConsent(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    <label htmlFor="sms-consent-reg" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                      <span className="flex items-center gap-1 font-semibold text-foreground text-sm mb-1">
+                        <MessageSquare className="w-3.5 h-3.5" /> SMS Alerts (optional)
+                      </span>
+                      By checking this box, I agree to receive text messages from GreenSynk at the business phone number provided above. Messages may include account alerts, appointment reminders, estimate and invoice notifications, and service updates. Message &amp; data rates may apply. Message frequency varies (approximately 1–8 messages per month). Reply <strong>STOP</strong> to cancel, <strong>HELP</strong> for help. Consent is not a condition of purchase. See our{' '}
+                      <a href="/sms-opt-in" target="_blank" rel="noopener noreferrer" className="underline text-primary">SMS opt-in details</a>,{' '}
+                      <a href="/sms-policy" target="_blank" rel="noopener noreferrer" className="underline text-primary">SMS Policy</a>,{' '}
+                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-primary">Privacy Policy</a>, and{' '}
+                      <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline text-primary">Terms of Service</a>.
+                    </label>
+                  </div>
+                </div>
+
                 <Button type="submit" className="w-full h-12">Continue <ChevronRight className="ml-2 w-4 h-4" /></Button>
                 <p className="text-center text-sm text-muted-foreground">Already have an account? <Link href="/login" className="text-primary font-semibold hover:underline">Sign in</Link></p>
               </CardContent>
@@ -203,51 +231,12 @@ export function RegisterPage() {
                   </div>
                 ))}
               </div>
-              <Button type="submit" className="w-full h-12">Continue <ChevronRight className="ml-2 w-4 h-4" /></Button>
+              <Button type="submit" className="w-full h-12" isLoading={registerMutation.isPending}>
+                Create Account & Start Free Trial
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">No credit card required for 14-day trial</p>
               <button type="button" onClick={() => setStep(1)} className="w-full text-center text-sm text-muted-foreground hover:text-foreground">← Back</button>
             </div>
-          )}
-
-          {step === 3 && (
-            <Card className="border-border/50 shadow-2xl shadow-black/5">
-              <CardHeader className="text-center pb-2">
-                <CardTitle className="text-2xl">Business details</CardTitle>
-                <p className="text-muted-foreground text-sm">Optional — you can add these later in Settings</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium pl-1">Business Phone</label>
-                  <Input type="tel" placeholder="(555) 000-0000" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
-                </div>
-
-                {/* SMS consent — required for A2P 10DLC; checkbox must be unchecked by default */}
-                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <input
-                      id="sms-consent-reg"
-                      type="checkbox"
-                      checked={smsConsent}
-                      onChange={e => setSmsConsent(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                    />
-                    <label htmlFor="sms-consent-reg" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
-                      <span className="flex items-center gap-1 font-semibold text-foreground text-sm mb-1">
-                        <MessageSquare className="w-3.5 h-3.5" /> SMS Alerts (optional)
-                      </span>
-                      By checking this box, I agree to receive text messages from GreenSynk at the business phone number provided above. Messages may include account alerts, platform updates, and service notifications. Message & data rates may apply. Message frequency varies. Reply <strong>STOP</strong> to cancel, <strong>HELP</strong> for help. See our{' '}
-                      <a href="/sms-policy" target="_blank" rel="noopener noreferrer" className="underline text-primary">SMS Policy</a> and{' '}
-                      <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-primary">Privacy Policy</a>.
-                    </label>
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full h-12" isLoading={registerMutation.isPending}>
-                  Create Account & Start Free Trial
-                </Button>
-                <p className="text-center text-xs text-muted-foreground">No credit card required for 14-day trial</p>
-                <button type="button" onClick={() => setStep(2)} className="w-full text-center text-sm text-muted-foreground hover:text-foreground">← Back</button>
-              </CardContent>
-            </Card>
           )}
         </form>
       </div>
