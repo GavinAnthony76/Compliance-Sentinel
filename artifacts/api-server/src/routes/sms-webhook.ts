@@ -21,21 +21,22 @@ import { optOutByPhone, reSubscribeByPhone, appendSmsConsentEvent, findCustomers
 
 const router = Router();
 
-// ─── Required carrier copy — do NOT change these strings ─────────────────────
+// ─── Carrier reply copy — kept in sync with the A2P 10DLC campaign submission ─
+// These strings must match the opt-out / opt-in / help messages registered in
+// the Twilio campaign, because carriers/Twilio auto-test STOP and HELP replies.
 const STOP_REPLY =
-  "You have been unsubscribed from GreenSynk SMS alerts. " +
-  "You will receive no further messages. " +
-  "Reply START to re-subscribe. Reply HELP for help.";
+  "You have successfully been unsubscribed from GreenSynk. " +
+  "You will not receive any more messages from this number. " +
+  "Reply START to resubscribe.";
 
 const START_REPLY =
-  "You have been re-subscribed to GreenSynk SMS alerts. " +
-  "Message & data rates may apply. " +
-  "Reply STOP to cancel. Reply HELP for help.";
+  "GreenSynk: You're subscribed to service alerts - appointment reminders, estimates, invoices & service updates. " +
+  "Msg frequency varies (approx 1-8/mo). Msg & data rates may apply. " +
+  "Reply HELP for help, STOP to cancel.";
 
 const HELP_REPLY =
-  "GreenSynk Alerts: appointment reminders, estimates, and invoices from your lawn care provider. " +
-  "Msg & data rates may apply. ~4 msg/mo. " +
-  "Reply STOP to cancel. Visit greensynk.com/sms-policy for info.";
+  "GreenSynk service alerts. Msg frequency varies; Msg & data rates may apply. " +
+  "Reply STOP to unsubscribe. Support: support@greensynk.com";
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STOP_KEYWORDS = new Set(["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"]);
