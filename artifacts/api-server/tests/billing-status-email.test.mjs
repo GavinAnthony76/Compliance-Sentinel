@@ -70,26 +70,37 @@ mock.module("resend", {
 // company, or a thrown error to simulate a DB failure.
 let mockCompanyRows = [];
 let mockDbThrows = false;
-mock.module("@workspace/db", {
-  namedExports: {
-    db: {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => {
-              if (mockDbThrows) throw new Error("simulated DB failure");
-              return mockCompanyRows;
-            },
-          }),
+const dbNamedExports = {
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => {
+            if (mockDbThrows) throw new Error("simulated DB failure");
+            return mockCompanyRows;
+          },
         }),
       }),
-    },
-    invoicesTable: {},
-    invoiceLineItemsTable: {},
-    customersTable: {},
-    usersTable: {},
-    companiesTable: { id: "id" },
+    }),
   },
+  invoicesTable: {},
+  invoiceLineItemsTable: {},
+  customersTable: {},
+  usersTable: {},
+  companiesTable: { id: "id" },
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
+
+// Preflight: if production code reachable from the modules imported below has
+// grown a new named import from @workspace/db, fail NOW with a clear
+// "add X to the mock" message instead of an opaque import-time SyntaxError.
+const { assertMockCovers } = await import("./mock-surface-check.mjs");
+const entryFiles = ["../src/lib/notifications.ts", "../src/lib/billing-activity.ts"];
+assertMockCovers({
+  testFile: import.meta.url,
+  packageName: "@workspace/db",
+  providedNames: Object.keys(dbNamedExports),
+  entryFiles,
 });
 
 const { dispatchBillingStatusEmail } = await import("../src/lib/notifications.ts");

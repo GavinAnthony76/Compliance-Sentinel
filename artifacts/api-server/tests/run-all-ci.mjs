@@ -88,6 +88,25 @@ async function main() {
     { env: { ...process.env, NODE_ENV: "test" } },
   );
 
+  // Notification-email module-mock suites: no server/DB needed (they mock
+  // @workspace/db + resend entirely in-memory). Each starts with a preflight
+  // (tests/mock-surface-check.mjs) that fails with an actionable "add X to the
+  // mock" message if production code grew a new @workspace/db / drizzle-orm
+  // import the mock doesn't cover — instead of an opaque import-time
+  // SyntaxError. Note: these suites manage NODE_ENV themselves (they must NOT
+  // run as "test" or sendEmail short-circuits before the mocked resend client).
+  const emailSuites = [
+    ["billing-emails", "tests/billing-status-email.test.mjs", "Billing status email validation"],
+    ["payment-receipts", "tests/payment-receipt-email.test.mjs", "Payment receipt email validation"],
+  ];
+  const emailLabels = {};
+  for (const [key, file, label] of emailSuites) {
+    emailLabels[key] = label;
+    console.log(`\n########## ${label} ##########\n`);
+    console.log(`=== ${file} ===`);
+    results[key] = await run("node", ["--experimental-test-module-mocks", file]);
+  }
+
   console.log("\n========== Combined validation summary ==========");
   let failed = 0;
   const guardOk = guardCode === 0;
@@ -104,6 +123,11 @@ async function main() {
   const raceOk = results["autopay-sweep-race"] === 0;
   if (!raceOk) failed++;
   console.log(`  ${raceOk ? "PASS" : "FAIL"}  Sweep/autopay race validation`);
+  for (const [key] of emailSuites) {
+    const ok = results[key] === 0;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "PASS" : "FAIL"}  ${emailLabels[key]}`);
+  }
   process.exit(failed === 0 ? 0 : 1);
 }
 

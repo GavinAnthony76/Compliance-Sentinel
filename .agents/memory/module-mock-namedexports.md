@@ -7,3 +7,5 @@ Suites using `node --experimental-test-module-mocks` (billing-status-email, paym
 **Why:** ESM named imports are validated against the mock's export list at instantiation; there is no wildcard/proxy fallback for namedExports.
 
 **How to apply:** After adding an import from `@workspace/db`/`drizzle-orm` in code covered by these suites, add the name to each test's mock and rerun `pnpm run test:payment-receipts` / `test:billing-emails`. Pattern for faithful conditional-UPDATE+RETURNING semantics lives in payment-receipt-email.test.mjs.
+
+Now guarded: tests/mock-surface-check.mjs runs a preflight in both suites that statically walks the production import graph and fails with "add X to the mock" naming the missing exports before any opaque SyntaxError. Both suites also run inside `test:all:ci` (the test-gate validation), so the breakage is caught in CI. New module-mock suites should reuse assertMockCovers.

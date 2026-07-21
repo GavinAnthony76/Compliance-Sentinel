@@ -165,36 +165,34 @@ const fakeDb = {
   },
 };
 
-mock.module("@workspace/db", {
-  namedExports: {
-    db: fakeDb,
-    companiesTable: makeTable("companies"),
-    customersTable: makeTable("customers"),
-    invoicesTable: makeTable("invoices"),
-    invoiceLineItemsTable: makeTable("invoiceLineItems"),
-    usersTable: makeTable("users"),
-    appointmentsTable: makeTable("appointments"),
-    servicesTable: makeTable("services"),
-    propertiesTable: makeTable("properties"),
-    recurringPlansTable: makeTable("recurringPlans"),
-    estimatesTable: makeTable("estimates"),
-    appointmentPhotosTable: makeTable("appointmentPhotos"),
-  },
-});
+const dbNamedExports = {
+  db: fakeDb,
+  companiesTable: makeTable("companies"),
+  customersTable: makeTable("customers"),
+  invoicesTable: makeTable("invoices"),
+  invoiceLineItemsTable: makeTable("invoiceLineItems"),
+  usersTable: makeTable("users"),
+  appointmentsTable: makeTable("appointments"),
+  servicesTable: makeTable("services"),
+  propertiesTable: makeTable("properties"),
+  recurringPlansTable: makeTable("recurringPlans"),
+  estimatesTable: makeTable("estimates"),
+  appointmentPhotosTable: makeTable("appointmentPhotos"),
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
 
-mock.module("drizzle-orm", {
-  namedExports: {
-    eq: (col, val) => (row) => row[col.__col] === val,
-    ne: (col, val) => (row) => row[col.__col] !== val,
-    and: (...preds) => (row) => preds.every((p) => !p || p(row)),
-    or: (...preds) => (row) => preds.some((p) => p && p(row)),
-    lt: (col, val) => (row) => row[col.__col] < val,
-    isNull: (col) => (row) => row[col.__col] == null,
-    inArray: (col, arr) => (row) => arr.includes(row[col.__col]),
-    desc: (col) => col,
-    sql: Object.assign(() => ({}), { raw: () => ({}) }),
-  },
-});
+const drizzleNamedExports = {
+  eq: (col, val) => (row) => row[col.__col] === val,
+  ne: (col, val) => (row) => row[col.__col] !== val,
+  and: (...preds) => (row) => preds.every((p) => !p || p(row)),
+  or: (...preds) => (row) => preds.some((p) => p && p(row)),
+  lt: (col, val) => (row) => row[col.__col] < val,
+  isNull: (col) => (row) => row[col.__col] == null,
+  inArray: (col, arr) => (row) => arr.includes(row[col.__col]),
+  desc: (col) => col,
+  sql: Object.assign(() => ({}), { raw: () => ({}) }),
+};
+mock.module("drizzle-orm", { namedExports: drizzleNamedExports });
 
 // --- Stub the handlers' other collaborators ----------------------------------
 const passthrough = (_req, _res, next) => next();
@@ -269,6 +267,44 @@ mock.module("../src/lib/stripe.ts", {
     getStripePriceId: async () => "price_dummy",
   },
 });
+
+// --- Preflight: mock surface must cover production imports -------------------
+// If any production module reachable from the routes below has grown a new
+// named import from @workspace/db or drizzle-orm, fail NOW with an actionable
+// "add X to the mock" message instead of an opaque import-time SyntaxError.
+const { assertMockCovers } = await import("./mock-surface-check.mjs");
+const routeEntryFiles = [
+  "../src/routes/invoices.ts",
+  "../src/routes/autopay.ts",
+  "../src/routes/billing.ts",
+  "../src/routes/customer-portal.ts",
+];
+const mockedRelativeModules = [
+  "../src/lib/auth.ts",
+  "../src/lib/subscription.ts",
+  "../src/lib/features.ts",
+  "../src/lib/activity.ts",
+  "../src/lib/automations.ts",
+  "../src/lib/invoice-email.ts",
+  "../src/lib/invoice-pdf.ts",
+  "../src/lib/invoice-number.ts",
+  "../src/lib/sms-consent.ts",
+  "../src/lib/objectStorage.ts",
+  "../src/lib/plan-catalog.ts",
+  "../src/lib/stripe.ts",
+];
+for (const [packageName, providedNames] of [
+  ["@workspace/db", Object.keys(dbNamedExports)],
+  ["drizzle-orm", Object.keys(drizzleNamedExports)],
+]) {
+  assertMockCovers({
+    testFile: import.meta.url,
+    packageName,
+    providedNames,
+    entryFiles: routeEntryFiles,
+    skipModules: mockedRelativeModules,
+  });
+}
 
 // --- Import the REAL route modules (mocks above intercept their imports) -----
 const invoicesRouter = (await import("../src/routes/invoices.ts")).default;
