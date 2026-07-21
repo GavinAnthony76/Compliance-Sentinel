@@ -286,7 +286,7 @@ type InvoiceDetail = {
   lineItems: InvoiceLineItemInput[];
 };
 
-function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoiceNumber: string; status: string }; onClose: () => void }) {
+export function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoiceNumber: string; status: string }; onClose: () => void }) {
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem('greensync_token');
