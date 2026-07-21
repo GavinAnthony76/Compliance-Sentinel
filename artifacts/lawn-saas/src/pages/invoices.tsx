@@ -292,11 +292,23 @@ function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoi
   const token = localStorage.getItem('greensync_token');
 
   useEffect(() => {
-    fetch(`/api/invoices/${invoice.id}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => setDetail(d))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const load = () => {
+      fetch(`/api/invoices/${invoice.id}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(d => {
+          if (cancelled) return;
+          setDetail(d);
+          // Poll while the payment is mid-charge so the modal flips to the
+          // settled status without a manual reload.
+          if (d?.status === 'processing') timer = setTimeout(load, 4000);
+        })
+        .catch(() => {})
+        .finally(() => { if (!cancelled) setLoading(false); });
+    };
+    load();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [invoice.id]);
 
   return (
@@ -307,7 +319,7 @@ function InvoiceDetailModal({ invoice, onClose }: { invoice: { id: number; invoi
             <h2 className="text-xl font-bold">{invoice.invoiceNumber}</h2>
             {detail?.customerName && <p className="text-sm text-muted-foreground mt-0.5">{detail.customerName}</p>}
           </div>
-          <InvoiceStatusBadge status={invoice.status} />
+          <InvoiceStatusBadge status={detail?.status ?? invoice.status} />
         </div>
 
         {loading ? (
@@ -492,7 +504,20 @@ export function InvoicesPage() {
   const [viewingInvoice, setViewingInvoice] = useState<{ id: number; invoiceNumber: string; status: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
-  const { data, isLoading } = useListInvoices({ status: statusFilter || undefined, paymentMethod: methodFilter || undefined, page: 1, limit: 50 } as Parameters<typeof useListInvoices>[0]);
+  const { data, isLoading } = useListInvoices(
+    { status: statusFilter || undefined, paymentMethod: methodFilter || undefined, page: 1, limit: 50 } as Parameters<typeof useListInvoices>[0],
+    {
+      query: {
+        queryKey: getListInvoicesQueryKey({ status: statusFilter || undefined, paymentMethod: methodFilter || undefined, page: 1, limit: 50 } as Parameters<typeof getListInvoicesQueryKey>[0]),
+        // While any visible invoice is mid-charge ("processing"), poll every
+        // few seconds so the list flips to paid/sent without a manual reload.
+        refetchInterval: (query) => {
+          const invoices = (query.state.data as { invoices?: { status: string }[] } | undefined)?.invoices;
+          return invoices?.some(inv => inv.status === 'processing') ? 4000 : false;
+        },
+      },
+    },
+  );
   const { toast } = useToast();
   const qc = useQueryClient();
   const sendMut = useSendInvoice();

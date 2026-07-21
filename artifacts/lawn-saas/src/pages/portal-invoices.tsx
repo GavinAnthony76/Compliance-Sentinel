@@ -41,11 +41,30 @@ export function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { inv
   const { toast } = useToast();
 
   useEffect(() => {
+    let cancelled = false;
     portalFetch(`/api/portal/invoices/${invoice.id}`)
       .then((r: any) => r.json())
-      .then(setDetail)
-      .finally(() => setLoading(false));
+      .then((d: any) => { if (!cancelled) setDetail(d); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [invoice.id]);
+
+  // Poll while a card charge is mid-flight so the panel flips to paid (or
+  // back to sent/overdue) without a manual reload. Keyed off the current
+  // status so it also kicks in when handlePay marks the invoice processing.
+  const detailStatus = detail?.status ?? invoice.status;
+  useEffect(() => {
+    if (detailStatus !== 'processing') return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      portalFetch(`/api/portal/invoices/${invoice.id}`)
+        .then((r: any) => r.json())
+        .then((d: any) => { if (!cancelled && d?.id) setDetail(d); })
+        .catch(() => {});
+    }, 4000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [detailStatus, invoice.id]);
 
   const handlePay = async () => {
     setPaying(true);
@@ -296,6 +315,20 @@ export function PortalInvoicesPage() {
       setInvoices(Array.isArray(data) ? data : []);
     }).finally(() => setDataLoading(false));
   }, [isAuthenticated]);
+
+  // While any invoice is mid-charge ("processing"), poll the list every few
+  // seconds so statuses flip to paid/sent without a manual reload.
+  const hasProcessing = invoices.some(inv => inv.status === 'processing');
+  useEffect(() => {
+    if (!isAuthenticated || !hasProcessing) return;
+    let cancelled = false;
+    const timer = setInterval(() => {
+      portalFetch('/api/portal/invoices').then((r: any) => r.json()).then((data: any) => {
+        if (!cancelled && Array.isArray(data)) setInvoices(data);
+      }).catch(() => {});
+    }, 4000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [isAuthenticated, hasProcessing]);
 
   if (isLoading || !isAuthenticated) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
