@@ -77,6 +77,17 @@ async function main() {
     { env: { ...process.env, NODE_ENV: "test" } },
   );
 
+  // Sweep vs. autopay-charge race suite: interleaves the real sweep with the
+  // real charge route mid-flight to lock in the compare-and-swap guards that
+  // prevent a released invoice from being double-charged.
+  console.log("\n########## Sweep/autopay race validation ##########\n");
+  console.log("=== tests/autopay-sweep-race.test.mjs ===");
+  results["autopay-sweep-race"] = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/autopay-sweep-race.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+
   console.log("\n========== Combined validation summary ==========");
   let failed = 0;
   const guardOk = guardCode === 0;
@@ -90,6 +101,9 @@ async function main() {
   const stuckOk = results["stuck-invoices"] === 0;
   if (!stuckOk) failed++;
   console.log(`  ${stuckOk ? "PASS" : "FAIL"}  Stuck-invoice sweep validation`);
+  const raceOk = results["autopay-sweep-race"] === 0;
+  if (!raceOk) failed++;
+  console.log(`  ${raceOk ? "PASS" : "FAIL"}  Sweep/autopay race validation`);
   process.exit(failed === 0 ? 0 : 1);
 }
 

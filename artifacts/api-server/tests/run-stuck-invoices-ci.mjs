@@ -51,7 +51,14 @@ async function main() {
     ["--experimental-test-module-mocks", "tests/stuck-invoices.test.mjs"],
     { env: { ...process.env, NODE_ENV: "test" } },
   );
-  process.exit(code);
+
+  console.log("\n=== tests/autopay-sweep-race.test.mjs ===");
+  const raceCode = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/autopay-sweep-race.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+  process.exit(code !== 0 ? code : raceCode);
 }
 
 main().catch((err) => {

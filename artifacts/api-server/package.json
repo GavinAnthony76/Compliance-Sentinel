@@ -23,6 +23,7 @@
     "test:awaited-dispatch": "node tests/awaited-dispatch.test.mjs",
     "test:stuck-invoices": "node --experimental-test-module-mocks tests/stuck-invoices.test.mjs",
     "test:stuck-invoices:ci": "node tests/run-stuck-invoices-ci.mjs",
+    "test:autopay-race": "node --experimental-test-module-mocks tests/autopay-sweep-race.test.mjs",
     "test:admin:ci": "node tests/run-admin-ci.mjs",
     "test:all:ci": "node tests/run-all-ci.mjs"
   },
