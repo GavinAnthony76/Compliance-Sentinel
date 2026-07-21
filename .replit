@@ -34,6 +34,10 @@ args = "staff-access"
 task = "workflow.run"
 args = "admin-access"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "frontend-tests"
+
 [[workflows.workflow]]
 name = "lead-access"
 author = "agent"
@@ -63,6 +67,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run test:admin:ci"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "frontend-tests"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pnpm --filter @workspace/lawn-saas test"
 
 [workflows.workflow.metadata]
 isValidation = true
