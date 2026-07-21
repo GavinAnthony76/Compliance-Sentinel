@@ -81,6 +81,8 @@ router.post("/", requireRole("owner", "admin"), requireFeature("team_management"
       companyName: company?.name ?? "your company",
       temporaryPassword,
       loginUrl: resolveBaseUrl(),
+      logoUrl: company?.logoUrl ?? null,
+      primaryColor: company?.primaryColor ?? null,
     });
     if (result.delivered) {
       logger.info({ to: member.email }, "Team invite email sent");

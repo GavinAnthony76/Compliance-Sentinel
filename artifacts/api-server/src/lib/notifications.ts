@@ -1737,10 +1737,40 @@ export async function sendTeamInviteEmail(opts: {
   companyName: string;
   temporaryPassword: string;
   loginUrl: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
 }): Promise<EmailResult> {
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">You have been added as a team member at <strong>${escapeHtml(opts.companyName)}</strong> on GreenSynk. Here are your login credentials:</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;border:1px solid #e5e7eb;border-radius:6px;background-color:#f9fafb;">
+              <tr><td style="padding:16px 20px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Email:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;">${escapeHtml(opts.to)}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:14px;color:#6b7280;padding:2px 12px 2px 0;">Temporary Password:</td>
+                    <td style="font-size:14px;color:#111827;font-weight:600;padding:2px 0;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;">${escapeHtml(opts.temporaryPassword)}</td>
+                  </tr>
+                </table>
+              </td></tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:14px;color:#6b7280;line-height:1.5;">Please change your password after your first login.</p>`;
+  const html = buildBrandedEmailHtml({
+    title: `You've been invited to join ${opts.companyName} on GreenSynk`,
+    companyName: opts.companyName,
+    bodyHtml,
+    cta: { label: "Log In", url: opts.loginUrl },
+    footerHtml: `Thank you,<br /><strong>${escapeHtml(opts.companyName)}</strong>`,
+    logoUrl: opts.logoUrl,
+    primaryColor: opts.primaryColor,
+  });
   return sendEmail({
     to: opts.to,
     subject: `You've been invited to join ${opts.companyName} on GreenSynk`,
     body: `Hi ${opts.firstName},\n\nYou have been added as a team member at ${opts.companyName} on GreenSynk.\n\nHere are your login credentials:\n\nEmail: ${opts.to}\nTemporary Password: ${opts.temporaryPassword}\n\nLogin here: ${opts.loginUrl}\n\nPlease change your password after your first login.\n\nThank you,\nThe GreenSynk Team`,
+    html,
   });
 }
