@@ -22,6 +22,7 @@
  *        - tests/payment-access.e2e.mjs               (autopay + portal payment guards)
  *        - tests/receipt-pdf-access.e2e.mjs           (portal paid-invoice receipt download)
  *        - tests/invoice-pdf-access.e2e.mjs           (portal invoice-PDF download)
+ *        - tests/invoice-summary.e2e.mjs              (all-invoices payment summary aggregation)
  *   5. Always tear the server down.
  *
  * Exit code 0 = every suite passed, non-zero = at least one suite failed (which
@@ -186,6 +187,7 @@ async function main() {
     "tests/payment-access.e2e.mjs",
     "tests/receipt-pdf-access.e2e.mjs",
     "tests/invoice-pdf-access.e2e.mjs",
+    "tests/invoice-summary.e2e.mjs",
   ];
 
   let failed = 0;
