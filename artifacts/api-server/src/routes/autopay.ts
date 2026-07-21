@@ -228,8 +228,11 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
 
       await logActivity({ companyId, userId, action: "invoice.autopay_charged", entityType: "invoice", entityId: invoiceId });
       if (transitioned.length > 0) {
-        dispatchPaymentReceiptEmail(invoiceId, companyId);
-        dispatchOwnerPaymentNotification(invoiceId, companyId);
+        // Awaited: on Autoscale, work started after the response is sent gets
+        // CPU-throttled and can be silently dropped. Both dispatchers catch
+        // their own errors, so awaiting never fails the request.
+        await dispatchPaymentReceiptEmail(invoiceId, companyId);
+        await dispatchOwnerPaymentNotification(invoiceId, companyId);
       }
       return res.json({ success: true, status: "paid" });
     }

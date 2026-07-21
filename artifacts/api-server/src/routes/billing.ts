@@ -100,8 +100,12 @@ router.post("/webhook", async (req: Request, res) => {
             logger.info({ invoiceId, sessionId: session.id, transitioned: transitioned.length > 0 }, "Invoice marked paid via portal checkout");
             if (companyId && transitioned.length > 0) {
               const { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } = await import("../lib/notifications");
-              dispatchPaymentReceiptEmail(invoiceId, companyId);
-              dispatchOwnerPaymentNotification(invoiceId, companyId);
+              // Awaited: on Autoscale, work started after the webhook response
+              // is sent gets CPU-throttled and can be silently dropped. Both
+              // dispatchers catch their own errors, so awaiting never fails
+              // the webhook (Stripe allows ~20s; PDF gen is fast).
+              await dispatchPaymentReceiptEmail(invoiceId, companyId);
+              await dispatchOwnerPaymentNotification(invoiceId, companyId);
             }
           }
           break;

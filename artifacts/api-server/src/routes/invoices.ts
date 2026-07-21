@@ -338,8 +338,11 @@ router.post("/:id/mark-paid", async (req: any, res) => {
     : await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
   await logActivity({ companyId, userId, action: "invoice.paid", entityType: "invoice", entityId: id, metadata: { paymentMethod: req.body.paymentMethod } });
   if (transitioned) {
-    dispatchPaymentReceiptEmail(id, companyId);
-    dispatchOwnerPaymentNotification(id, companyId);
+    // Awaited: on Autoscale, work started after the response is sent gets
+    // CPU-throttled and can be silently dropped. Both dispatchers catch their
+    // own errors, so awaiting never fails the request.
+    await dispatchPaymentReceiptEmail(id, companyId);
+    await dispatchOwnerPaymentNotification(id, companyId);
   }
   const lineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
   return res.json(fmt(updated, undefined, lineItems.map(fmtLineItem)));

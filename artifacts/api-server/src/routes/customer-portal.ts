@@ -866,8 +866,11 @@ router.post("/invoices/:id/confirm-payment", requirePortalAuth, async (req: any,
 
   if (transitioned.length > 0) {
     const { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } = await import("../lib/notifications");
-    dispatchPaymentReceiptEmail(id, companyId);
-    dispatchOwnerPaymentNotification(id, companyId);
+    // Awaited: on Autoscale, work started after the response is sent gets
+    // CPU-throttled and can be silently dropped. Both dispatchers catch their
+    // own errors, so awaiting never fails the request.
+    await dispatchPaymentReceiptEmail(id, companyId);
+    await dispatchOwnerPaymentNotification(id, companyId);
   }
 
   return res.json({ confirmed: true });

@@ -85,8 +85,11 @@ export async function releaseStuckProcessingInvoices(): Promise<void> {
 
           if (transitioned.length > 0) {
             await logActivity({ companyId: invoice.companyId, action: "invoice.autopay_reconciled_paid", entityType: "invoice", entityId: invoice.id });
-            dispatchPaymentReceiptEmail(invoice.id, invoice.companyId);
-            dispatchOwnerPaymentNotification(invoice.id, invoice.companyId);
+            // Awaited: the sweep may run inside a request-triggered tick on
+            // Autoscale, where un-awaited work after the response is dropped.
+            // Both dispatchers catch their own errors.
+            await dispatchPaymentReceiptEmail(invoice.id, invoice.companyId);
+            await dispatchOwnerPaymentNotification(invoice.id, invoice.companyId);
             logger.info({ invoiceId: invoice.id, paymentIntentId: succeededIntent.id }, "Stuck invoice reconciled as paid");
           }
           continue;
