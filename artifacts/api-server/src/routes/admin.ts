@@ -623,6 +623,31 @@ router.get("/activity", async (req, res) => {
   });
 });
 
+// ─── Automated Lockout Runs ──────────────────────────────────────────────────
+// History of the daily dormancy sweep so admins can confirm at a glance that
+// the automated inactivity lockout is running (timestamp + count per run),
+// without digging through the full activity feed.
+router.get("/lockout-runs", async (req, res) => {
+  const limit = Math.max(1, Math.min(Number(req.query.limit) || 10, 50));
+  const rows = await db.select()
+    .from(activityLogsTable)
+    .where(eq(activityLogsTable.action, "admin.admins_auto_deactivated"))
+    .orderBy(desc(activityLogsTable.createdAt))
+    .limit(limit);
+
+  const runs = rows.map(r => {
+    const meta = (r.metadataJson ?? {}) as Record<string, unknown>;
+    return {
+      id: r.id,
+      ranAt: r.createdAt,
+      deactivatedCount: typeof meta.count === "number" ? meta.count : 0,
+      thresholdDays: typeof meta.thresholdDays === "number" ? meta.thresholdDays : null,
+    };
+  });
+
+  return res.json({ runs, lastRun: runs[0] ?? null });
+});
+
 // ─── Admin Users ──────────────────────────────────────────────────────────────
 router.get("/admins", async (_req, res) => {
   const admins = await db.select({

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAdminListAdmins, useAdminCreateAdmin, useAdminGetMe } from '@workspace/api-client-react';
 import { AdminLayout } from './admin-dashboard';
 import { Button, Input } from '@/components/ui';
-import { Plus, Shield, Mail, Pencil, Trash2, X, AlertTriangle, Ban, RotateCcw } from 'lucide-react';
+import { Plus, Shield, Mail, Pencil, Trash2, X, AlertTriangle, Ban, RotateCcw, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAdminListAdminsQueryKey } from '@workspace/api-client-react';
@@ -20,6 +20,95 @@ function getLoginStatus(lastLoginAt: string | null | undefined, staleDays: numbe
 function adminFetch(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem('greensync_admin_token');
   return fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(opts.headers ?? {}) } });
+}
+
+interface LockoutRun {
+  id: number;
+  ranAt: string;
+  deactivatedCount: number;
+  thresholdDays: number | null;
+}
+
+function LockoutHistoryPanel() {
+  const [runs, setRuns] = useState<LockoutRun[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await adminFetch('/api/admin/lockout-runs?limit=10');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!cancelled) setRuns(data.runs ?? []);
+      } catch {
+        if (!cancelled) setLoadFailed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loadFailed) {
+    return (
+      <div className="mb-6 bg-slate-900 rounded-xl border border-slate-800 p-4 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+          <Clock className="w-4 h-4 text-slate-500" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-white">Automatic inactivity lockout</p>
+          <p className="text-xs text-slate-500">Couldn't load the sweep history right now.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (runs === null) return null;
+
+  const lastRun = runs[0];
+
+  return (
+    <div className="mb-6 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 p-4">
+        <div className="w-9 h-9 rounded-lg bg-emerald-400/10 flex items-center justify-center shrink-0">
+          <Clock className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-white">Automatic inactivity lockout</p>
+          {lastRun ? (
+            <p className="text-xs text-slate-400">
+              Last ran {format(new Date(lastRun.ranAt), 'MMM d, yyyy h:mm a')} — {lastRun.deactivatedCount === 0 ? 'no admins deactivated' : `${lastRun.deactivatedCount} admin${lastRun.deactivatedCount === 1 ? '' : 's'} deactivated`}
+              {lastRun.thresholdDays != null && ` (${lastRun.thresholdDays}-day threshold)`}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-400">The automated sweep hasn't run yet.</p>
+          )}
+        </div>
+        {runs.length > 1 && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="ml-auto flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            {expanded ? 'Hide history' : `View history (${runs.length})`}
+            {expanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+        )}
+      </div>
+      {expanded && (
+        <div className="border-t border-slate-800 divide-y divide-slate-800/60">
+          {runs.map(run => (
+            <div key={run.id} className="flex items-center justify-between px-4 py-2.5 text-xs">
+              <span className="text-slate-300">{format(new Date(run.ranAt), 'MMM d, yyyy h:mm a')}</span>
+              <span className={run.deactivatedCount > 0 ? 'text-amber-400 font-medium' : 'text-slate-500'}>
+                {run.deactivatedCount === 0 ? 'No admins deactivated' : `${run.deactivatedCount} deactivated`}
+                {run.thresholdDays != null && <span className="text-slate-500 font-normal"> · {run.thresholdDays}-day threshold</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function EditAdminModal({ admin, onClose, onSaved }: { admin: any; onClose: () => void; onSaved: () => void }) {
@@ -315,6 +404,8 @@ export function AdminAdminsPage() {
         <h1 className="text-2xl font-bold text-white">Admin Users</h1>
         <Button onClick={() => setShowNew(true)}><Plus className="w-4 h-4 mr-2" />New Admin</Button>
       </div>
+
+      <LockoutHistoryPanel />
 
       {!isLoading && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
