@@ -72,6 +72,19 @@ async function waitForServer() {
 }
 
 async function main() {
+  // --- Unit suite (no server needed) -----------------------------------------
+  // Covers the custom lockout note: rendering in the deactivation email, the
+  // PUT /admins/:id pass-through, and that the bulk sweep never carries a note.
+  console.log("=== tests/admin-deactivation-note.test.mjs ===");
+  const noteCode = await run("node", [
+    "--experimental-test-module-mocks",
+    "tests/admin-deactivation-note.test.mjs",
+  ]);
+  if (noteCode !== 0) {
+    console.error("Custom-lockout-note unit suite failed; aborting.");
+    process.exit(noteCode);
+  }
+
   // --- Build ----------------------------------------------------------------
   console.log(`• Building api-server into ${DIST}…`);
   const buildCode = await run("node", ["build.mjs"], {

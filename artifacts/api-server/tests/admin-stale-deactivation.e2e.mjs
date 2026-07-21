@@ -146,6 +146,12 @@ async function main() {
         suffix: "recent",
         lastLoginAt: new Date(now - 10 * DAY_MS),
       });
+      // Dedicated target for the custom-lockout-note tests (recently active so
+      // the bulk sweep never touches it).
+      seeded.noted = await seedAdmin(client, {
+        suffix: "noted",
+        lastLoginAt: new Date(now - 5 * DAY_MS),
+      });
       const seededIds = new Set(Object.values(seeded));
 
       // --- Log in as the acting admin to obtain a real admin token ----------
@@ -179,6 +185,82 @@ async function main() {
         "acting admin remains active after self-deactivation attempt",
         (await adminIsActive(client, seeded.acting)) === true,
       );
+
+      // === Test 1b: custom lockout note on a manual deactivation ===========
+      console.log("\nCustom lockout note (PUT /admin/admins/:id { isActive:false, note }):");
+      const NOTE = "Contract ended 2026-07-01; access revoked per security policy.";
+      const noted = await req("PUT", `/admin/admins/${seeded.noted}`, {
+        token: actingToken,
+        body: { isActive: false, note: NOTE },
+      });
+      check("deactivation with a note -> 200", noted.status === 200, `got ${noted.status}`);
+      check(
+        "noted admin is inactive in DB",
+        (await adminIsActive(client, seeded.noted)) === false,
+      );
+      const notedLog = await client.query(
+        `SELECT metadata_json FROM activity_logs
+          WHERE admin_id = $1 AND action = 'admin.admin_deactivated'
+            AND entity_type = 'admin' AND entity_id = $2
+          ORDER BY id DESC LIMIT 1`,
+        [seeded.acting, seeded.noted],
+      );
+      check("deactivation with a note is recorded in the activity log", notedLog.rows.length === 1);
+      check(
+        "activity log stores the note in metadataJson.note",
+        notedLog.rows[0]?.metadata_json?.note === NOTE,
+        `metadata_json=${JSON.stringify(notedLog.rows[0]?.metadata_json)}`,
+      );
+
+      // A non-deactivation update must IGNORE a note in the body.
+      const renamed = await req("PUT", `/admin/admins/${seeded.noted}`, {
+        token: actingToken,
+        body: { firstName: "Renamed", note: "must be ignored" },
+      });
+      check("plain update with a stray note -> 200", renamed.status === 200, `got ${renamed.status}`);
+      const renamedLog = await client.query(
+        `SELECT metadata_json FROM activity_logs
+          WHERE admin_id = $1 AND action = 'admin.admin_updated'
+            AND entity_type = 'admin' AND entity_id = $2
+          ORDER BY id DESC LIMIT 1`,
+        [seeded.acting, seeded.noted],
+      );
+      check("plain update is recorded as admin.admin_updated", renamedLog.rows.length === 1);
+      check(
+        "plain update stores NO note metadata",
+        renamedLog.rows[0]?.metadata_json == null ||
+          renamedLog.rows[0].metadata_json.note === undefined,
+        `metadata_json=${JSON.stringify(renamedLog.rows[0]?.metadata_json)}`,
+      );
+
+      // A deactivation WITHOUT a note must store no note either. Reuse the
+      // recent admin (reactivated afterwards so later assertions still hold).
+      const noteless = await req("PUT", `/admin/admins/${seeded.recent}`, {
+        token: actingToken,
+        body: { isActive: false },
+      });
+      check("deactivation without a note -> 200", noteless.status === 200, `got ${noteless.status}`);
+      const notelessLog = await client.query(
+        `SELECT metadata_json FROM activity_logs
+          WHERE admin_id = $1 AND action = 'admin.admin_deactivated'
+            AND entity_type = 'admin' AND entity_id = $2
+          ORDER BY id DESC LIMIT 1`,
+        [seeded.acting, seeded.recent],
+      );
+      check("note-less deactivation is recorded in the activity log", notelessLog.rows.length === 1);
+      check(
+        "note-less deactivation stores NO note metadata",
+        notelessLog.rows[0]?.metadata_json == null ||
+          notelessLog.rows[0].metadata_json.note === undefined,
+        `metadata_json=${JSON.stringify(notelessLog.rows[0]?.metadata_json)}`,
+      );
+      // Restore the recent admin so the bulk-sweep assertions below still see
+      // an ACTIVE recently-signed-in admin that must not be swept.
+      const restoreRecent = await req("PUT", `/admin/admins/${seeded.recent}`, {
+        token: actingToken,
+        body: { isActive: true },
+      });
+      check("recent admin restored to active for the sweep test", restoreRecent.status === 200 && (await adminIsActive(client, seeded.recent)) === true);
 
       // === Test 2: bulk-deactivate only dormant admins =====================
       console.log("\nBulk deactivate-stale (POST /admin/admins/deactivate-stale):");
@@ -238,12 +320,17 @@ async function main() {
 
       // The bulk action must be audited when it deactivates anyone.
       const bulkLog = await client.query(
-        `SELECT id FROM activity_logs
+        `SELECT metadata_json FROM activity_logs
           WHERE admin_id = $1 AND action = 'admin.admins_bulk_deactivated'
           ORDER BY id DESC LIMIT 1`,
         [seeded.acting],
       );
       check("bulk deactivation is recorded in the activity log", bulkLog.rows.length === 1);
+      check(
+        "bulk sweep metadata NEVER carries a per-person note",
+        bulkLog.rows[0]?.metadata_json != null && !("note" in bulkLog.rows[0].metadata_json),
+        `metadata_json=${JSON.stringify(bulkLog.rows[0]?.metadata_json)}`,
+      );
 
       // === Test 3: reactivation flips isActive back and is logged ===========
       console.log("\nReactivation (PUT /admin/admins/:id { isActive:true }):");
