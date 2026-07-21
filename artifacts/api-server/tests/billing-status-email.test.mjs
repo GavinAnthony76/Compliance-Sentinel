@@ -85,7 +85,9 @@ mock.module("@workspace/db", {
       }),
     },
     invoicesTable: {},
+    invoiceLineItemsTable: {},
     customersTable: {},
+    usersTable: {},
     companiesTable: { id: "id" },
   },
 });

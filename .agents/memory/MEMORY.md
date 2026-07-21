@@ -37,4 +37,5 @@
 - [Layered rate-limit key](rate-limit-layered-key.md) — app.ts rateLimit keys by ip:path:max:windowMs so you can stack multiple limiters (burst + sustained) on one route without counter collision.
 - [SMS consent surfaces](sms-consent-surfaces.md) — every reminder/review SMS caller (incl. routes-mgmt cron) must pass `consent` or it falls back to raw sendSMS; phone-match on trailing-10 digits; portal JWT secret must equal customer-portal's.
 - [Admin billing-status override](admin-billing-status-override.md) — admin writes to companies.subscriptionStatus must never flip an `active` (Stripe-paying) company; only move non-active states into trialing (e.g. extend-trial).
+- [Module-mock namedExports drift](module-mock-namedexports.md) — mock.module suites crash when code adds a new named import from a mocked module; extend each test's namedExports list.
 - [Autoscale drops fire-and-forget email](autoscale-fire-and-forget-email.md) — on Cloud Run autoscale, async sends started AFTER res.json() get CPU-throttled away & silently never deliver; await all critical external I/O before responding.
