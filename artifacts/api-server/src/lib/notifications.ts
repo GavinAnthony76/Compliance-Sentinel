@@ -1100,6 +1100,48 @@ export async function sendEmailVerificationEmail(opts: {
   });
 }
 
+// Password-reset link for a company user (owner/manager/staff). Sent from the
+// public forgot-password endpoint; the link is valid for 1 hour.
+export async function sendPasswordResetEmail(opts: {
+  to: string;
+  firstName: string;
+  resetUrl: string;
+}): Promise<EmailResult> {
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
+            <p style="margin:0 0 8px;font-size:15px;color:#374151;line-height:1.5;">We received a request to reset the password for your GreenSynk account. Click the button below to set a new password. This link is valid for 1 hour.</p>
+            <p style="margin:0 0 24px;font-size:13px;color:#6b7280;line-height:1.5;">Your new password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: "Reset your GreenSynk password",
+    companyName: "GreenSynk",
+    bodyHtml,
+    cta: { label: "Reset my password", url: opts.resetUrl },
+    footerHtml: `If you did not request a password reset, you can safely ignore this email. Your password will not change.<br /><br />— The GreenSynk Team`,
+  });
+
+  return sendEmail({
+    to: opts.to,
+    subject: "Reset your GreenSynk password",
+    body: [
+      `Hi ${opts.firstName},`,
+      "",
+      "We received a request to reset the password for your GreenSynk account.",
+      "",
+      "Click the link below to set a new password. This link is valid for 1 hour:",
+      "",
+      opts.resetUrl,
+      "",
+      "Your new password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.",
+      "",
+      "If you did not request a password reset, you can safely ignore this email. Your password will not change.",
+      "",
+      "— The GreenSynk Team",
+    ].join("\n"),
+    html,
+  });
+}
+
 // Notify the company that a customer cancelled a portal-submitted booking.
 export async function sendPortalCancellationNotification(opts: {
   companyEmail: string;

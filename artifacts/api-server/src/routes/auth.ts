@@ -3,7 +3,7 @@ import { db, usersTable, companiesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signUserToken, hashPassword, verifyPassword, requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
-import { sendEmail, sendWelcomeEmail, sendEmailVerificationEmail, resolveBaseUrl } from "../lib/notifications";
+import { sendEmail, sendWelcomeEmail, sendEmailVerificationEmail, sendPasswordResetEmail, resolveBaseUrl } from "../lib/notifications";
 import { appendSmsConsentEvent } from "../lib/sms-consent";
 import { logger } from "../lib/logger";
 import { z } from "zod";
@@ -403,25 +403,7 @@ router.post("/forgot-password", async (req, res) => {
     await db.update(usersTable).set({ passwordResetToken: tokenHash, passwordResetExpiresAt: expiresAt, updatedAt: new Date() }).where(eq(usersTable.id, user.id));
 
     const resetUrl = `${resolveBaseUrl()}/reset-password?token=${rawToken}`;
-    await sendEmail({
-      to: user.email,
-      subject: "Reset your GreenSynk password",
-      body: [
-        `Hi ${user.firstName},`,
-        "",
-        "We received a request to reset the password for your GreenSynk account.",
-        "",
-        "Click the link below to set a new password. This link is valid for 1 hour:",
-        "",
-        resetUrl,
-        "",
-        "Your new password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.",
-        "",
-        "If you did not request a password reset, you can safely ignore this email. Your password will not change.",
-        "",
-        "— The GreenSynk Team",
-      ].join("\n"),
-    });
+    await sendPasswordResetEmail({ to: user.email, firstName: user.firstName, resetUrl });
   }
 
   return res.json({ success: true, message: "If that email is registered, a reset link has been sent." });
