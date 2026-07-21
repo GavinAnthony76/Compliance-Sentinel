@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import { ArrowLeft, CreditCard, CheckCircle, Leaf, ChevronRight, Download } from 'lucide-react';
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
     draft:      { label: 'Draft',                 className: 'bg-gray-100 text-gray-700' },
     sent:       { label: 'Sent',                  className: 'bg-blue-100 text-blue-800' },
@@ -32,7 +32,7 @@ function PaymentMethodBadge({ method }: { method: string }) {
   return <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">{labels[method] ?? method}</span>;
 }
 
-function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: any; slug: string; onBack: () => void; portalFetch: any }) {
+export function InvoiceDetailPanel({ invoice, slug, onBack, portalFetch }: { invoice: any; slug: string; onBack: () => void; portalFetch: any }) {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);

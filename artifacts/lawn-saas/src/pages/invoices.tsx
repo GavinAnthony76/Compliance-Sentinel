@@ -44,11 +44,11 @@ const STATUS_LABELS: Record<string, string> = {
   processing: 'Payment in progress…',
 };
 
-function statusLabel(status: string): string {
+export function statusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function InvoiceStatusBadge({ status }: { status: string }) {
+export function InvoiceStatusBadge({ status }: { status: string }) {
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[status] || 'bg-gray-100 text-gray-600'}`}>
       {status === 'processing' && (
