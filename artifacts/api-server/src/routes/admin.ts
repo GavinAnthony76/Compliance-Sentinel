@@ -645,7 +645,9 @@ router.get("/lockout-runs", async (req, res) => {
     };
   });
 
-  return res.json({ runs, lastRun: runs[0] ?? null });
+  const settings = await getPlatformSettings();
+
+  return res.json({ runs, lastRun: runs[0] ?? null, sweepEnabled: settings.staleAdminSweepEnabled });
 });
 
 // ─── Admin Users ──────────────────────────────────────────────────────────────

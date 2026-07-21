@@ -29,8 +29,12 @@ interface LockoutRun {
   thresholdDays: number | null;
 }
 
+const OVERDUE_AMBER_MS = 36 * 60 * 60 * 1000;
+const OVERDUE_RED_MS = 72 * 60 * 60 * 1000;
+
 function LockoutHistoryPanel() {
   const [runs, setRuns] = useState<LockoutRun[] | null>(null);
+  const [sweepEnabled, setSweepEnabled] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -41,7 +45,10 @@ function LockoutHistoryPanel() {
         const res = await adminFetch('/api/admin/lockout-runs?limit=10');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (!cancelled) setRuns(data.runs ?? []);
+        if (!cancelled) {
+          setRuns(data.runs ?? []);
+          setSweepEnabled(typeof data.sweepEnabled === 'boolean' ? data.sweepEnabled : null);
+        }
       } catch {
         if (!cancelled) setLoadFailed(true);
       }
@@ -66,12 +73,45 @@ function LockoutHistoryPanel() {
   if (runs === null) return null;
 
   const lastRun = runs[0];
+  const disabled = sweepEnabled === false;
+  const sinceLastRun = lastRun ? Date.now() - new Date(lastRun.ranAt).getTime() : null;
+  const hoursSince = sinceLastRun != null ? Math.floor(sinceLastRun / (60 * 60 * 1000)) : null;
+  // Only warn about staleness when the sweep is supposed to be running.
+  const overdueLevel: 'none' | 'amber' | 'red' = disabled
+    ? 'none'
+    : sinceLastRun == null
+      ? 'amber'
+      : sinceLastRun >= OVERDUE_RED_MS
+        ? 'red'
+        : sinceLastRun >= OVERDUE_AMBER_MS
+          ? 'amber'
+          : 'none';
+
+  const containerClass = disabled
+    ? 'mb-6 bg-slate-900 rounded-xl border border-slate-700 overflow-hidden'
+    : overdueLevel === 'red'
+      ? 'mb-6 bg-slate-900 rounded-xl border border-red-500/50 overflow-hidden'
+      : overdueLevel === 'amber'
+        ? 'mb-6 bg-slate-900 rounded-xl border border-amber-500/50 overflow-hidden'
+        : 'mb-6 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden';
+
+  const iconWrapClass = disabled
+    ? 'w-9 h-9 rounded-lg bg-slate-700/40 flex items-center justify-center shrink-0'
+    : overdueLevel === 'red'
+      ? 'w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0'
+      : overdueLevel === 'amber'
+        ? 'w-9 h-9 rounded-lg bg-amber-400/10 flex items-center justify-center shrink-0'
+        : 'w-9 h-9 rounded-lg bg-emerald-400/10 flex items-center justify-center shrink-0';
 
   return (
-    <div className="mb-6 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+    <div className={containerClass}>
       <div className="flex flex-wrap items-center gap-3 p-4">
-        <div className="w-9 h-9 rounded-lg bg-emerald-400/10 flex items-center justify-center shrink-0">
-          <Clock className="w-4 h-4 text-emerald-400" />
+        <div className={iconWrapClass}>
+          {overdueLevel !== 'none' ? (
+            <AlertTriangle className={`w-4 h-4 ${overdueLevel === 'red' ? 'text-red-400' : 'text-amber-400'}`} />
+          ) : (
+            <Clock className={`w-4 h-4 ${disabled ? 'text-slate-400' : 'text-emerald-400'}`} />
+          )}
         </div>
         <div className="min-w-0">
           <p className="text-sm font-medium text-white">Automatic inactivity lockout</p>
@@ -83,6 +123,17 @@ function LockoutHistoryPanel() {
           ) : (
             <p className="text-xs text-slate-400">The automated sweep hasn't run yet.</p>
           )}
+          {disabled ? (
+            <p className="text-xs text-slate-400 mt-0.5">
+              The automatic sweep is currently <span className="font-medium text-slate-300">turned off</span> in platform settings, so no new runs are expected.
+            </p>
+          ) : overdueLevel !== 'none' ? (
+            <p className={`text-xs mt-0.5 font-medium ${overdueLevel === 'red' ? 'text-red-400' : 'text-amber-400'}`}>
+              {lastRun
+                ? `The sweep hasn't run in ${hoursSince != null && hoursSince >= 48 ? `${Math.floor(hoursSince / 24)} days` : `${hoursSince} hours`} — it may have stopped. It normally runs nightly.`
+                : 'The sweep is enabled but has never run — it may not be scheduled correctly.'}
+            </p>
+          ) : null}
         </div>
         {runs.length > 1 && (
           <button

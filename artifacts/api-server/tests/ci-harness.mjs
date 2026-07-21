@@ -329,6 +329,12 @@ export const HARNESSES = {
         file: "tests/admin-deactivation-note.test.mjs",
         nodeArgs: ["--experimental-test-module-mocks"],
       },
+      // Unit suite covering the lockout-runs sweep-health endpoint
+      // (sweepEnabled flag so the panel can tell "disabled" from "broken").
+      {
+        file: "tests/lockout-runs-health.test.mjs",
+        nodeArgs: ["--experimental-test-module-mocks"],
+      },
       "tests/admin-stale-deactivation.e2e.mjs",
       // Pins the GET /admin/lockout-runs contract (auth, newest-first
       // ordering, metadata mapping, manual-sweep exclusion) so the Admin
