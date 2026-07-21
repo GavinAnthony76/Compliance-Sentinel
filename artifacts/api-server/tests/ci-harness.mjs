@@ -335,11 +335,20 @@ export const HARNESSES = {
         file: "tests/lockout-runs-health.test.mjs",
         nodeArgs: ["--experimental-test-module-mocks"],
       },
+      // Unit suite: the scheduled sweep is skipped when disabled in settings
+      // (manual runs proceed) and honors the configured threshold.
+      {
+        file: "tests/admin-sweep-toggle.test.mjs",
+        nodeArgs: ["--experimental-test-module-mocks"],
+      },
       "tests/admin-stale-deactivation.e2e.mjs",
       // Pins the GET /admin/lockout-runs contract (auth, newest-first
       // ordering, metadata mapping, manual-sweep exclusion) so the Admin
       // Users lockout-history panel can't silently break.
       "tests/admin-lockout-runs.e2e.mjs",
+      // E2E: PUT /admin/settings custom thresholds actually change what the
+      // sweep deactivates; settings are restored afterwards.
+      "tests/admin-settings-threshold.e2e.mjs",
     ],
   },
 };
