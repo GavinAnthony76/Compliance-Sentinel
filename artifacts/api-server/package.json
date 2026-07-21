@@ -20,6 +20,7 @@
     "test:access": "node tests/invoice-billing-access.e2e.mjs && node tests/appointment-customer-access.e2e.mjs && node tests/property-service-access.e2e.mjs && node tests/estimate-recurring-plan-access.e2e.mjs && node tests/shared-screen-access.e2e.mjs && node tests/manager-screen-access.e2e.mjs && node tests/billing-access.e2e.mjs && node tests/portal-auth.e2e.mjs && node tests/receipt-pdf-access.e2e.mjs && node tests/invoice-summary.e2e.mjs",
     "test:access:ci": "node tests/run-access-ci.mjs",
     "test:admin-note": "node --experimental-test-module-mocks tests/admin-deactivation-note.test.mjs",
+    "test:awaited-dispatch": "node tests/awaited-dispatch.test.mjs",
     "test:stuck-invoices": "node --experimental-test-module-mocks tests/stuck-invoices.test.mjs",
     "test:stuck-invoices:ci": "node tests/run-stuck-invoices-ci.mjs",
     "test:admin:ci": "node tests/run-admin-ci.mjs",

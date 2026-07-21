@@ -36,6 +36,14 @@ useLocalTestDatabase();
 const DIST = "dist-ci";
 
 async function main() {
+  // Static guard first (fast, no build/DB needed): every call to the payment
+  // email dispatchers must be awaited, or Autoscale silently drops the sends.
+  console.log("\n########## Awaited payment-dispatch guard ##########\n");
+  console.log("=== tests/awaited-dispatch.test.mjs ===");
+  const guardCode = await run("node", ["tests/awaited-dispatch.test.mjs"], {
+    env: { ...process.env, NODE_ENV: "test" },
+  });
+
   const buildCode = await buildServer(DIST);
   if (buildCode !== 0) {
     console.error("Build failed; aborting combined validation.");
@@ -71,6 +79,9 @@ async function main() {
 
   console.log("\n========== Combined validation summary ==========");
   let failed = 0;
+  const guardOk = guardCode === 0;
+  if (!guardOk) failed++;
+  console.log(`  ${guardOk ? "PASS" : "FAIL"}  Awaited payment-dispatch guard`);
   for (const name of groups) {
     const ok = results[name] === 0;
     if (!ok) failed++;
