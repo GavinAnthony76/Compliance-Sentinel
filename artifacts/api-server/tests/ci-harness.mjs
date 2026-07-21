@@ -329,6 +329,10 @@ export const HARNESSES = {
         nodeArgs: ["--experimental-test-module-mocks"],
       },
       "tests/admin-stale-deactivation.e2e.mjs",
+      // Pins the GET /admin/lockout-runs contract (auth, newest-first
+      // ordering, metadata mapping, manual-sweep exclusion) so the Admin
+      // Users lockout-history panel can't silently break.
+      "tests/admin-lockout-runs.e2e.mjs",
     ],
   },
 };
