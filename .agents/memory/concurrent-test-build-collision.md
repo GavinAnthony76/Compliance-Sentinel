@@ -1,19 +1,19 @@
 ---
 name: concurrent test-build collision
-description: Why validation/test workflows intermittently fail with esbuild "SyntaxError: Unexpected end of input"
+description: Why validation/test workflows intermittently failed with esbuild "SyntaxError: Unexpected end of input" and the single-build gate that replaced them
 ---
 
-The `lead-access` (test:permissions:ci) and `staff-access` (test:access:ci) validation
-workflows each rebuild api-server's `dist/` (via `build.mjs`/esbuild) before running.
-When they run concurrently (e.g. both triggered by mark_task_complete validation, or
-both workflows started together), one process can read a half-written `dist/index.mjs`
-produced by the other, yielding `SyntaxError: Unexpected end of input` during build.
+The CI harnesses each used to rebuild api-server's shared `dist/` (esbuild) before
+running. Concurrent runs could read a half-written `dist/index.mjs`, yielding
+`SyntaxError: Unexpected end of input`.
 
-**Why:** both suites share the same on-disk `dist/` output path; esbuild writes are not
-atomic across processes, so a concurrent reader sees a truncated bundle.
+**Fixed by design:** the validation gate is now a single `test-gate` workflow running
+`test:all:ci` (tests/run-all-ci.mjs), which builds ONCE into `dist-ci` then runs the
+permissions/access/admin groups sequentially, each on its own port with its own server
+and cleanup namespace. Shared lifecycle lives in tests/ci-harness.mjs. The standalone
+scripts (test:permissions:ci / test:access:ci / test:admin:ci) still work and build
+their own isolated dists (dist-permissions/dist-access/dist-admin).
 
-**How to apply:** a permissions/access CI build failure with "Unexpected end of input" is
-almost always this flake, NOT a real syntax error. Verify by building api-server alone
-(`pnpm --filter @workspace/api-server run build`) and running the suite in isolation
-(`pnpm --filter @workspace/api-server run test:permissions:ci`). If both pass, treat the
-validation failure as transient.
+**How to apply:** an "Unexpected end of input" build failure only recurs if something
+runs two builds into the same outdir concurrently — don't add parallel gate steps that
+share BUILD_OUTDIR. Verify a suite in isolation via its standalone script.

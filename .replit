@@ -24,49 +24,19 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "lead-access"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "staff-access"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "admin-access"
+args = "test-gate"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "frontend-tests"
 
 [[workflows.workflow]]
-name = "lead-access"
+name = "test-gate"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run test:permissions:ci"
-
-[workflows.workflow.metadata]
-isValidation = true
-
-[[workflows.workflow]]
-name = "staff-access"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run test:access:ci"
-
-[workflows.workflow.metadata]
-isValidation = true
-
-[[workflows.workflow]]
-name = "admin-access"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run test:admin:ci"
+args = "pnpm --filter @workspace/api-server run test:all:ci"
 
 [workflows.workflow.metadata]
 isValidation = true

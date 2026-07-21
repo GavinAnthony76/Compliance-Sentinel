@@ -1,0 +1,88 @@
+#!/usr/bin/env node
+/**
+ * Combined CI/validation runner: the full api-server test gate with ONE build.
+ *
+ * Instead of each harness compiling its own esbuild bundle (3 identical builds
+ * per full gate), this runner:
+ *
+ *   1. Builds the api-server ONCE into an isolated dist (dist-ci).
+ *   2. Pushes schema to the local test database ONCE.
+ *   3. Runs each harness group sequentially — permissions, access, admin —
+ *      each still on its own isolated port with its own server instance,
+ *      per-run cleanup namespace, and teardown (see tests/ci-harness.mjs).
+ *
+ * The standalone entrypoints (run-permissions-ci.mjs, run-access-ci.mjs,
+ * run-admin-ci.mjs) keep working for running a single group in isolation; they
+ * build their own separate dists so a concurrent standalone run never races
+ * this runner's bundle.
+ *
+ * Exit code 0 = every group passed, non-zero = at least one group failed.
+ */
+
+import { useLocalTestDatabase } from "./test-db-guard.mjs";
+import {
+  buildServer,
+  pushSchema,
+  runHarness,
+  run,
+  HARNESSES,
+} from "./ci-harness.mjs";
+
+// Force everything onto the local throwaway DB so a validation run can never
+// pollute the production Neon database. Also aborts if DATABASE_URL looks like
+// production, since we force-push schema to it. See test-db-guard.mjs.
+useLocalTestDatabase();
+
+const DIST = "dist-ci";
+
+async function main() {
+  const buildCode = await buildServer(DIST);
+  if (buildCode !== 0) {
+    console.error("Build failed; aborting combined validation.");
+    process.exit(buildCode);
+  }
+
+  const pushCode = await pushSchema();
+  if (pushCode !== 0) {
+    console.error("Schema push to local test DB failed; aborting.");
+    process.exit(pushCode);
+  }
+
+  const groups = ["permissions", "access", "admin"];
+  const results = {};
+  for (const name of groups) {
+    console.log(`\n########## ${HARNESSES[name].label} ##########\n`);
+    results[name] = await runHarness(HARNESSES[name], {
+      prebuiltDist: DIST,
+      skipSchemaPush: true,
+    });
+  }
+
+  // Stuck-invoice sweep suite: runs the real sweep against the local test DB
+  // directly (no server/build needed), mocking Stripe + notifications. Schema
+  // was already pushed above. Mirrors tests/run-stuck-invoices-ci.mjs.
+  console.log("\n########## Stuck-invoice sweep validation ##########\n");
+  console.log("=== tests/stuck-invoices.test.mjs ===");
+  results["stuck-invoices"] = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/stuck-invoices.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+
+  console.log("\n========== Combined validation summary ==========");
+  let failed = 0;
+  for (const name of groups) {
+    const ok = results[name] === 0;
+    if (!ok) failed++;
+    console.log(`  ${ok ? "PASS" : "FAIL"}  ${HARNESSES[name].label}`);
+  }
+  const stuckOk = results["stuck-invoices"] === 0;
+  if (!stuckOk) failed++;
+  console.log(`  ${stuckOk ? "PASS" : "FAIL"}  Stuck-invoice sweep validation`);
+  process.exit(failed === 0 ? 0 : 1);
+}
+
+main().catch((err) => {
+  console.error("Unexpected error in combined validation runner:", err);
+  process.exit(1);
+});

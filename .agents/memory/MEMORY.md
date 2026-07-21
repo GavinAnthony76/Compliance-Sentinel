@@ -16,7 +16,7 @@
 - [Tenant URL SSRF in PDFs](tenant-url-ssrf.md) — server-side fetch of tenant-supplied URLs (company.logoUrl in PDF gen) is an SSRF vector; route through fetchImageBufferSafe (https-only, block private IPs, no redirects).
 - [Role-gating drift](role-gating-drift.md) — frontend hides 10 manager-only pages; all manager-only routers (incl. follow-ups/reporting/leads GETs) now enforce requireRole. Verify: `pnpm run test:permissions`.
 - [Test suites pollute NEON](test-suites-pollute-neon.md) — FIXED: CI harnesses call useLocalTestDatabase() to redirect server+helpers to local DATABASE_URL (push-force schema first); never touch NEON. Cleanup/TEST_RUN_NS now defense-in-depth.
-- [Concurrent test-build collision](concurrent-test-build-collision.md) — lead-access + staff-access both rebuild api-server dist; concurrent run flakes with esbuild "Unexpected end of input". Verify in isolation.
+- [Concurrent test-build collision](concurrent-test-build-collision.md) — gate is now one `test-gate` validation (test:all:ci, single build into dist-ci); never point two concurrent builds at one outdir.
 - [Stripe webhook config](stripe-webhook-config.md) — one live endpoint; URL must be the deployed domain; repoint (not recreate) to keep STRIPE_WEBHOOK_SECRET; handler must catch invoice.payment_succeeded.
 - [Billing activity dedup](billing-activity-dedup.md) — checkout updates company row BEFORE subscription.updated reads it; that ordering (not a dedup table) is what stops plan_changed+subscription_updated double-logging. Logic in src/lib/billing-activity.ts.
 - [Stuck processing invoice sweep](stuck-invoice-sweep.md) — autopay "processing" claim is in-memory-only; a crash strands invoices. Sweep in lib/stuck-invoices.ts reconciles Stripe-first before reverting.

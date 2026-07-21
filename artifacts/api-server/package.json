@@ -21,7 +21,8 @@
     "test:admin-note": "node --experimental-test-module-mocks tests/admin-deactivation-note.test.mjs",
     "test:stuck-invoices": "node --experimental-test-module-mocks tests/stuck-invoices.test.mjs",
     "test:stuck-invoices:ci": "node tests/run-stuck-invoices-ci.mjs",
-    "test:admin:ci": "node tests/run-admin-ci.mjs"
+    "test:admin:ci": "node tests/run-admin-ci.mjs",
+    "test:all:ci": "node tests/run-all-ci.mjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",
