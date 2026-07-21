@@ -308,6 +308,7 @@ export const HARNESSES = {
       "tests/payment-access.e2e.mjs",
       "tests/receipt-pdf-access.e2e.mjs",
       "tests/invoice-pdf-access.e2e.mjs",
+      "tests/portal-document-access.e2e.mjs",
       "tests/invoice-summary.e2e.mjs",
     ],
   },
