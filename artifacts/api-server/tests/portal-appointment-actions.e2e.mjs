@@ -211,6 +211,48 @@ async function main() {
     });
     check("booking without token -> 401", r.status === 401, `got ${r.status}`);
   }
+  {
+    const r = await req("POST", "/portal/appointments", {
+      token: portalA1.portalToken,
+      body: { serviceId: serviceA, scheduledStart: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+    });
+    check("booking with a PAST scheduledStart -> 400", r.status === 400, `got ${r.status} ${JSON.stringify(r.json)}`);
+  }
+  {
+    const r = await req("POST", "/portal/appointments", {
+      token: portalA1.portalToken,
+      body: { serviceId: serviceA, scheduledStart: "not-a-real-date" },
+    });
+    check("booking with an INVALID date string -> 400", r.status === 400, `got ${r.status} ${JSON.stringify(r.json)}`);
+  }
+  {
+    const r = await req("POST", "/portal/appointments", {
+      token: portalA1.portalToken,
+      body: { scheduledStart: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() },
+    });
+    check("booking with MISSING serviceId -> 400", r.status === 400, `got ${r.status} ${JSON.stringify(r.json)}`);
+  }
+  {
+    const r = await req("POST", "/portal/appointments", {
+      token: portalA1.portalToken,
+      body: { serviceId: "mowing", scheduledStart: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() },
+    });
+    check("booking with a NON-NUMERIC serviceId -> 400", r.status === 400, `got ${r.status} ${JSON.stringify(r.json)}`);
+  }
+  {
+    // Own-company service that has been retired (isActive=false) must 404.
+    const inactiveServiceA = await createService(companyA.ownerToken, "A_inactive");
+    const deact = await req("PUT", `/services/${inactiveServiceA}`, {
+      token: companyA.ownerToken,
+      body: { isActive: false },
+    });
+    check("setup: deactivate own-company service", deact.status === 200, `got ${deact.status} ${JSON.stringify(deact.json)}`);
+    const r = await req("POST", "/portal/appointments", {
+      token: portalA1.portalToken,
+      body: { serviceId: inactiveServiceA, scheduledStart: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString() },
+    });
+    check("booking an INACTIVE own-company service -> 404", r.status === 404, `got ${r.status} ${JSON.stringify(r.json)}`);
+  }
   const bookedA1 = await bookPortalAppointment(portalA1.portalToken, serviceA);
   check("booking with own company's service -> 201", Boolean(bookedA1.id), JSON.stringify(bookedA1));
   check(
