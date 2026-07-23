@@ -32,7 +32,7 @@ interface LockoutRun {
 const OVERDUE_AMBER_MS = 36 * 60 * 60 * 1000;
 const OVERDUE_RED_MS = 72 * 60 * 60 * 1000;
 
-function LockoutHistoryPanel() {
+export function LockoutHistoryPanel() {
   const [runs, setRuns] = useState<LockoutRun[] | null>(null);
   const [sweepEnabled, setSweepEnabled] = useState<boolean | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
