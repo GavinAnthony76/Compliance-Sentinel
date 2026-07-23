@@ -331,6 +331,7 @@ export const HARNESSES = {
       "tests/portal-document-access.e2e.mjs",
       "tests/portal-appointment-actions.e2e.mjs",
       "tests/invoice-summary.e2e.mjs",
+      "tests/invoice-export-filters.e2e.mjs",
     ],
   },
   admin: {

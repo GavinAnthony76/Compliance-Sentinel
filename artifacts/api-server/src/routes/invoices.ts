@@ -11,6 +11,7 @@ import { dispatchInvoiceEmail } from "../lib/invoice-email";
 import { logger } from "../lib/logger";
 import { buildInvoicePdf } from "../lib/invoice-pdf";
 import { insertInvoiceWithNumber } from "../lib/invoice-number";
+import { buildInvoiceFilterConditions } from "../lib/invoice-filters";
 
 const router = Router();
 router.use(requireAuth);
@@ -69,33 +70,9 @@ router.get("/", async (req: any, res) => {
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 20;
   const offset = (page - 1) * limit;
-  const conditions: any[] = [eq(invoicesTable.companyId, companyId)];
-  if (req.query.status) conditions.push(eq(invoicesTable.status, req.query.status as string));
-  if (req.query.paymentMethod) conditions.push(eq(invoicesTable.paymentMethod, req.query.paymentMethod as string));
-  if (req.query.customerId) conditions.push(eq(invoicesTable.customerId, Number(req.query.customerId)));
-
-  // Date-range filter for collections reporting. Paid invoices are bucketed by
-  // when the money arrived (paid_at); everything else by creation date — keyed
-  // on status (not paid_at presence) so a stale paid_at on a reverted invoice
-  // can't shift its bucket. `to` is inclusive: a date-only value covers the
-  // whole day (exclusive upper bound of the next midnight).
-  const effectiveDate = sql`(case when ${invoicesTable.status} = 'paid' then coalesce(${invoicesTable.paidAt}, ${invoicesTable.createdAt}) else ${invoicesTable.createdAt} end)`;
-  if (req.query.from) {
-    const from = new Date(String(req.query.from));
-    if (!isNaN(from.getTime())) conditions.push(sql`${effectiveDate} >= ${from.toISOString()}`);
-  }
-  if (req.query.to) {
-    const raw = String(req.query.to);
-    const to = new Date(raw);
-    if (!isNaN(to.getTime())) {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-        const upper = new Date(to.getTime() + 24 * 60 * 60 * 1000);
-        conditions.push(sql`${effectiveDate} < ${upper.toISOString()}`);
-      } else {
-        conditions.push(sql`${effectiveDate} <= ${to.toISOString()}`);
-      }
-    }
-  }
+  // Status/paymentMethod/customerId/date-range filters, shared with the CSV
+  // export so the downloaded file always matches the on-screen list.
+  const conditions = buildInvoiceFilterConditions(companyId, req.query);
 
   // Aggregate payment-method totals across the FULL filtered set (not just the current page).
   // Online = paymentMethod 'card', or legacy null method with a Stripe payment intent; everything else is offline.

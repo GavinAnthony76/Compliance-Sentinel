@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { db, customersTable, appointmentsTable, invoicesTable, servicesTable, usersTable } from "@workspace/db";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
+import { buildInvoiceFilterConditions } from "../lib/invoice-filters";
 
 import { requireActiveSubscription } from "../lib/subscription";
 
@@ -84,10 +85,13 @@ router.get("/appointments", async (req: any, res) => {
 
 router.get("/invoices", async (req: any, res) => {
   const { companyId } = req.user;
+  // Honor the same status/paymentMethod/customerId/from/to filters as
+  // GET /invoices so the CSV matches what the invoices screen shows.
+  const conditions = buildInvoiceFilterConditions(companyId, req.query);
   const invoices = await db
     .select()
     .from(invoicesTable)
-    .where(eq(invoicesTable.companyId, companyId))
+    .where(and(...conditions))
     .orderBy(desc(invoicesTable.createdAt));
 
   const customerIds = [...new Set(invoices.map(i => i.customerId))];

@@ -658,7 +658,16 @@ export function InvoicesPage() {
             </Button>
           )}
           {plan === 'pro' && (
-            <Button variant="outline" onClick={() => downloadExport('/api/export/invoices', 'invoices.csv', msg => toast({ title: msg, variant: 'destructive' }))}>
+            <Button variant="outline" onClick={() => {
+              // Pass the active on-screen filters so the CSV matches the list.
+              const params = new URLSearchParams();
+              if (statusFilter) params.set('status', statusFilter);
+              if (methodFilter) params.set('paymentMethod', methodFilter);
+              if (fromDate) params.set('from', fromDate);
+              if (toDate) params.set('to', toDate);
+              const qs = params.toString();
+              downloadExport(`/api/export/invoices${qs ? `?${qs}` : ''}`, 'invoices.csv', msg => toast({ title: msg, variant: 'destructive' }));
+            }}>
               <Download className="w-4 h-4 mr-2" />Export CSV
             </Button>
           )}
