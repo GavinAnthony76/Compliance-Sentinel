@@ -77,5 +77,3 @@ APP_BASE_URL = "https://greensynk.com"
 FRONTEND_URL = "https://greensynk.com"
 
 [userenv.production]
-SEED_IMPORT_ON_EMPTY = "1"
-SEED_IMPORT_REPLACE = "1"
