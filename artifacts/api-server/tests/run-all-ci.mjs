@@ -44,6 +44,15 @@ async function main() {
     env: { ...process.env, NODE_ENV: "test" },
   });
 
+  // Complementary static guard: every code path that flips an invoice to
+  // "paid" must actually CALL both dispatchers (receipt + owner notification),
+  // so a new payment path can't ship without emails at all.
+  console.log("\n########## Paid-transition dispatch guard ##########\n");
+  console.log("=== tests/paid-transition-dispatch.test.mjs ===");
+  const paidGuardCode = await run("node", ["tests/paid-transition-dispatch.test.mjs"], {
+    env: { ...process.env, NODE_ENV: "test" },
+  });
+
   const buildCode = await buildServer(DIST);
   if (buildCode !== 0) {
     console.error("Build failed; aborting combined validation.");
@@ -122,6 +131,9 @@ async function main() {
   const guardOk = guardCode === 0;
   if (!guardOk) failed++;
   console.log(`  ${guardOk ? "PASS" : "FAIL"}  Awaited payment-dispatch guard`);
+  const paidGuardOk = paidGuardCode === 0;
+  if (!paidGuardOk) failed++;
+  console.log(`  ${paidGuardOk ? "PASS" : "FAIL"}  Paid-transition dispatch guard`);
   for (const name of groups) {
     const ok = results[name] === 0;
     if (!ok) failed++;
