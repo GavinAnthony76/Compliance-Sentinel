@@ -117,6 +117,7 @@ async function main() {
   const emailSuites = [
     ["billing-emails", "tests/billing-status-email.test.mjs", "Billing status email validation"],
     ["payment-receipts", "tests/payment-receipt-email.test.mjs", "Payment receipt email validation"],
+    ["team-invite-email", "tests/team-invite-email.test.mjs", "Team-invite email validation"],
   ];
   const emailLabels = {};
   for (const [key, file, label] of emailSuites) {
