@@ -197,52 +197,6 @@ mock.module("drizzle-orm", { namedExports: drizzleNamedExports });
 // --- Stub the handlers' other collaborators ----------------------------------
 const passthrough = (_req, _res, next) => next();
 
-mock.module("../src/lib/auth.ts", {
-  namedExports: {
-    requireAuth: passthrough,
-    requireRole: () => passthrough,
-    hashPassword: async () => "hashed",
-    verifyPassword: async () => true,
-  },
-});
-mock.module("../src/lib/subscription.ts", {
-  namedExports: { requireActiveSubscription: passthrough },
-});
-mock.module("../src/lib/features.ts", {
-  namedExports: {
-    requireWithinPlanLimit: () => passthrough,
-    requireFeature: () => passthrough,
-    hasFeature: async () => true,
-    getRequiredPlanForFeature: () => "pro",
-    getPlanUsageSummary: async () => ({}),
-    getDowngradeViolations: async () => [],
-  },
-});
-mock.module("../src/lib/activity.ts", {
-  namedExports: { logActivity: async () => {} },
-});
-mock.module("../src/lib/automations.ts", {
-  namedExports: { fireAutomations: () => {} },
-});
-mock.module("../src/lib/invoice-email.ts", {
-  namedExports: { dispatchInvoiceEmail: async () => true },
-});
-mock.module("../src/lib/invoice-pdf.ts", {
-  namedExports: { buildInvoicePdf: async () => Buffer.from("PDF") },
-});
-mock.module("../src/lib/invoice-number.ts", {
-  namedExports: { insertInvoiceWithNumber: async () => null },
-});
-mock.module("../src/lib/sms-consent.ts", {
-  namedExports: { sendSMSWithConsent: async () => {} },
-});
-mock.module("../src/lib/objectStorage.ts", {
-  namedExports: { ObjectStorageService: class {} },
-});
-mock.module("../src/lib/plan-catalog.ts", {
-  namedExports: { getCatalog: async () => [] },
-});
-
 // Controlled per-scenario Stripe stub. constructEvent trusts the raw body here —
 // signature verification is Stripe SDK behavior, not what this suite guards.
 let stripeSessionResult = { payment_status: "paid" };
@@ -260,39 +214,58 @@ const fakeStripe = {
   paymentIntents: { create: async () => stripePaymentIntentResult },
   subscriptions: { retrieve: async () => ({ status: "active", current_period_end: 0, trial_end: null, metadata: {} }) },
 };
-mock.module("../src/lib/stripe.ts", {
-  namedExports: {
+
+// Every relative production module this suite mocks, keyed by the exact
+// specifier passed to mock.module. Keeping the namedExports in ONE map lets
+// the preflight below verify each mock still covers everything production
+// code imports from it.
+const relativeMocks = {
+  "../src/lib/auth.ts": {
+    requireAuth: passthrough,
+    requireRole: () => passthrough,
+    hashPassword: async () => "hashed",
+    verifyPassword: async () => true,
+  },
+  "../src/lib/subscription.ts": { requireActiveSubscription: passthrough },
+  "../src/lib/features.ts": {
+    requireWithinPlanLimit: () => passthrough,
+    requireFeature: () => passthrough,
+    hasFeature: async () => true,
+    getRequiredPlanForFeature: () => "pro",
+    getPlanUsageSummary: async () => ({}),
+    getDowngradeViolations: async () => [],
+  },
+  "../src/lib/activity.ts": { logActivity: async () => {} },
+  "../src/lib/automations.ts": { fireAutomations: () => {} },
+  "../src/lib/invoice-email.ts": { dispatchInvoiceEmail: async () => true },
+  "../src/lib/invoice-pdf.ts": { buildInvoicePdf: async () => Buffer.from("PDF") },
+  "../src/lib/invoice-number.ts": { insertInvoiceWithNumber: async () => null },
+  "../src/lib/sms-consent.ts": { sendSMSWithConsent: async () => {} },
+  "../src/lib/objectStorage.ts": { ObjectStorageService: class {} },
+  "../src/lib/plan-catalog.ts": { getCatalog: async () => [] },
+  "../src/lib/stripe.ts": {
     getUncachableStripeClient: async () => fakeStripe,
     getStripePublishableKey: async () => "pk_test_dummy",
     getStripePriceId: async () => "price_dummy",
   },
-});
+};
+for (const [specifier, namedExports] of Object.entries(relativeMocks)) {
+  mock.module(specifier, { namedExports });
+}
 
 // --- Preflight: mock surface must cover production imports -------------------
 // If any production module reachable from the routes below has grown a new
-// named import from @workspace/db or drizzle-orm, fail NOW with an actionable
-// "add X to the mock" message instead of an opaque import-time SyntaxError.
-const { assertMockCovers } = await import("./mock-surface-check.mjs");
+// named import from @workspace/db, drizzle-orm, or any of the mocked relative
+// libs above, fail NOW with an actionable "add X to the mock" message instead
+// of an opaque import-time SyntaxError.
+const { assertMockCovers, assertRelativeMockCovers } = await import("./mock-surface-check.mjs");
 const routeEntryFiles = [
   "../src/routes/invoices.ts",
   "../src/routes/autopay.ts",
   "../src/routes/billing.ts",
   "../src/routes/customer-portal.ts",
 ];
-const mockedRelativeModules = [
-  "../src/lib/auth.ts",
-  "../src/lib/subscription.ts",
-  "../src/lib/features.ts",
-  "../src/lib/activity.ts",
-  "../src/lib/automations.ts",
-  "../src/lib/invoice-email.ts",
-  "../src/lib/invoice-pdf.ts",
-  "../src/lib/invoice-number.ts",
-  "../src/lib/sms-consent.ts",
-  "../src/lib/objectStorage.ts",
-  "../src/lib/plan-catalog.ts",
-  "../src/lib/stripe.ts",
-];
+const mockedRelativeModules = Object.keys(relativeMocks);
 for (const [packageName, providedNames] of [
   ["@workspace/db", Object.keys(dbNamedExports)],
   ["drizzle-orm", Object.keys(drizzleNamedExports)],
@@ -301,6 +274,15 @@ for (const [packageName, providedNames] of [
     testFile: import.meta.url,
     packageName,
     providedNames,
+    entryFiles: routeEntryFiles,
+    skipModules: mockedRelativeModules,
+  });
+}
+for (const [modulePath, exportsObject] of Object.entries(relativeMocks)) {
+  assertRelativeMockCovers({
+    testFile: import.meta.url,
+    modulePath,
+    providedNames: Object.keys(exportsObject),
     entryFiles: routeEntryFiles,
     skipModules: mockedRelativeModules,
   });

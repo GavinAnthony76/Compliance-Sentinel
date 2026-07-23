@@ -57,14 +57,16 @@ const EXPORT_FROM_RE = /export\s+(type\s+)?(?:\{([^}]*)\}|\*)\s*from\s*["']([^"'
  *
  * @param {object} opts
  * @param {string[]} opts.entryFiles   absolute paths of production entry modules
- * @param {string}   opts.packageName  e.g. "@workspace/db" or "drizzle-orm"
+ * @param {string}   [opts.packageName]  e.g. "@workspace/db" or "drizzle-orm"
+ * @param {string}   [opts.targetFile]  absolute path of a mocked RELATIVE module;
+ *   imports are matched by resolved file path instead of bare specifier
  * @param {string[]} [opts.skipModules] absolute paths of relative modules the
  *   suite mocks (not traversed)
  * @returns {{ names: Set<string>, importers: Map<string, string[]> }}
- *   names: all runtime named imports from packageName;
+ *   names: all runtime named imports from the target;
  *   importers: name -> list of files that import it
  */
-export function collectNamedImports({ entryFiles, packageName, skipModules = [] }) {
+export function collectNamedImports({ entryFiles, packageName, targetFile, skipModules = [] }) {
   const skip = new Set(skipModules);
   const visited = new Set();
   const queue = [...entryFiles];
@@ -96,9 +98,17 @@ export function collectNamedImports({ entryFiles, packageName, skipModules = [] 
       }
     };
 
+    const isTarget = (spec) => {
+      if (packageName !== undefined) return spec === packageName;
+      if (targetFile !== undefined && (spec.startsWith("./") || spec.startsWith("../"))) {
+        return resolveRelative(file, spec) === targetFile;
+      }
+      return false;
+    };
+
     for (const m of source.matchAll(IMPORT_RE)) {
       const [, typeOnly, defaultName, namedBlock, spec] = m;
-      if (spec === packageName && !typeOnly) {
+      if (isTarget(spec) && !typeOnly) {
         if (defaultName) record("default", file);
         if (namedBlock) {
           for (const raw of namedBlock.split(",")) {
@@ -113,7 +123,7 @@ export function collectNamedImports({ entryFiles, packageName, skipModules = [] 
     }
     for (const m of source.matchAll(EXPORT_FROM_RE)) {
       const [, typeOnly, namedBlock, spec] = m;
-      if (spec === packageName && !typeOnly && namedBlock) {
+      if (isTarget(spec) && !typeOnly && namedBlock) {
         for (const raw of namedBlock.split(",")) {
           const entry = raw.trim();
           if (!entry || entry.startsWith("type ")) continue;
@@ -171,6 +181,59 @@ export function assertMockCovers({ testFile, packageName, providedNames, entryFi
     `\nFix: add the name(s) above to the mock.module("${packageName}", { namedExports: {...} }) ` +
       `call in ${testName}. Without this, the suite would crash at import time with ` +
       `"SyntaxError: The requested module '${packageName}' does not provide an export named '...'".\n`,
+  );
+  process.exit(1);
+}
+
+/**
+ * Same guarantee as assertMockCovers, but for RELATIVE modules the suite mocks
+ * (e.g. "../src/lib/stripe.ts"). Imports are matched by resolved file path, so
+ * "../lib/stripe" from a route and "./stripe" from a sibling both count.
+ *
+ * @param {object} opts
+ * @param {string} opts.testFile      import.meta.url of the calling test
+ * @param {string} opts.modulePath    the mocked module, relative to tests/ (as passed to mock.module)
+ * @param {Iterable<string>} opts.providedNames names the mock.module call exports
+ * @param {string[]} opts.entryFiles  paths relative to tests/
+ * @param {string[]} [opts.skipModules] relative-to-tests/ paths of ALL mocked modules
+ */
+export function assertRelativeMockCovers({ testFile, modulePath, providedNames, entryFiles, skipModules = [] }) {
+  const abs = (p) => pathResolve(TESTS_DIR, p);
+  // Accept extensionless specifiers the same way import matching does.
+  const targetFile =
+    resolveRelative(pathResolve(TESTS_DIR, "x.mjs"), modulePath) ?? abs(modulePath);
+  if (!existsSync(targetFile)) {
+    console.error(
+      `\nMOCK TARGET MISSING: ${modulePath} (mocked in ${testFile ? fileURLToPath(testFile).split("/").pop() : "this test"}) ` +
+        `does not exist — the mock.module path is stale.\n`,
+    );
+    process.exit(1);
+  }
+  const { names, importers } = collectNamedImports({
+    entryFiles: entryFiles.map(abs),
+    targetFile,
+    skipModules: skipModules.map(abs),
+  });
+
+  const provided = new Set(providedNames);
+  const missing = [...names].filter((n) => !provided.has(n)).sort();
+  if (missing.length === 0) return;
+
+  const testName = testFile ? fileURLToPath(testFile).split("/").pop() : "this test";
+  console.error(
+    `\nMOCK OUT OF DATE: the "${modulePath}" mock in ${testName} is missing ` +
+      `named export(s) production code now imports:\n`,
+  );
+  for (const name of missing) {
+    const files = [...new Set(importers.get(name) || [])].map((f) =>
+      f.replace(TESTS_DIR.replace(/\/tests$/, "") + "/", ""),
+    );
+    console.error(`  - ${name}  (imported by ${files.join(", ")})`);
+  }
+  console.error(
+    `\nFix: add the name(s) above to the mock.module("${modulePath}", { namedExports: {...} }) ` +
+      `call in ${testName}. Without this, the suite would crash at import time with ` +
+      `"SyntaxError: The requested module ... does not provide an export named '...'".\n`,
   );
   process.exit(1);
 }

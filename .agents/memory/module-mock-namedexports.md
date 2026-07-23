@@ -9,3 +9,5 @@ Suites using `node --experimental-test-module-mocks` (billing-status-email, paym
 **How to apply:** After adding an import from `@workspace/db`/`drizzle-orm` in code covered by these suites, add the name to each test's mock and rerun `pnpm run test:payment-receipts` / `test:billing-emails`. Pattern for faithful conditional-UPDATE+RETURNING semantics lives in payment-receipt-email.test.mjs.
 
 Now guarded: tests/mock-surface-check.mjs runs a preflight in both suites that statically walks the production import graph and fails with "add X to the mock" naming the missing exports before any opaque SyntaxError. Both suites also run inside `test:all:ci` (the test-gate validation), so the breakage is caught in CI. New module-mock suites should reuse assertMockCovers.
+
+Relative mocks now guarded too: payment-receipt-email.test.mjs keeps its ~12 relative mock.module calls in one `relativeMocks` map and preflights each via assertRelativeMockCovers (path-keyed, resolves "../lib/x" and "./x" alike, also flags stale mock paths). Other module-mock suites (stuck-invoices, autopay-sweep-race, billing-status-email) should adopt the same pattern for their relative mocks.
