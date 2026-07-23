@@ -145,6 +145,8 @@ async function main() {
     ["billing-emails", "tests/billing-status-email.test.mjs", "Billing status email validation"],
     ["payment-receipts", "tests/payment-receipt-email.test.mjs", "Payment receipt email validation"],
     ["team-invite-email", "tests/team-invite-email.test.mjs", "Team-invite email validation"],
+    ["branded-emails", "tests/branded-emails.test.mjs", "Branded owner-email validation"],
+    ["account-emails", "tests/account-emails.test.mjs", "Account-email validation"],
   ];
   const emailLabels = {};
   for (const [key, file, label] of emailSuites) {
