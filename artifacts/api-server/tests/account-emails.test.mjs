@@ -14,8 +14,16 @@
  *      pointing at the reset URL, plus the password-rules and
  *      didn't-request-this copy in both bodies.
  *
- * A future change that reverts either email to plain text (dropping `html`)
- * or breaks its CTA link fails this suite.
+ *   3. sendPasswordChangedEmail — the post-reset security notice. Must be
+ *      multipart, GreenSynk-branded, keep the "if this wasn't you" copy and
+ *      forgot-password link, and carry a "Reset my password" CTA.
+ *
+ *   4. sendForgotUsernameEmail — the username lookup message. Must be
+ *      multipart, GreenSynk-branded, include the username (login email),
+ *      account name/role, a "Sign in" CTA, and the forgot-password pointer.
+ *
+ * A future change that reverts any of these emails to plain text (dropping
+ * `html`) or breaks its CTA link fails this suite.
  *
  * Same harness as branded-emails.test.mjs: mocks `resend` and `@workspace/db`
  * via node:test module mocking (--experimental-test-module-mocks) plus the
@@ -75,7 +83,7 @@ mock.module("@workspace/db", {
   },
 });
 
-const { sendEmailVerificationEmail, sendPasswordResetEmail } = await import(
+const { sendEmailVerificationEmail, sendPasswordResetEmail, sendPasswordChangedEmail, sendForgotUsernameEmail } = await import(
   "../src/lib/notifications.ts"
 );
 
@@ -208,6 +216,142 @@ console.log("\nsendPasswordResetEmail produces a branded multipart message:");
   check(
     "HTML footer reassures non-requesters",
     !!html?.includes("Your password will not change"),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 3. sendPasswordChangedEmail — multipart, GreenSynk-branded, security copy.
+// ---------------------------------------------------------------------------
+console.log("\nsendPasswordChangedEmail produces a branded multipart message:");
+{
+  sentEmails.length = 0;
+  const forgotPasswordUrl = "https://app.greensynk.test/forgot-password";
+  const result = await sendPasswordChangedEmail({
+    to: "owner@acme.test",
+    firstName: "Dana",
+  });
+  const email = sentEmails[0];
+
+  check("exactly one email is sent", sentEmails.length === 1, `sent ${sentEmails.length}`);
+  check("send is reported as delivered", result?.delivered === true, JSON.stringify(result));
+  check("addressed to the account owner", email?.to === "owner@acme.test", email?.to);
+  check(
+    "subject confirms the password change",
+    email?.subject === "Your GreenSynk password was changed",
+    email?.subject,
+  );
+
+  check(
+    "a plain-text body is present (multipart)",
+    typeof email?.text === "string" && email.text.includes("was successfully changed"),
+  );
+  check(
+    "plain-text body names the account email",
+    !!email?.text?.includes("(owner@acme.test)"),
+  );
+  check(
+    "plain-text body includes the changed-at timestamp",
+    !!email?.text?.includes("Password changed at:"),
+  );
+  check(
+    "plain-text body keeps the if-this-wasn't-you security copy",
+    !!email?.text?.includes("did NOT request this change"),
+  );
+  check(
+    "plain-text body includes the forgot-password link",
+    !!email?.text?.includes(forgotPasswordUrl),
+  );
+
+  const html = email?.html;
+  check("an HTML body is present (multipart)", typeof html === "string" && html.length > 0);
+  check("HTML is a full document", !!html?.includes("<!DOCTYPE html>"));
+  check("HTML carries GreenSynk branding in the header", !!html?.includes(">GreenSynk</span>"));
+  check(
+    "HTML header band uses the GreenSynk green accent",
+    !!html?.includes(`background-color:${GREENSYNK_GREEN}`),
+  );
+  check("HTML greets the user by name", !!html?.includes("Hi Dana"));
+  check(
+    "HTML keeps the if-this-wasn't-you security copy",
+    !!html?.includes("did NOT request this change"),
+  );
+  check(
+    "HTML includes a reset CTA pointing at forgot-password",
+    !!html?.includes(`href="${forgotPasswordUrl}"`) && !!html?.includes("Reset my password"),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 4. sendForgotUsernameEmail — multipart, GreenSynk-branded, username + reset pointer.
+// ---------------------------------------------------------------------------
+console.log("\nsendForgotUsernameEmail produces a branded multipart message:");
+{
+  sentEmails.length = 0;
+  const loginUrl = "https://app.greensynk.test/login";
+  const forgotPasswordUrl = "https://app.greensynk.test/forgot-password";
+  const result = await sendForgotUsernameEmail({
+    to: "manager@acme.test",
+    firstName: "Riley",
+    lastName: "Moss",
+    role: "manager",
+  });
+  const email = sentEmails[0];
+
+  check("exactly one email is sent", sentEmails.length === 1, `sent ${sentEmails.length}`);
+  check("send is reported as delivered", result?.delivered === true, JSON.stringify(result));
+  check("addressed to the requesting user", email?.to === "manager@acme.test", email?.to);
+  check(
+    "subject is the login-details subject",
+    email?.subject === "Your GreenSynk login (username) details",
+    email?.subject,
+  );
+
+  check(
+    "a plain-text body is present (multipart)",
+    typeof email?.text === "string" && email.text.includes("look up the login details"),
+  );
+  check(
+    "plain-text body includes the username (login email)",
+    !!email?.text?.includes("manager@acme.test"),
+  );
+  check(
+    "plain-text body includes the account name",
+    !!email?.text?.includes("Account name: Riley Moss"),
+  );
+  check(
+    "plain-text body includes the capitalized role",
+    !!email?.text?.includes("Account role: Manager"),
+  );
+  check("plain-text body includes the login URL", !!email?.text?.includes(loginUrl));
+  check(
+    "plain-text body includes the forgot-password pointer",
+    !!email?.text?.includes(forgotPasswordUrl),
+  );
+
+  const html = email?.html;
+  check("an HTML body is present (multipart)", typeof html === "string" && html.length > 0);
+  check("HTML is a full document", !!html?.includes("<!DOCTYPE html>"));
+  check("HTML carries GreenSynk branding in the header", !!html?.includes(">GreenSynk</span>"));
+  check(
+    "HTML header band uses the GreenSynk green accent",
+    !!html?.includes(`background-color:${GREENSYNK_GREEN}`),
+  );
+  check("HTML greets the user by name", !!html?.includes("Hi Riley"));
+  check(
+    "HTML shows the username (login email)",
+    !!html?.includes("manager@acme.test"),
+  );
+  check(
+    "HTML includes a sign-in CTA pointing at the login page",
+    !!html?.includes(`href="${loginUrl}"`) && !!html?.includes("Sign in"),
+  );
+  check(
+    "HTML includes the forgot-password pointer",
+    !!html?.includes(`href="${forgotPasswordUrl}"`),
+  );
+  check(
+    "HTML footer covers the didn't-request case",
+    !!html?.includes("you can safely ignore it"),
   );
 }
 

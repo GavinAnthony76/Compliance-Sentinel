@@ -1142,6 +1142,111 @@ export async function sendPasswordResetEmail(opts: {
   });
 }
 
+// Security confirmation sent after a user's password is successfully reset.
+export async function sendPasswordChangedEmail(opts: {
+  to: string;
+  firstName: string;
+}): Promise<EmailResult> {
+  const changedAt = new Date().toUTCString();
+  const forgotPasswordUrl = `${resolveBaseUrl()}/forgot-password`;
+
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
+            <p style="margin:0 0 8px;font-size:15px;color:#374151;line-height:1.5;">This is a confirmation that the password for your GreenSynk account (${escapeHtml(opts.to)}) was successfully changed.</p>
+            <p style="margin:0 0 16px;font-size:13px;color:#6b7280;line-height:1.5;">Password changed at: ${escapeHtml(changedAt)}</p>
+            <p style="margin:0 0 8px;font-size:15px;color:#374151;line-height:1.5;">If you made this change, no further action is needed.</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">If you did NOT request this change, your account may be compromised. Please contact us immediately or reset your password again using the button below.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: "Your GreenSynk password was changed",
+    companyName: "GreenSynk",
+    bodyHtml,
+    cta: { label: "Reset my password", url: forgotPasswordUrl },
+    footerHtml: `If this wasn't you, secure your account right away.<br /><br />— The GreenSynk Team`,
+  });
+
+  return sendEmail({
+    to: opts.to,
+    subject: "Your GreenSynk password was changed",
+    body: [
+      `Hi ${opts.firstName},`,
+      "",
+      `This is a confirmation that the password for your GreenSynk account (${opts.to}) was successfully changed.`,
+      "",
+      `Password changed at: ${changedAt}`,
+      "",
+      "If you made this change, no further action is needed.",
+      "",
+      "If you did NOT request this change, your account may be compromised. Please contact us immediately or reset your password again:",
+      "",
+      forgotPasswordUrl,
+      "",
+      "— The GreenSynk Team",
+    ].join("\n"),
+    html,
+  });
+}
+
+// Sends the user their username (login email) after a forgot-username request.
+export async function sendForgotUsernameEmail(opts: {
+  to: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}): Promise<EmailResult> {
+  const baseUrl = resolveBaseUrl();
+  const loginUrl = `${baseUrl}/login`;
+  const forgotPasswordUrl = `${baseUrl}/forgot-password`;
+  const roleLabel = opts.role.charAt(0).toUpperCase() + opts.role.slice(1);
+
+  const bodyHtml = `
+            <p style="margin:0 0 16px;font-size:16px;color:#111827;">Hi ${escapeHtml(opts.firstName)},</p>
+            <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.5;">We received a request to look up the login details for your GreenSynk account.</p>
+            <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">Your username (login email) is:</p>
+            <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#111827;">${escapeHtml(opts.to)}</p>
+            <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">Account name: ${escapeHtml(`${opts.firstName} ${opts.lastName}`)}</p>
+            <p style="margin:0 0 24px;font-size:13px;color:#6b7280;">Account role: ${escapeHtml(roleLabel)}</p>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.5;">If you've also forgotten your password, you can reset it at <a href="${forgotPasswordUrl}" style="color:#16a34a;">${forgotPasswordUrl}</a>.</p>`;
+
+  const html = buildBrandedEmailHtml({
+    title: "Your GreenSynk login details",
+    companyName: "GreenSynk",
+    bodyHtml,
+    cta: { label: "Sign in", url: loginUrl },
+    footerHtml: `If you did not request this email, you can safely ignore it.<br /><br />— The GreenSynk Team`,
+  });
+
+  return sendEmail({
+    to: opts.to,
+    subject: "Your GreenSynk login (username) details",
+    body: [
+      `Hi ${opts.firstName},`,
+      "",
+      "We received a request to look up the login details for your GreenSynk account.",
+      "",
+      "Your username (login email) is:",
+      "",
+      `  ${opts.to}`,
+      "",
+      `Account name: ${opts.firstName} ${opts.lastName}`,
+      `Account role: ${roleLabel}`,
+      "",
+      "You can sign in here:",
+      "",
+      loginUrl,
+      "",
+      "If you've also forgotten your password, you can reset it at:",
+      "",
+      forgotPasswordUrl,
+      "",
+      "If you did not request this email, you can safely ignore it.",
+      "",
+      "— The GreenSynk Team",
+    ].join("\n"),
+    html,
+  });
+}
+
 // Notify the company that a customer cancelled a portal-submitted booking.
 export async function sendPortalCancellationNotification(opts: {
   companyEmail: string;

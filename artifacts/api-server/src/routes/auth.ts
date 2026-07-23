@@ -3,7 +3,7 @@ import { db, usersTable, companiesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signUserToken, hashPassword, verifyPassword, requireAuth } from "../lib/auth";
 import { logActivity } from "../lib/activity";
-import { sendEmail, sendWelcomeEmail, sendEmailVerificationEmail, sendPasswordResetEmail, resolveBaseUrl } from "../lib/notifications";
+import { sendEmail, sendWelcomeEmail, sendEmailVerificationEmail, sendPasswordResetEmail, sendPasswordChangedEmail, sendForgotUsernameEmail, resolveBaseUrl } from "../lib/notifications";
 import { appendSmsConsentEvent } from "../lib/sms-consent";
 import { logger } from "../lib/logger";
 import { z } from "zod";
@@ -440,25 +440,7 @@ router.post("/reset-password", async (req, res) => {
   await logActivity({ companyId: user.companyId, userId: user.id, action: "user.password_reset", entityType: "user", entityId: user.id });
 
   // Send security confirmation email
-  await sendEmail({
-    to: user.email,
-    subject: "Your GreenSynk password was changed",
-    body: [
-      `Hi ${user.firstName},`,
-      "",
-      "This is a confirmation that the password for your GreenSynk account (${user.email}) was successfully changed.",
-      "",
-      `Password changed at: ${new Date().toUTCString()}`,
-      "",
-      "If you made this change, no further action is needed.",
-      "",
-      "If you did NOT request this change, your account may be compromised. Please contact us immediately or reset your password again:",
-      "",
-      `${resolveBaseUrl()}/forgot-password`,
-      "",
-      "— The GreenSynk Team",
-    ].join("\n").replace("${user.email}", user.email),
-  });
+  await sendPasswordChangedEmail({ to: user.email, firstName: user.firstName });
 
   return res.json({ success: true, message: "Password updated successfully." });
 });
@@ -471,34 +453,11 @@ router.post("/forgot-username", async (req, res) => {
 
   // Always return success to avoid account enumeration
   if (user && user.isActive) {
-    const loginUrl = `${resolveBaseUrl()}/login`;
-    await sendEmail({
+    await sendForgotUsernameEmail({
       to: user.email,
-      subject: "Your GreenSynk login (username) details",
-      body: [
-        `Hi ${user.firstName},`,
-        "",
-        "We received a request to look up the login details for your GreenSynk account.",
-        "",
-        "Your username (login email) is:",
-        "",
-        `  ${user.email}`,
-        "",
-        `Account name: ${user.firstName} ${user.lastName}`,
-        `Account role: ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}`,
-        "",
-        "You can sign in here:",
-        "",
-        loginUrl,
-        "",
-        "If you've also forgotten your password, you can reset it at:",
-        "",
-        `${resolveBaseUrl()}/forgot-password`,
-        "",
-        "If you did not request this email, you can safely ignore it.",
-        "",
-        "— The GreenSynk Team",
-      ].join("\n"),
+      firstName: user.firstName,
+      lastName: user.lastName,
+      role: user.role,
     });
   }
 
