@@ -88,6 +88,16 @@ async function main() {
     { env: { ...process.env, NODE_ENV: "test" } },
   );
 
+  // Claim-ownership race suite: a stale failed charge's revert must not
+  // release a newer writer's in-progress claim (ownership token on the claim).
+  console.log("\n########## Claim-ownership race validation ##########\n");
+  console.log("=== tests/autopay-claim-ownership.test.mjs ===");
+  results["autopay-claim-ownership"] = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/autopay-claim-ownership.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+
   // Notification-email module-mock suites: no server/DB needed (they mock
   // @workspace/db + resend entirely in-memory). Each starts with a preflight
   // (tests/mock-surface-check.mjs) that fails with an actionable "add X to the
@@ -123,6 +133,9 @@ async function main() {
   const raceOk = results["autopay-sweep-race"] === 0;
   if (!raceOk) failed++;
   console.log(`  ${raceOk ? "PASS" : "FAIL"}  Sweep/autopay race validation`);
+  const ownershipOk = results["autopay-claim-ownership"] === 0;
+  if (!ownershipOk) failed++;
+  console.log(`  ${ownershipOk ? "PASS" : "FAIL"}  Claim-ownership race validation`);
   for (const [key] of emailSuites) {
     const ok = results[key] === 0;
     if (!ok) failed++;

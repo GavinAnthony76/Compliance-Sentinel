@@ -174,7 +174,7 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
       ne(invoicesTable.status, "paid"),
       ne(invoicesTable.status, "processing"),
     ))
-    .returning({ id: invoicesTable.id });
+    .returning({ id: invoicesTable.id, updatedAt: invoicesTable.updatedAt });
   if (claimed.length === 0) {
     // Someone else won the claim (or it was just paid). Re-read to report the
     // most useful error to the caller.
@@ -184,9 +184,18 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
     return res.status(409).json({ error: "ChargeInProgress", message: "A charge for this invoice is already in progress" });
   }
 
+  // Claim ownership token: the exact updatedAt written by OUR claim above. The
+  // revert must only release OUR claim — without this, a slow failed charge
+  // could revert a NEWER claim (sweep released ours, someone else re-claimed)
+  // and make the invoice chargeable again while that newer charge is settling.
+  const claimToken = claimed[0].updatedAt;
   const revertClaim = async () => {
     await db.update(invoicesTable).set({ status: priorStatus, updatedAt: new Date() })
-      .where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.status, "processing")));
+      .where(and(
+        eq(invoicesTable.id, invoiceId),
+        eq(invoicesTable.status, "processing"),
+        eq(invoicesTable.updatedAt, claimToken),
+      ));
   };
 
   let stripe: any;

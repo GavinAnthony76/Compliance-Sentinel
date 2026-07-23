@@ -58,7 +58,13 @@ async function main() {
     ["--experimental-test-module-mocks", "tests/autopay-sweep-race.test.mjs"],
     { env: { ...process.env, NODE_ENV: "test" } },
   );
-  process.exit(code !== 0 ? code : raceCode);
+  console.log("\n=== tests/autopay-claim-ownership.test.mjs ===");
+  const ownershipCode = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/autopay-claim-ownership.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+  process.exit(code !== 0 ? code : raceCode !== 0 ? raceCode : ownershipCode);
 }
 
 main().catch((err) => {
