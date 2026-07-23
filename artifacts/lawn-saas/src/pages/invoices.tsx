@@ -547,6 +547,14 @@ export function InvoicesPage() {
   const [datePreset, setDatePreset] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+
+  // Any filter change restarts the list from page 1 so the user never lands
+  // on an out-of-range page of the new (smaller) result set.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, methodFilter, fromDate, toDate]);
 
   const applyPreset = (preset: string) => {
     setDatePreset(preset);
@@ -561,8 +569,8 @@ export function InvoicesPage() {
     paymentMethod: methodFilter || undefined,
     from: fromDate || undefined,
     to: toDate || undefined,
-    page: 1,
-    limit: 50,
+    page,
+    limit: PAGE_SIZE,
   };
   const { data, isLoading } = useListInvoices(
     listParams as Parameters<typeof useListInvoices>[0],
@@ -575,6 +583,9 @@ export function InvoicesPage() {
           const invoices = (query.state.data as { invoices?: { status: string }[] } | undefined)?.invoices;
           return invoices?.some(inv => inv.status === 'processing') ? 4000 : false;
         },
+        // Keep the previous page's rows visible while the next page loads so
+        // paging doesn't flash the full-screen spinner.
+        placeholderData: (prev?: import('@workspace/api-client-react').InvoiceListResponse) => prev,
       },
     },
   );
@@ -831,6 +842,26 @@ export function InvoicesPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {(data?.total ?? 0) > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-border">
+              <p className="text-sm text-muted-foreground">
+                Showing {(data!.page - 1) * data!.limit + 1}–{Math.min(data!.page * data!.limit, data!.total)} of {data!.total} invoice{data!.total === 1 ? '' : 's'}
+              </p>
+              {data!.total > data!.limit && (
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground px-1">
+                    Page {data!.page} of {Math.max(1, Math.ceil(data!.total / data!.limit))}
+                  </span>
+                  <Button size="sm" variant="outline" disabled={data!.page * data!.limit >= data!.total} onClick={() => setPage(p => p + 1)}>
+                    Next
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </Card>
