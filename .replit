@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "postgresql-16", "python-3.11"]
+modules = ["nodejs-24", "python-3.11", "postgresql-16"]
 
 [[artifacts]]
 id = "artifacts/api-server"
@@ -78,3 +78,4 @@ FRONTEND_URL = "https://greensynk.com"
 
 [userenv.production]
 SEED_IMPORT_ON_EMPTY = "1"
+SEED_IMPORT_REPLACE = "1"
