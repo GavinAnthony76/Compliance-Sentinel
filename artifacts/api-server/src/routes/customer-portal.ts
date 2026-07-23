@@ -421,9 +421,11 @@ router.post("/appointments", requirePortalAuth, async (req: any, res) => {
     price: service.basePrice ?? null,
   }).returning();
 
-  // Notify the company of the new request AND confirm to the customer
-  // (fire-and-forget — never block the booking response on email).
-  void (async () => {
+  // Notify the company of the new request AND confirm to the customer.
+  // Awaited before responding: on autoscale, async work started after
+  // res.json() gets CPU-throttled away and silently never delivers. The
+  // try/catch ensures an email failure still never fails the booking.
+  await (async () => {
     try {
       const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
       const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
@@ -498,8 +500,10 @@ router.post("/appointments/:id/cancel", requirePortalAuth, async (req: any, res)
     .where(eq(appointmentsTable.id, id))
     .returning();
 
-  // Notify the company that the customer cancelled (fire-and-forget).
-  void (async () => {
+  // Notify the company that the customer cancelled. Awaited before responding
+  // for autoscale safety (post-response async work can be dropped); failures
+  // are caught so email problems never fail the cancellation itself.
+  await (async () => {
     try {
       const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
       const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
