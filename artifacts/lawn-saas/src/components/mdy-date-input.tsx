@@ -38,11 +38,13 @@ export function MdyDateInput({
   onChange,
   className,
   id,
+  'aria-label': ariaLabel,
 }: {
   value: string;
   onChange: (iso: string) => void;
   className?: string;
   id?: string;
+  'aria-label'?: string;
 }) {
   const [text, setText] = useState(() => isoToMdy(value));
 
@@ -61,6 +63,7 @@ export function MdyDateInput({
   return (
     <Input
       id={id}
+      aria-label={ariaLabel}
       type="text"
       inputMode="numeric"
       placeholder="MM/DD/YYYY"

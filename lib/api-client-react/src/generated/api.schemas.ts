@@ -1157,6 +1157,14 @@ export type ListInvoicesParams = {
   status?: string;
   paymentMethod?: string;
   customerId?: number;
+  /**
+   * Start of date range (inclusive). Paid invoices filter on paidAt, others on createdAt.
+   */
+  from?: string;
+  /**
+   * End of date range (inclusive). Paid invoices filter on paidAt, others on createdAt.
+   */
+  to?: string;
   page?: number;
   limit?: number;
 };

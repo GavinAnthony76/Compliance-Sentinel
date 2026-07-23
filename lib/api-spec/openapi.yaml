@@ -741,6 +741,18 @@ paths:
           in: query
           schema:
             type: integer
+        - name: from
+          in: query
+          description: Start of date range (inclusive). Paid invoices filter on paidAt, others on createdAt.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          description: End of date range (inclusive). Paid invoices filter on paidAt, others on createdAt.
+          schema:
+            type: string
+            format: date
         - name: page
           in: query
           schema:

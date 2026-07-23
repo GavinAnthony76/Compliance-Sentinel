@@ -999,6 +999,18 @@ export const ListInvoicesQueryParams = zod.object({
   status: zod.coerce.string().optional(),
   paymentMethod: zod.coerce.string().optional(),
   customerId: zod.coerce.number().optional(),
+  from: zod
+    .date()
+    .optional()
+    .describe(
+      "Start of date range (inclusive). Paid invoices filter on paidAt, others on createdAt.",
+    ),
+  to: zod
+    .date()
+    .optional()
+    .describe(
+      "End of date range (inclusive). Paid invoices filter on paidAt, others on createdAt.",
+    ),
   page: zod.coerce.number().default(listInvoicesQueryPageDefault),
   limit: zod.coerce.number().default(listInvoicesQueryLimitDefault),
 });

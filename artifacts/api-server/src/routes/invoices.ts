@@ -74,6 +74,29 @@ router.get("/", async (req: any, res) => {
   if (req.query.paymentMethod) conditions.push(eq(invoicesTable.paymentMethod, req.query.paymentMethod as string));
   if (req.query.customerId) conditions.push(eq(invoicesTable.customerId, Number(req.query.customerId)));
 
+  // Date-range filter for collections reporting. Paid invoices are bucketed by
+  // when the money arrived (paid_at); everything else by creation date — keyed
+  // on status (not paid_at presence) so a stale paid_at on a reverted invoice
+  // can't shift its bucket. `to` is inclusive: a date-only value covers the
+  // whole day (exclusive upper bound of the next midnight).
+  const effectiveDate = sql`(case when ${invoicesTable.status} = 'paid' then coalesce(${invoicesTable.paidAt}, ${invoicesTable.createdAt}) else ${invoicesTable.createdAt} end)`;
+  if (req.query.from) {
+    const from = new Date(String(req.query.from));
+    if (!isNaN(from.getTime())) conditions.push(sql`${effectiveDate} >= ${from.toISOString()}`);
+  }
+  if (req.query.to) {
+    const raw = String(req.query.to);
+    const to = new Date(raw);
+    if (!isNaN(to.getTime())) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const upper = new Date(to.getTime() + 24 * 60 * 60 * 1000);
+        conditions.push(sql`${effectiveDate} < ${upper.toISOString()}`);
+      } else {
+        conditions.push(sql`${effectiveDate} <= ${to.toISOString()}`);
+      }
+    }
+  }
+
   // Aggregate payment-method totals across the FULL filtered set (not just the current page).
   // Online = paymentMethod 'card', or legacy null method with a Stripe payment intent; everything else is offline.
   const onlineExpr = sql`(${invoicesTable.paymentMethod} = 'card' OR (${invoicesTable.paymentMethod} IS NULL AND ${invoicesTable.stripePaymentIntentId} IS NOT NULL))`;

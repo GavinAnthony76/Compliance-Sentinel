@@ -496,6 +496,46 @@ function EditInvoiceModal({ invoice, onClose }: { invoice: { id: number; invoice
   );
 }
 
+// Local-date formatting (not toISOString, which shifts to UTC and can land on
+// the wrong day for evening users).
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function presetRange(preset: string): { from: string; to: string } | null {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const q = Math.floor(m / 3);
+  switch (preset) {
+    case 'this_month':
+      return { from: ymd(new Date(y, m, 1)), to: ymd(new Date(y, m + 1, 0)) };
+    case 'last_month':
+      return { from: ymd(new Date(y, m - 1, 1)), to: ymd(new Date(y, m, 0)) };
+    case 'this_quarter':
+      return { from: ymd(new Date(y, q * 3, 1)), to: ymd(new Date(y, q * 3 + 3, 0)) };
+    case 'last_quarter':
+      return { from: ymd(new Date(y, q * 3 - 3, 1)), to: ymd(new Date(y, q * 3, 0)) };
+    case 'this_year':
+      return { from: ymd(new Date(y, 0, 1)), to: ymd(new Date(y, 11, 31)) };
+    case 'last_year':
+      return { from: ymd(new Date(y - 1, 0, 1)), to: ymd(new Date(y - 1, 11, 31)) };
+    default:
+      return null;
+  }
+}
+
+const DATE_PRESETS: Array<[string, string]> = [
+  ['', 'All time'],
+  ['this_month', 'This month'],
+  ['last_month', 'Last month'],
+  ['this_quarter', 'This quarter'],
+  ['last_quarter', 'Last quarter'],
+  ['this_year', 'This year'],
+  ['last_year', 'Last year'],
+  ['custom', 'Custom range…'],
+];
+
 export function InvoicesPage() {
   const [showNew, setShowNew] = useState(false);
   const [preselectedApptId, setPreselectedApptId] = useState<number | undefined>(undefined);
@@ -504,11 +544,31 @@ export function InvoicesPage() {
   const [viewingInvoice, setViewingInvoice] = useState<{ id: number; invoiceNumber: string; status: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [methodFilter, setMethodFilter] = useState('');
+  const [datePreset, setDatePreset] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const applyPreset = (preset: string) => {
+    setDatePreset(preset);
+    if (preset === 'custom') return; // keep current from/to for manual editing
+    const range = presetRange(preset);
+    setFromDate(range?.from ?? '');
+    setToDate(range?.to ?? '');
+  };
+
+  const listParams = {
+    status: statusFilter || undefined,
+    paymentMethod: methodFilter || undefined,
+    from: fromDate || undefined,
+    to: toDate || undefined,
+    page: 1,
+    limit: 50,
+  };
   const { data, isLoading } = useListInvoices(
-    { status: statusFilter || undefined, paymentMethod: methodFilter || undefined, page: 1, limit: 50 } as Parameters<typeof useListInvoices>[0],
+    listParams as Parameters<typeof useListInvoices>[0],
     {
       query: {
-        queryKey: getListInvoicesQueryKey({ status: statusFilter || undefined, paymentMethod: methodFilter || undefined, page: 1, limit: 50 } as Parameters<typeof getListInvoicesQueryKey>[0]),
+        queryKey: getListInvoicesQueryKey(listParams as Parameters<typeof getListInvoicesQueryKey>[0]),
         // While any visible invoice is mid-charge ("processing"), poll every
         // few seconds so the list flips to paid/sent without a manual reload.
         refetchInterval: (query) => {
@@ -634,7 +694,15 @@ export function InvoicesPage() {
             </button>
           ))}
         </div>
-        <div className="sm:ml-auto">
+        <div className="sm:ml-auto flex flex-wrap items-center gap-2">
+          <select
+            value={datePreset}
+            onChange={e => applyPreset(e.target.value)}
+            className="h-10 px-3 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground hover:border-primary/50 transition-all"
+            aria-label="Filter by date range"
+          >
+            {DATE_PRESETS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
           <select
             value={methodFilter}
             onChange={e => setMethodFilter(e.target.value)}
@@ -646,6 +714,27 @@ export function InvoicesPage() {
           </select>
         </div>
       </div>
+
+      {datePreset === 'custom' && (
+        <div className="flex flex-wrap items-center gap-3 mb-6 -mt-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">From</span>
+            <MdyDateInput value={fromDate} onChange={setFromDate} aria-label="Date range start" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">To</span>
+            <MdyDateInput value={toDate} onChange={setToDate} aria-label="Date range end" />
+          </div>
+          {(fromDate || toDate) && (
+            <button
+              onClick={() => { setFromDate(''); setToDate(''); }}
+              className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              Clear dates
+            </button>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" /></div>

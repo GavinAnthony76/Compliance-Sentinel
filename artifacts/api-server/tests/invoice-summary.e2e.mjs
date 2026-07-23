@@ -321,6 +321,128 @@ async function main() {
   check("GET ?status=paid&customerId=A -> 200", paidARes.status === 200, `got ${paidARes.status}`);
   checkSummary("status=paid & customerId=A", paidARes.json?.summary, paidA);
 
+  // --- 7. Date-range filter ---------------------------------------------------
+  // Shift every 3rd invoice's effective date ~40 days back (paid_at for paid
+  // invoices, created_at otherwise — the same column the API filters on), then
+  // assert from/to slices the summary into the right periods.
+  console.log("\nDate-range filter — summary respects from/to:");
+  const DAY = 24 * 60 * 60 * 1000;
+  const oldDate = new Date(Date.now() - 40 * DAY);
+  const shifted = [];
+  const dbc = new pg.Client({
+    connectionString: cs,
+    ssl: process.env.NEON_DATABASE_URL ? true : undefined,
+  });
+  await dbc.connect();
+  try {
+    for (let i = 0; i < seeded.length; i++) {
+      if (i % 3 !== 0) continue;
+      const inv = seeded[i];
+      shifted.push(inv.id);
+      inv.period = "old";
+      await dbc.query(
+        `UPDATE invoices
+            SET created_at = $1::timestamptz,
+                paid_at = CASE WHEN status = 'paid' THEN $1::timestamptz ELSE paid_at END
+          WHERE id = $2`,
+        [oldDate.toISOString(), inv.id],
+      );
+    }
+    // Stale paid_at on a NON-paid invoice: pick a recent "sent" invoice and
+    // give it an old paid_at. The date filter is status-aware (non-paid
+    // invoices bucket by created_at), so this invoice must stay in the recent
+    // window and stay OUT of the old window — the recent/old summary checks
+    // below fail if paid_at presence alone shifted its bucket.
+    const staleSent = seeded.find((i, idx) => idx % 3 !== 0 && i.status === "sent");
+    if (!staleSent) {
+      console.error("Setup failed: no recent 'sent' invoice available for stale paid_at case.");
+      process.exit(1);
+    }
+    await dbc.query(`UPDATE invoices SET paid_at = $1::timestamptz WHERE id = $2`, [
+      oldDate.toISOString(),
+      staleSent.id,
+    ]);
+  } finally {
+    await dbc.end();
+  }
+  for (const inv of seeded) if (!inv.period) inv.period = "recent";
+  const ymd = (d) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+
+  const recentOnly = expectationFor(seeded.filter((i) => i.period === "recent"));
+  // `to` = today (date-only) must be INCLUSIVE of the whole day.
+  const recentFrom = ymd(new Date(Date.now() - 2 * DAY));
+  const recentTo = ymd(new Date());
+  const recentRes = await req(
+    "GET",
+    `/invoices?from=${recentFrom}&to=${recentTo}`,
+    { token: ownerToken },
+  );
+  check("GET ?from/to (recent window) -> 200", recentRes.status === 200, `got ${recentRes.status}`);
+  check(
+    "recent window total counts only unshifted invoices",
+    Number(recentRes.json?.total) === seeded.length - shifted.length,
+    `got ${recentRes.json?.total}, want ${seeded.length - shifted.length}`,
+  );
+  checkSummary("recent window", recentRes.json?.summary, recentOnly);
+
+  const oldOnly = expectationFor(seeded.filter((i) => i.period === "old"));
+  const oldFrom = ymd(new Date(oldDate.getTime() - 2 * DAY));
+  const oldTo = ymd(new Date(oldDate.getTime() + 2 * DAY));
+  const oldRes = await req("GET", `/invoices?from=${oldFrom}&to=${oldTo}`, { token: ownerToken });
+  check("GET ?from/to (old window) -> 200", oldRes.status === 200, `got ${oldRes.status}`);
+  check(
+    "old window total counts only shifted invoices",
+    Number(oldRes.json?.total) === shifted.length,
+    `got ${oldRes.json?.total}, want ${shifted.length}`,
+  );
+  checkSummary("old window", oldRes.json?.summary, oldOnly);
+
+  check(
+    "recent + old summaries add up to the unfiltered totals",
+    close(recentOnly.paidTotal + oldOnly.paidTotal, all.paidTotal) &&
+      close(recentOnly.outstanding + oldOnly.outstanding, all.outstanding),
+    `recent=${JSON.stringify(recentOnly)} old=${JSON.stringify(oldOnly)}`,
+  );
+
+  // from-only (open-ended) range: everything from the recent window onward.
+  const fromOnlyRes = await req("GET", `/invoices?from=${recentFrom}`, { token: ownerToken });
+  check("GET ?from= (open-ended) -> 200", fromOnlyRes.status === 200, `got ${fromOnlyRes.status}`);
+  checkSummary("from-only (open-ended)", fromOnlyRes.json?.summary, recentOnly);
+
+  // to-only (open-ended) range ending before the recent window: old only.
+  const toOnlyRes = await req("GET", `/invoices?to=${oldTo}`, { token: ownerToken });
+  check("GET ?to= (open-ended) -> 200", toOnlyRes.status === 200, `got ${toOnlyRes.status}`);
+  checkSummary("to-only (open-ended)", toOnlyRes.json?.summary, oldOnly);
+
+  // Date range combined with an existing filter.
+  console.log("\nCombined status=paid + date-range filter:");
+  const paidOld = expectationFor(seeded.filter((i) => i.status === "paid" && i.period === "old"));
+  const paidOldRes = await req(
+    "GET",
+    `/invoices?status=paid&from=${oldFrom}&to=${oldTo}`,
+    { token: ownerToken },
+  );
+  check("GET ?status=paid&from/to -> 200", paidOldRes.status === 200, `got ${paidOldRes.status}`);
+  checkSummary("status=paid & old window", paidOldRes.json?.summary, paidOld);
+
+  // An empty window between the two clusters matches nothing.
+  const emptyFrom = ymd(new Date(Date.now() - 30 * DAY));
+  const emptyTo = ymd(new Date(Date.now() - 20 * DAY));
+  const emptyRes = await req("GET", `/invoices?from=${emptyFrom}&to=${emptyTo}`, { token: ownerToken });
+  check("GET ?from/to (empty window) -> 200", emptyRes.status === 200, `got ${emptyRes.status}`);
+  check(
+    "empty window total is 0",
+    Number(emptyRes.json?.total) === 0,
+    `got ${emptyRes.json?.total}`,
+  );
+  checkSummary("empty window", emptyRes.json?.summary, {
+    outstanding: 0,
+    paidTotal: 0,
+    paidOnline: 0,
+    paidOffline: 0,
+  });
+
   // --- Summary --------------------------------------------------------------
   console.log(`\nInvoice summary e2e: ${passes} passed, ${failures} failed.`);
   process.exit(failures === 0 ? 0 : 1);
