@@ -18,7 +18,7 @@ import { runHarness, HARNESSES } from "./ci-harness.mjs";
 // pollute the production Neon database (even if per-run cleanup fails). This
 // also aborts if DATABASE_URL looks like production, since the harness
 // force-pushes schema to it. See test-db-guard.mjs.
-useLocalTestDatabase();
+await useLocalTestDatabase();
 
 runHarness(HARNESSES.access)
   .then((code) => process.exit(code))

@@ -49,7 +49,7 @@ import { fileURLToPath } from "node:url";
 import { useLocalTestDatabase } from "./test-db-guard.mjs";
 
 // Hard guard: never run this suite against the production Neon database.
-useLocalTestDatabase();
+await useLocalTestDatabase();
 process.env.NODE_ENV = "test";
 
 // Resolve the api-server's extensionless relative .ts imports the way esbuild

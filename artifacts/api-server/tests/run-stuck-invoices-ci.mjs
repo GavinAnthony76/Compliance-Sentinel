@@ -25,7 +25,7 @@ import { useLocalTestDatabase } from "./test-db-guard.mjs";
 
 // Redirect every DB entrypoint onto the local test DB, and abort if
 // DATABASE_URL looks like production (we force-push schema to it below).
-useLocalTestDatabase();
+await useLocalTestDatabase();
 
 const artifactDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 

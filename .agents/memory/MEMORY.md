@@ -1,8 +1,8 @@
+- [Replit DB migration](replit-db-migration.md) — app is off Neon, DATABASE_URL only; prod seeded via flag-gated one-time bootstrap that MUST be removed after verified publish.
 - [pdfkit esbuild externalize](pdfkit-esbuild.md) — pdfkit can't be bundled by esbuild (fontkit/brotli/@swc/helpers); add to `external` in api-server build.mjs or server won't start.
 - [composite dist staleness](composite-dist-staleness.md) — after editing a @workspace/* lib's exports (db schema, orval codegen), rebuild its dist `tsc -b` or consumer tsc fails TS2724/TS2305 though app runs.
 - [SendGrid managed connector](sendgrid-connector.md) — connector ships NO code snippet; hand-write the proxy fetch (api_key+from_email); 401 "Maximum credits exceeded" = account billing, not wiring.
 - [API codegen pipeline](api-codegen-pipeline.md) — after spec edits: codegen → rebuild api-client-react dist → frontend typecheck; api-zod index needs explicit re-export to fix TS2308; twilio/pdfkit must be installed+externalized.
-- [NEON vs sandbox DB](neon-vs-sandbox-db.md) — app + drizzle push use NEON_DATABASE_URL; sandbox executeSql/psql $DATABASE_URL hit a DIFFERENT db. Seed/verify via psql "$NEON_DATABASE_URL".
 - [Private object storage read auth](storage-object-auth.md) — `/api/storage/objects/*` ships auth commented OUT; lock it with requireAuth + DB tenant-ownership check, and render authed images via fetch→blob (not `<img src>`).
 - [AI integration lazy import](ai-integration-lazy-import.md) — Replit OpenAI integration client throws at import time if env unset; lazy-import inside the function after an env check, never top-level.
 - [GreenSynk rebrand & email](greensynk-rebrand.md) — app renamed to GreenSynk; Resend verified on greensynk.com; noreply@greensynk.com is the from address.
@@ -15,7 +15,7 @@
 - [RBAC dual-surface](rbac-dual-surface.md) — managerOnly nav flag is cosmetic; matching backend route MUST have requireRole or staff are UI-blocked but API-open; sidebar must show user not company name.
 - [Tenant URL SSRF in PDFs](tenant-url-ssrf.md) — server-side fetch of tenant-supplied URLs (company.logoUrl in PDF gen) is an SSRF vector; route through fetchImageBufferSafe (https-only, block private IPs, no redirects).
 - [Role-gating drift](role-gating-drift.md) — frontend hides 10 manager-only pages; all manager-only routers (incl. follow-ups/reporting/leads GETs) now enforce requireRole. Verify: `pnpm run test:permissions`.
-- [Test suites pollute NEON](test-suites-pollute-neon.md) — FIXED: CI harnesses call useLocalTestDatabase() to redirect server+helpers to local DATABASE_URL (push-force schema first); never touch NEON. Cleanup/TEST_RUN_NS now defense-in-depth.
+- [Test DB isolation](replit-db-migration.md) — useLocalTestDatabase() is async (await it!) and redirects suites to a separate <db>_test database; dev DATABASE_URL holds real data.
 - [Concurrent test-build collision](concurrent-test-build-collision.md) — gate is now one `test-gate` validation (test:all:ci, single build into dist-ci); never point two concurrent builds at one outdir.
 - [Stripe webhook config](stripe-webhook-config.md) — one live endpoint; URL must be the deployed domain; repoint (not recreate) to keep STRIPE_WEBHOOK_SECRET; handler must catch invoice.payment_succeeded.
 - [Billing activity dedup](billing-activity-dedup.md) — checkout updates company row BEFORE subscription.updated reads it; that ordering (not a dedup table) is what stops plan_changed+subscription_updated double-logging. Logic in src/lib/billing-activity.ts.

@@ -31,7 +31,7 @@ import {
 // Force everything onto the local throwaway DB so a validation run can never
 // pollute the production Neon database. Also aborts if DATABASE_URL looks like
 // production, since we force-push schema to it. See test-db-guard.mjs.
-useLocalTestDatabase();
+await useLocalTestDatabase();
 
 const DIST = "dist-ci";
 
