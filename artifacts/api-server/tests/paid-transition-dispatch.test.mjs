@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 // Static guard: every code path that transitions an invoice to "paid" must
@@ -9,8 +10,20 @@ import { fileURLToPath } from "node:url";
 // notification). The awaited-dispatch guard catches un-awaited calls, but a
 // future endpoint that flips status -> paid and simply never CALLS the
 // dispatchers would ship silently with no emails. This test finds every
-// `status: "paid"` write in api-server source and requires awaited calls to
-// both dispatchers within the lines that follow it.
+// `status: "paid"` write in api-server source and requires the dispatchers
+// to be genuinely invoked within the lines that follow it.
+//
+// ACCEPTED INDIRECTIONS (intentional accept-list — anything else is flagged):
+//   1. Direct awaited call:            await dispatchPaymentReceiptEmail(...)
+//   2. Awaited Promise.all/allSettled: await Promise.all([dispatchPaymentReceiptEmail(...), ...])
+//   3. A local wrapper function defined inside the window that awaits the
+//      dispatcher, PROVIDED the wrapper itself is awaited-invoked inside the
+//      same window (a defined-but-never-called wrapper does NOT count).
+// KNOWN EVASIONS THE GUARD MUST CATCH (covered by fixture tests below):
+//   - Moving the paid write into a helper that never dispatches.
+//   - Spacing the dispatch more than WINDOW_LINES below the write.
+//   - Wrapping the dispatchers in a local function that is never invoked.
+//   - Passing the dispatcher as a bare reference/callback without awaiting.
 
 const DISPATCHERS = [
   "dispatchPaymentReceiptEmail",
@@ -81,49 +94,155 @@ function stripComments(source) {
 // SQL strings use `status='paid'`) and are not matched.
 const PAID_WRITE_RE = /\bstatus\s*:\s*["']paid["']/g;
 
-test("every invoice paid-transition triggers both payment dispatchers", () => {
-  const files = collectTsFiles(SRC_ROOT);
-  const problems = [];
-  let writeSites = 0;
-
-  for (const file of files) {
-    const raw = readFileSync(file, "utf8");
-    if (!raw.includes("paid")) continue;
-    const code = stripComments(raw);
-    const lines = code.split("\n");
-
-    PAID_WRITE_RE.lastIndex = 0;
-    let m;
-    while ((m = PAID_WRITE_RE.exec(code)) !== null) {
-      const lineNo = code.slice(0, m.index).split("\n").length; // 1-based
-      writeSites++;
-
-      // Skip response payloads like res.json({ status: "paid" }) — those
-      // report state, they don't transition it. Heuristic: the write must sit
-      // inside/near a db update (`.set(` or `update(` on the same or the 3
-      // preceding lines) to count as a transition.
-      const context = lines.slice(Math.max(0, lineNo - 4), lineNo).join("\n");
-      if (!/\.set\s*\(|\bupdate\s*\(|updateData|\bset\s*:\s*\{/.test(context)) {
-        writeSites--;
-        continue;
-      }
-
-      const windowText = lines
-        .slice(lineNo - 1, lineNo - 1 + WINDOW_LINES)
-        .join("\n");
-      const missing = DISPATCHERS.filter(
-        (name) => !new RegExp(`await\\s+${name}\\s*\\(`).test(windowText),
-      );
-      if (missing.length > 0) {
-        problems.push(
-          `${relative(process.cwd(), file)}:${lineNo} — invoice transitioned to "paid" ` +
-            `without awaited call(s) to: ${missing.join(", ")} within ${WINDOW_LINES} lines. ` +
-            "Every paid-transition must send the customer receipt AND the owner notification " +
-            "(guarded on the transitioned rows, like routes/invoices.ts mark-paid).",
-        );
-      }
+// Match the closing bracket for the opener at text[openIdx] ("(" or "{"),
+// ignoring nesting of the same pair. Returns index after the close, or
+// text.length if unbalanced.
+function matchBracket(text, openIdx) {
+  const open = text[openIdx];
+  const close = open === "(" ? ")" : "}";
+  let depth = 0;
+  for (let i = openIdx; i < text.length; i++) {
+    if (text[i] === open) depth++;
+    else if (text[i] === close) {
+      depth--;
+      if (depth === 0) return i + 1;
     }
   }
+  return text.length;
+}
+
+// Find brace-bodied local function definitions in the window:
+// `const x = async (...) => {...}`, `async function x(...) {...}`, etc.
+// Returns [{ name, start, end }] where start/end bound the body.
+function findLocalFnRanges(text) {
+  const ranges = [];
+  const defRe =
+    /(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function\b[^({]*|\([^)]*\)\s*(?::[^={]+)?=>\s*|\w+\s*=>\s*)|(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*/g;
+  let m;
+  while ((m = defRe.exec(text)) !== null) {
+    const name = m[1] ?? m[2];
+    const braceIdx = text.indexOf("{", m.index + m[0].length - 1);
+    if (braceIdx === -1) continue;
+    // Only treat it as the function body if the brace directly follows the
+    // definition header (allowing whitespace).
+    const between = text.slice(m.index + m[0].length, braceIdx);
+    if (/\S/.test(between)) continue;
+    const end = matchBracket(text, braceIdx);
+    ranges.push({ name, start: braceIdx, end });
+    defRe.lastIndex = braceIdx + 1;
+  }
+  return ranges;
+}
+
+function containingRange(ranges, idx) {
+  let best = null;
+  for (const r of ranges) {
+    if (idx > r.start && idx < r.end) {
+      if (!best || r.end - r.start < best.end - best.start) best = r;
+    }
+  }
+  return best;
+}
+
+// A call site at index `idx` "counts" only if it is at top level of the
+// window, or inside a local wrapper that is itself awaited-invoked at a
+// counting position (one level of indirection).
+function callSiteCounts(text, ranges, idx) {
+  const r = containingRange(ranges, idx);
+  if (!r) return true;
+  const invokeRe = new RegExp(`await\\s+${r.name}\\s*\\(`, "g");
+  let m;
+  while ((m = invokeRe.exec(text)) !== null) {
+    const outer = containingRange(ranges, m.index);
+    if (!outer) return true;
+  }
+  return false;
+}
+
+// Is `dispatcher` genuinely invoked (per the accept-list) within windowText?
+function dispatcherSatisfied(windowText, ranges, dispatcher) {
+  // 1 + 3: direct awaited call (possibly inside an invoked wrapper).
+  const directRe = new RegExp(`await\\s+${dispatcher}\\s*\\(`, "g");
+  let m;
+  while ((m = directRe.exec(windowText)) !== null) {
+    if (callSiteCounts(windowText, ranges, m.index)) return true;
+  }
+  // 2: awaited Promise.all / allSettled containing a real call (not a bare
+  // reference — must be followed by "(").
+  const paRe = /await\s+Promise\s*\.\s*(?:all|allSettled)\s*\(/g;
+  while ((m = paRe.exec(windowText)) !== null) {
+    const openIdx = m.index + m[0].length - 1;
+    const end = matchBracket(windowText, openIdx);
+    const region = windowText.slice(openIdx, end);
+    if (
+      new RegExp(`\\b${dispatcher}\\s*\\(`).test(region) &&
+      callSiteCounts(windowText, ranges, m.index)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Scan one file's source. Returns { writeSites, problems } where problems
+// are human-readable strings referencing `label`.
+export function scanSource(raw, label) {
+  const problems = [];
+  let writeSites = 0;
+  if (!raw.includes("paid")) return { writeSites, problems };
+  const code = stripComments(raw);
+  const lines = code.split("\n");
+
+  PAID_WRITE_RE.lastIndex = 0;
+  let m;
+  while ((m = PAID_WRITE_RE.exec(code)) !== null) {
+    const lineNo = code.slice(0, m.index).split("\n").length; // 1-based
+    writeSites++;
+
+    // Skip response payloads like res.json({ status: "paid" }) — those
+    // report state, they don't transition it. Heuristic: the write must sit
+    // inside/near a db update (`.set(` or `update(` on the same or the 3
+    // preceding lines) to count as a transition.
+    const context = lines.slice(Math.max(0, lineNo - 4), lineNo).join("\n");
+    if (!/\.set\s*\(|\bupdate\s*\(|updateData|\bset\s*:\s*\{/.test(context)) {
+      writeSites--;
+      continue;
+    }
+
+    const windowText = lines
+      .slice(lineNo - 1, lineNo - 1 + WINDOW_LINES)
+      .join("\n");
+    const ranges = findLocalFnRanges(windowText);
+    const missing = DISPATCHERS.filter(
+      (name) => !dispatcherSatisfied(windowText, ranges, name),
+    );
+    if (missing.length > 0) {
+      problems.push(
+        `${label}:${lineNo} — invoice transitioned to "paid" ` +
+          `without genuinely-invoked call(s) to: ${missing.join(", ")} within ${WINDOW_LINES} lines. ` +
+          "Every paid-transition must send the customer receipt AND the owner notification " +
+          "(guarded on the transitioned rows, like routes/invoices.ts mark-paid). " +
+          "Accepted forms: direct await, awaited Promise.all/allSettled, or a local " +
+          "wrapper that is itself awaited within the window.",
+      );
+    }
+  }
+  return { writeSites, problems };
+}
+
+function scanDir(root) {
+  const problems = [];
+  let writeSites = 0;
+  for (const file of collectTsFiles(root)) {
+    const res = scanSource(readFileSync(file, "utf8"), relative(process.cwd(), file));
+    writeSites += res.writeSites;
+    problems.push(...res.problems);
+  }
+  return { writeSites, problems };
+}
+
+test("every invoice paid-transition triggers both payment dispatchers", () => {
+  const { writeSites, problems } = scanDir(SRC_ROOT);
 
   // Sanity check: the guard must actually be seeing the known paid-write
   // sites (invoices mark-paid, billing webhook, portal confirm-payment,
@@ -141,4 +260,164 @@ test("every invoice paid-transition triggers both payment dispatchers", () => {
     "Invoice paid-transitions found that never dispatch the payment emails:\n" +
       problems.join("\n"),
   );
+});
+
+// ---------------------------------------------------------------------------
+// Mutation-style fixture tests: prove the guard flags known evasions and
+// accepts the documented safe indirections. Fixtures are written to a temp
+// dir and scanned through the exact same directory-walk + scan path as src/.
+// ---------------------------------------------------------------------------
+
+const PAID_UPDATE = [
+  "await db",
+  "  .update(invoices)",
+  '  .set({ status: "paid", paidDate: new Date() })',
+  "  .where(eq(invoices.id, id));",
+].join("\n");
+
+const BOTH_DISPATCH = [
+  "await dispatchPaymentReceiptEmail(invoice);",
+  "await dispatchOwnerPaymentNotification(invoice);",
+].join("\n");
+
+function scanFixture(name, source) {
+  const dir = mkdtempSync(join(tmpdir(), "paid-guard-fixture-"));
+  try {
+    mkdirSync(join(dir, "routes"), { recursive: true });
+    writeFileSync(join(dir, "routes", name), source);
+    return scanDir(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("guard fixture: direct awaited dispatch passes (baseline)", () => {
+  const res = scanFixture(
+    "baseline.ts",
+    `export async function markPaid(id: string) {\n${PAID_UPDATE}\n${BOTH_DISPATCH}\n}\n`,
+  );
+  assert.equal(res.writeSites, 1);
+  assert.deepEqual(res.problems, []);
+});
+
+test("guard fixture: helper-extraction with no dispatch is flagged", () => {
+  // Refactor evasion: paid write moved into a helper that never dispatches;
+  // the caller (or nobody) sends the emails. Must be flagged.
+  const res = scanFixture(
+    "helper.ts",
+    [
+      "async function setPaidStatus(id: string) {",
+      PAID_UPDATE,
+      "}",
+      "export async function markPaid(id: string) {",
+      "  await setPaidStatus(id);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /dispatchPaymentReceiptEmail/);
+  assert.match(res.problems[0], /dispatchOwnerPaymentNotification/);
+});
+
+test("guard fixture: dispatch spaced beyond the window is flagged", () => {
+  const filler = Array.from(
+    { length: WINDOW_LINES + 10 },
+    (_, i) => `  logger.debug("padding line ${i}");`,
+  ).join("\n");
+  const res = scanFixture(
+    "spacing.ts",
+    `export async function markPaid(id: string) {\n${PAID_UPDATE}\n${filler}\n${BOTH_DISPATCH}\n}\n`,
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+});
+
+test("guard fixture: wrapper defined but never invoked is flagged", () => {
+  // The dispatchers appear (awaited!) inside a local function within the
+  // window, but nothing ever calls it — no emails actually send.
+  const res = scanFixture(
+    "wrapper-uninvoked.ts",
+    [
+      "export async function markPaid(id: string) {",
+      PAID_UPDATE,
+      "  const sendEmails = async () => {",
+      "    await dispatchPaymentReceiptEmail(invoice);",
+      "    await dispatchOwnerPaymentNotification(invoice);",
+      "  };",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /dispatchPaymentReceiptEmail/);
+});
+
+test("guard fixture: bare callback reference (not a call) is flagged", () => {
+  const res = scanFixture(
+    "callback-ref.ts",
+    [
+      "export async function markPaid(id: string) {",
+      PAID_UPDATE,
+      "  queue.push(dispatchPaymentReceiptEmail);",
+      "  queue.push(dispatchOwnerPaymentNotification);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+});
+
+test("guard fixture: awaited Promise.all wrapping both dispatchers passes", () => {
+  const res = scanFixture(
+    "promise-all.ts",
+    [
+      "export async function markPaid(id: string) {",
+      PAID_UPDATE,
+      "  await Promise.all([",
+      "    dispatchPaymentReceiptEmail(invoice),",
+      "    dispatchOwnerPaymentNotification(invoice),",
+      "  ]);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.deepEqual(res.problems, []);
+});
+
+test("guard fixture: local wrapper that IS awaited passes", () => {
+  const res = scanFixture(
+    "wrapper-invoked.ts",
+    [
+      "export async function markPaid(id: string) {",
+      PAID_UPDATE,
+      "  const sendEmails = async () => {",
+      "    await dispatchPaymentReceiptEmail(invoice);",
+      "    await dispatchOwnerPaymentNotification(invoice);",
+      "  };",
+      "  await sendEmails();",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.deepEqual(res.problems, []);
+});
+
+test("guard fixture: response payloads are not treated as transitions", () => {
+  const res = scanFixture(
+    "payload.ts",
+    [
+      "export async function getInvoice(id: string) {",
+      '  res.json({ id, status: "paid" });',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 0);
+  assert.deepEqual(res.problems, []);
 });
