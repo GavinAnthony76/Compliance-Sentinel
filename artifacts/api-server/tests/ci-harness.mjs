@@ -348,6 +348,13 @@ export const HARNESSES = {
         file: "tests/sweep-health-alert.test.mjs",
         nodeArgs: ["--experimental-test-module-mocks"],
       },
+      // Unit suite: updatePlatformSettings() clamps an out-of-range lockout
+      // threshold (defense-in-depth behind the route's zod validation — a
+      // stored 0 would lock every admin out).
+      {
+        file: "tests/platform-settings-clamp.test.mjs",
+        nodeArgs: ["--experimental-test-module-mocks"],
+      },
       "tests/admin-stale-deactivation.e2e.mjs",
       // Pins the GET /admin/lockout-runs contract (auth, newest-first
       // ordering, metadata mapping, manual-sweep exclusion) so the Admin

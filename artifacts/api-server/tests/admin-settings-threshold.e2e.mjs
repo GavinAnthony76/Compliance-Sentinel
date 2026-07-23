@@ -157,6 +157,38 @@ async function main() {
 
       const seededIds = () => new Set(Object.values(seeded));
 
+      // === Test 0: out-of-range / garbage thresholds are REJECTED ============
+      // A stored threshold of 0 would lock every admin out on the next sweep,
+      // so PUT /admin/settings must 400 and leave the stored value untouched.
+      console.log("Out-of-range lockout thresholds are rejected (PUT /admin/settings):");
+      const baselineDays = before.json.staleAdminDays;
+      const rejectCases = [
+        ["zero", 0],
+        ["negative", -30],
+        ["above the 3650 ceiling", 99999],
+        ["non-integer (2.5)", 2.5],
+        ["garbage string", "not-a-number"],
+        ["null", null],
+      ];
+      for (const [label, value] of rejectCases) {
+        const rej = await req("PUT", "/admin/settings", {
+          token: actingToken,
+          body: { staleAdminDays: value },
+        });
+        check(
+          `staleAdminDays ${label} -> 400 ValidationError`,
+          rej.status === 400 && rej.json?.error === "ValidationError",
+          `got ${rej.status} ${JSON.stringify(rej.json)}`,
+        );
+      }
+      const afterRejects = await req("GET", "/admin/settings", { token: actingToken });
+      check(
+        "stored threshold is unchanged after all rejected requests",
+        afterRejects.json?.staleAdminDays === baselineDays,
+        `got ${afterRejects.json?.staleAdminDays}, expected ${baselineDays}`,
+      );
+      console.log("");
+
       // Run the manual sweep, immediately restoring any real admin it caught.
       async function sweep() {
         const res = await req("POST", "/admin/admins/deactivate-stale", { token: actingToken });
