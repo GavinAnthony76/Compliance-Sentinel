@@ -183,4 +183,14 @@ import("./lib/stale-admins").then(({ deactivateStaleAdmins }) => {
   }, 24 * 60 * 60 * 1000);
 });
 
+// Watchdog for the sweep above: if the automated lockout sweep is enabled but
+// hasn't recorded a run in >48h (a dead/wedged scheduler), email platform
+// admins so the failure is noticed without anyone opening the dashboard.
+// Runs hourly and once shortly after boot (non-destructive; the check dedupes
+// via a persistent activity-log marker so restarts can't re-spam).
+import("./lib/sweep-health").then(({ checkSweepHealth }) => {
+  setTimeout(() => { checkSweepHealth().catch(() => {}); }, 60 * 1000);
+  setInterval(() => { checkSweepHealth().catch(() => {}); }, 60 * 60 * 1000);
+});
+
 export default app;

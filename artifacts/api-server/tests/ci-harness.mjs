@@ -341,6 +341,12 @@ export const HARNESSES = {
         file: "tests/admin-sweep-toggle.test.mjs",
         nodeArgs: ["--experimental-test-module-mocks"],
       },
+      // Unit suite covering the sweep-health watchdog (email alert when the
+      // enabled nightly sweep hasn't recorded a run for >48h, with 24h dedupe).
+      {
+        file: "tests/sweep-health-alert.test.mjs",
+        nodeArgs: ["--experimental-test-module-mocks"],
+      },
       "tests/admin-stale-deactivation.e2e.mjs",
       // Pins the GET /admin/lockout-runs contract (auth, newest-first
       // ordering, metadata mapping, manual-sweep exclusion) so the Admin

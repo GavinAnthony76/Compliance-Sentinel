@@ -1772,6 +1772,59 @@ export async function sendAdminReactivationEmail(opts: {
   });
 }
 
+// Alert a platform admin that the nightly inactivity-lockout sweep looks dead:
+// it is enabled in platform settings, yet no scheduled run has been recorded
+// for longer than the health threshold. Sent by the sweep-health monitor so a
+// dead scheduler is noticed even when nobody opens the Admin Users page.
+export async function sendSweepHealthAlertEmail(opts: {
+  to: string;
+  firstName?: string | null;
+  /** Timestamp of the last recorded scheduled sweep run, if any. */
+  lastRunAt: Date | null;
+  /** Hours since the last run (or since monitoring began when it never ran). */
+  hoursOverdue: number;
+  adminUsersUrl: string;
+  supportEmail: string;
+}): Promise<EmailResult> {
+  const name = (opts.firstName || "there").trim();
+  const hours = Math.round(opts.hoursOverdue);
+  const lastRunText = opts.lastRunAt
+    ? `The last recorded run was on ${opts.lastRunAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC — about ${hours} hours ago.`
+    : `No scheduled run has ever been recorded, even though monitoring has been active for about ${hours} hours.`;
+
+  const paragraphs = [
+    `Hi ${escapeHtml(name)},`,
+    `The automated inactivity-lockout sweep is <strong>enabled</strong> in platform settings, but it hasn't recorded a run recently. ${escapeHtml(lastRunText)}`,
+    `The sweep normally runs once a day, so this usually means the background scheduler has stopped (for example after a crashed or wedged server process). Dormant admin accounts are not being locked out while it is down.`,
+    `Please check the API server and restart it if needed, then confirm a new run appears on the Admin Users page.`,
+  ];
+
+  const body = [
+    `Hi ${name},`,
+    ``,
+    `The automated inactivity-lockout sweep is enabled in platform settings, but it hasn't recorded a run recently. ${lastRunText}`,
+    ``,
+    `The sweep normally runs once a day, so this usually means the background scheduler has stopped. Dormant admin accounts are not being locked out while it is down.`,
+    ``,
+    `Please check the API server and restart it if needed, then confirm a new run appears on the Admin Users page:`,
+    opts.adminUsersUrl,
+    ``,
+    `— The GreenSynk Team`,
+  ].join("\n");
+
+  return sendEmail({
+    to: opts.to,
+    subject: "Action needed: GreenSynk inactivity-lockout sweep has stopped running",
+    body,
+    html: buildPlatformEmailHtml({
+      title: "Lockout sweep is overdue",
+      paragraphs,
+      button: { label: "Open Admin Users", url: opts.adminUsersUrl },
+    }),
+    replyTo: opts.supportEmail,
+  });
+}
+
 export async function sendTeamInviteEmail(opts: {
   to: string;
   firstName: string;
