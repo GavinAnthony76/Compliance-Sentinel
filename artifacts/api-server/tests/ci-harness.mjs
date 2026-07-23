@@ -39,12 +39,17 @@ const READY_TIMEOUT_MS = 60_000;
 const READY_POLL_MS = 500;
 
 export function run(command, args, opts = {}) {
+  const { onOutput, ...spawnOpts } = opts;
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: artifactDir,
-      stdio: "inherit",
-      ...opts,
+      stdio: onOutput ? ["ignore", "pipe", "pipe"] : "inherit",
+      ...spawnOpts,
     });
+    if (onOutput) {
+      child.stdout.on("data", (d) => onOutput(d.toString()));
+      child.stderr.on("data", (d) => onOutput(d.toString()));
+    }
     child.on("error", reject);
     child.on("exit", (code) => resolve(code ?? 1));
   });
@@ -128,6 +133,10 @@ function installSignalHandlers() {
  * options:
  *   prebuiltDist   — use this already-built bundle instead of building
  *   skipSchemaPush — schema was already pushed by the caller
+ *   onOutput       — if set, ALL output (harness logs, server output, suite
+ *                    output) is routed through this callback instead of the
+ *                    parent's stdio, so concurrent harnesses can buffer their
+ *                    logs per group and keep failures readable.
  *
  * Returns an exit code: 0 = every suite passed and cleanup succeeded.
  */
@@ -135,12 +144,15 @@ export async function runHarness(config, options = {}) {
   const { label, port, suites, nsPrefix, disableEmail } = config;
   const dist = options.prebuiltDist || config.dist;
   const base = `http://127.0.0.1:${port}/api`;
+  const onOutput = options.onOutput;
+  const log = onOutput ? (msg) => onOutput(`${msg}\n`) : console.log;
+  const logError = onOutput ? (msg) => onOutput(`${msg}\n`) : console.error;
 
   // --- Build ----------------------------------------------------------------
   if (!options.prebuiltDist) {
     const buildCode = await buildServer(dist);
     if (buildCode !== 0) {
-      console.error(`Build failed; aborting ${label}.`);
+      logError(`Build failed; aborting ${label}.`);
       return buildCode;
     }
   }
@@ -149,7 +161,7 @@ export async function runHarness(config, options = {}) {
   if (!options.skipSchemaPush) {
     const pushCode = await pushSchema();
     if (pushCode !== 0) {
-      console.error("Schema push to local test DB failed; aborting.");
+      logError("Schema push to local test DB failed; aborting.");
       return pushCode;
     }
   }
@@ -169,21 +181,25 @@ export async function runHarness(config, options = {}) {
     delete serverEnv.RESEND_FROM_EMAIL;
   }
 
-  console.log(
+  log(
     `• Starting api-server on port ${port}${disableEmail ? " (email delivery disabled)" : ""}…`
   );
   const server = spawn("node", ["--enable-source-maps", `${dist}/index.mjs`], {
     cwd: artifactDir,
-    stdio: "inherit",
+    stdio: onOutput ? ["ignore", "pipe", "pipe"] : "inherit",
     env: serverEnv,
   });
+  if (onOutput) {
+    server.stdout.on("data", (d) => onOutput(d.toString()));
+    server.stderr.on("data", (d) => onOutput(d.toString()));
+  }
 
   let serverExited = false;
   server.on("exit", (code) => {
     serverExited = true;
     liveServers.delete(server);
     if (code !== 0 && code !== null) {
-      console.error(`api-server exited early with code ${code}.`);
+      logError(`api-server exited early with code ${code}.`);
     }
   });
   liveServers.add(server);
@@ -201,14 +217,14 @@ export async function runHarness(config, options = {}) {
   };
 
   // --- Wait for readiness ---------------------------------------------------
-  console.log("• Waiting for api-server to accept traffic…");
+  log("• Waiting for api-server to accept traffic…");
   const ready = await waitForServer(base);
   if (!ready || serverExited) {
-    console.error("api-server did not become ready in time; aborting.");
+    logError("api-server did not become ready in time; aborting.");
     shutdown();
     return 1;
   }
-  console.log(`• api-server ready at ${base}\n`);
+  log(`• api-server ready at ${base}\n`);
 
   // --- Optional DB snapshot + per-run namespace ------------------------------
   // Snapshot the DB so every company the suites create can be purged afterwards.
@@ -220,7 +236,7 @@ export async function runHarness(config, options = {}) {
     try {
       dbSnapshot = await snapshotMaxCompanyId();
     } catch (err) {
-      console.error(
+      logError(
         `Could not snapshot DB before tests; aborting to avoid un-cleanable pollution: ${err.message}`
       );
       shutdown();
@@ -230,7 +246,7 @@ export async function runHarness(config, options = {}) {
     // provisions (via TEST_RUN_NS); cleanup purges ONLY this token's companies,
     // so overlapping runs never delete each other's in-flight rows.
     runNs = makeRunNamespace(nsPrefix);
-    console.log(`• Run namespace: ${runNs}`);
+    log(`• Run namespace: ${runNs}`);
   }
 
   // --- Run the suites -------------------------------------------------------
@@ -242,10 +258,13 @@ export async function runHarness(config, options = {}) {
       // that need extra node flags (e.g. --experimental-test-module-mocks).
       const file = typeof suite === "string" ? suite : suite.file;
       const nodeArgs = typeof suite === "string" ? [] : suite.nodeArgs || [];
-      console.log(`\n=== ${file} ===`);
+      log(`\n=== ${file} ===`);
       const suiteEnv = { ...process.env, API_BASE: base };
       if (runNs) suiteEnv.TEST_RUN_NS = runNs;
-      const code = await run("node", [...nodeArgs, file], { env: suiteEnv });
+      const code = await run("node", [...nodeArgs, file], {
+        env: suiteEnv,
+        onOutput,
+      });
       if (code !== 0) failed++;
     }
   } finally {
@@ -255,10 +274,11 @@ export async function runHarness(config, options = {}) {
       try {
         await purgeTestDataAbove(dbSnapshot, {
           ownerPatterns: [`${runNs}%@example.com`],
+          log,
         });
       } catch (err) {
         cleanupFailed = true;
-        console.error(
+        logError(
           `[db-cleanup] CRITICAL: cleanup failed, test data may remain: ${err.message}`
         );
       }
@@ -266,7 +286,7 @@ export async function runHarness(config, options = {}) {
     shutdown();
   }
 
-  console.log(
+  log(
     `\n${label}: ${suites.length - failed}/${suites.length} suites passed.`
   );
   return failed === 0 && !cleanupFailed ? 0 : 1;

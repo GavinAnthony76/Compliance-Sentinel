@@ -98,6 +98,8 @@ export async function snapshotMaxCompanyId() {
  *   runner CREATED (purge these). Defaults to all @example.com.
  * @param {string[]} [opts.excludeOwnerPatterns]  SQL LIKE patterns this runner
  *   must NEVER touch (another runner's namespace).
+ * @param {(msg: string) => void} [opts.log]  logger for the purge summary line
+ *   (defaults to console.log; concurrent harnesses pass a buffered logger).
  */
 export async function purgeTestDataAbove(snapshotId, opts = {}) {
   if (snapshotId == null || Number.isNaN(snapshotId)) {
@@ -105,6 +107,7 @@ export async function purgeTestDataAbove(snapshotId, opts = {}) {
   }
   const ownerPatterns = opts.ownerPatterns ?? [ALL_TEST_OWNER_PATTERN];
   const excludeOwnerPatterns = opts.excludeOwnerPatterns ?? [];
+  const log = opts.log ?? console.log;
 
   return withClient(async (client) => {
     // $1 = snapshot; $2 = include patterns (array); $3 = exclude patterns (array).
@@ -126,7 +129,7 @@ export async function purgeTestDataAbove(snapshotId, opts = {}) {
     );
     // Deleting the company cascades to every company-scoped child table.
     const co = await client.query(`DELETE FROM companies WHERE id IN (${doomed})`, params);
-    console.log(
+    log(
       `[db-cleanup] purged ${co.rowCount} test compan${co.rowCount === 1 ? "y" : "ies"} ` +
         `and ${al.rowCount} activity-log row(s) created during this run ` +
         `(company id > ${snapshotId}, owners matching ${JSON.stringify(ownerPatterns)}` +

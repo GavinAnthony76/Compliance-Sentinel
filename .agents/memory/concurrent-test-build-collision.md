@@ -9,8 +9,10 @@ running. Concurrent runs could read a half-written `dist/index.mjs`, yielding
 
 **Fixed by design:** the validation gate is now a single `test-gate` workflow running
 `test:all:ci` (tests/run-all-ci.mjs), which builds ONCE into `dist-ci` then runs the
-permissions/access/admin groups sequentially, each on its own port with its own server
-and cleanup namespace. Shared lifecycle lives in tests/ci-harness.mjs. The standalone
+permissions/access/admin groups CONCURRENTLY (Promise.all), each on its own port with
+its own server, cleanup namespace, and per-group buffered output (runHarness onOutput)
+flushed as contiguous blocks. This is safe because there's one shared build, not
+parallel builds. Shared lifecycle lives in tests/ci-harness.mjs. The standalone
 scripts (test:permissions:ci / test:access:ci / test:admin:ci) still work and build
 their own isolated dists (dist-permissions/dist-access/dist-admin).
 

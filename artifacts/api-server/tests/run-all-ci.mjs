@@ -7,9 +7,12 @@
  *
  *   1. Builds the api-server ONCE into an isolated dist (dist-ci).
  *   2. Pushes schema to the local test database ONCE.
- *   3. Runs each harness group sequentially — permissions, access, admin —
- *      each still on its own isolated port with its own server instance,
- *      per-run cleanup namespace, and teardown (see tests/ci-harness.mjs).
+ *   3. Runs the three harness groups — permissions, access, admin —
+ *      CONCURRENTLY. Each group still gets its own isolated port, its own
+ *      server instance, its own per-run cleanup namespace, and its own
+ *      teardown (see tests/ci-harness.mjs), so they never share state. Each
+ *      group's output is buffered and printed as a contiguous block once the
+ *      group finishes, so interleaved logs stay readable.
  *
  * The standalone entrypoints (run-permissions-ci.mjs, run-access-ci.mjs,
  * run-admin-ci.mjs) keep working for running a single group in isolation; they
@@ -65,14 +68,38 @@ async function main() {
     process.exit(pushCode);
   }
 
+  // Run the three groups concurrently. Each group's output (harness logs,
+  // server output, suite output) is buffered via onOutput and printed as one
+  // contiguous block after all groups finish, so logs never interleave.
   const groups = ["permissions", "access", "admin"];
   const results = {};
+  const buffers = {};
+  console.log("• Running suite groups concurrently: " + groups.join(", ") + "…");
+  await Promise.all(
+    groups.map(async (name) => {
+      const chunks = [];
+      try {
+        results[name] = await runHarness(HARNESSES[name], {
+          prebuiltDist: DIST,
+          skipSchemaPush: true,
+          onOutput: (text) => chunks.push(text),
+        });
+      } catch (err) {
+        // An unexpected throw (e.g. spawn failure) must not sink Promise.all
+        // and hide the other groups' results — record it as a failure.
+        chunks.push(`Unexpected error in ${HARNESSES[name].label}: ${err?.stack || err}\n`);
+        results[name] = 1;
+      }
+      buffers[name] = chunks.join("");
+      console.log(
+        `• ${HARNESSES[name].label} finished: ${results[name] === 0 ? "PASS" : "FAIL"}`
+      );
+    })
+  );
+
   for (const name of groups) {
     console.log(`\n########## ${HARNESSES[name].label} ##########\n`);
-    results[name] = await runHarness(HARNESSES[name], {
-      prebuiltDist: DIST,
-      skipSchemaPush: true,
-    });
+    process.stdout.write(buffers[name]);
   }
 
   // Stuck-invoice sweep suite: runs the real sweep against the local test DB
