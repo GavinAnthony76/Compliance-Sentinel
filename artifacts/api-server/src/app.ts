@@ -115,6 +115,16 @@ app.use("/api/admin/auth/change-password", rateLimit(10, 60_000));
 app.use("/api/portal/auth/login", rateLimit(20, 60_000));
 app.use("/api/portal/auth/forgot-password", rateLimit(10, 60_000));
 app.use("/api/portal/auth/set-password", rateLimit(10, 60_000));
+// Portal booking creation: layered burst + sustained caps so a scripted
+// customer can't flood the company's inbox faster than the per-customer
+// pending-request cap can catch. Applies to POST (create) only — GET listing
+// and /:id/cancel stay unlimited.
+const portalBookingBurstLimiter = rateLimit(10, 60_000);
+const portalBookingSustainedLimiter = rateLimit(30, 60 * 60_000);
+app.use("/api/portal/appointments", (req, res, next) => {
+  if (req.method !== "POST" || req.path !== "/") return next();
+  portalBookingBurstLimiter(req, res, () => portalBookingSustainedLimiter(req, res, next));
+});
 app.use("/api/public/book", rateLimit(15, 60_000));
 app.use("/api/public/estimates", rateLimit(15, 60_000));
 app.use("/api/export", rateLimit(30, 60_000));

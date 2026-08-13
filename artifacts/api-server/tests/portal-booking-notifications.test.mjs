@@ -166,6 +166,24 @@ const fakeDb = {
   },
 };
 
+// The booking route counts pending requests + inserts inside a transaction
+// (with a pg advisory lock) so the per-customer cap is concurrency-safe.
+// Model that here: the tx exposes execute (advisory lock -> no-op), a
+// count-aware select, and the same insert as the top-level fake db.
+fakeDb.transaction = async (fn) =>
+  fn({
+    execute: async () => [],
+    select: () => ({
+      from: (table) => ({
+        where: (pred) =>
+          Promise.resolve([
+            { pendingCount: store[table.__store].filter((r) => !pred || pred(r)).length },
+          ]),
+      }),
+    }),
+    insert: fakeDb.insert.bind(fakeDb),
+  });
+
 const dbNamedExports = {
   db: fakeDb,
   companiesTable: makeTable("companies"),

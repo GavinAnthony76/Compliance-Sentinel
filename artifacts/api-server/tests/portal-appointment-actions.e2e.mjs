@@ -317,6 +317,77 @@ async function main() {
     check("other company's visit remains uncancelled", apptB1 && apptB1.status !== "cancelled", `status=${apptB1?.status}`);
   }
 
+  // ==========================================================================
+  // 3. Pending-request cap — a customer can't flood the company with requests
+  // ==========================================================================
+  console.log("\nBooking cap — max pending portal requests per customer:");
+  {
+    const CAP = 5; // MAX_PENDING_PORTAL_REQUESTS in customer-portal.ts
+    // Fresh customer so the pending count starts at zero.
+    const custA3 = await createCustomer(companyA.ownerToken, "A", 3);
+    const portalA3 = await provisionPortalCustomer(companyA.ownerToken, custA3.id);
+
+    const booked = [];
+    for (let i = 0; i < CAP; i++) {
+      booked.push(await bookPortalAppointment(portalA3.portalToken, serviceA));
+    }
+    check(`customer can book up to the cap (${CAP} pending requests)`, booked.length === CAP);
+
+    const over = await req("POST", "/portal/appointments", {
+      token: portalA3.portalToken,
+      body: { serviceId: serviceA, scheduledStart: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString() },
+    });
+    check("booking past the cap -> 429", over.status === 429, `got ${over.status} ${JSON.stringify(over.json)}`);
+    check(
+      "429 body carries a friendly message",
+      typeof over.json?.message === "string" && over.json.message.length > 0,
+      JSON.stringify(over.json),
+    );
+
+    // The over-cap attempt must not have created an appointment.
+    const list = await req("GET", "/portal/appointments", { token: portalA3.portalToken });
+    const pending = Array.isArray(list.json) ? list.json.filter((a) => a.status === "pending") : [];
+    check(`over-cap attempt created nothing (still ${CAP} pending)`, pending.length === CAP, `pending=${pending.length}`);
+
+    // Cancelling one pending request frees a slot.
+    const cancel = await req("POST", `/portal/appointments/${booked[0].id}/cancel`, { token: portalA3.portalToken });
+    check("cancel one pending request -> 200", cancel.status === 200, `got ${cancel.status}`);
+    const again = await req("POST", "/portal/appointments", {
+      token: portalA3.portalToken,
+      body: { serviceId: serviceA, scheduledStart: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString() },
+    });
+    check("booking after cancelling one -> 201 again", again.status === 201, `got ${again.status} ${JSON.stringify(again.json)}`);
+
+    // The cap is per-customer: another customer in the same company can still book.
+    const other = await req("POST", "/portal/appointments", {
+      token: portalA2.portalToken,
+      body: { serviceId: serviceA, scheduledStart: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString() },
+    });
+    check("cap is per-customer (other customer can still book)", other.status === 201, `got ${other.status}`);
+
+    // Concurrency: the cap must hold under simultaneous requests. Fire 8
+    // parallel bookings for a FRESH customer; the advisory-lock admission
+    // must let exactly CAP through and 429 the rest — a plain
+    // count-then-insert would let all 8 through.
+    const custA4 = await createCustomer(companyA.ownerToken, "A", 4);
+    const portalA4 = await provisionPortalCustomer(companyA.ownerToken, custA4.id);
+    const burst = await Promise.all(
+      Array.from({ length: 8 }, (_, i) =>
+        req("POST", "/portal/appointments", {
+          token: portalA4.portalToken,
+          body: { serviceId: serviceA, scheduledStart: new Date(Date.now() + (96 + i) * 60 * 60 * 1000).toISOString() },
+        }),
+      ),
+    );
+    const created = burst.filter((r) => r.status === 201).length;
+    const rejected = burst.filter((r) => r.status === 429).length;
+    check(`8 concurrent bookings -> exactly ${CAP} created`, created === CAP, `created=${created} statuses=${burst.map((r) => r.status).join(",")}`);
+    check(`8 concurrent bookings -> ${8 - CAP} rejected with 429`, rejected === 8 - CAP, `rejected=${rejected}`);
+    const afterBurst = await req("GET", "/portal/appointments", { token: portalA4.portalToken });
+    const pendingAfterBurst = Array.isArray(afterBurst.json) ? afterBurst.json.filter((a) => a.status === "pending") : [];
+    check(`no excess pending rows after concurrent burst (exactly ${CAP})`, pendingAfterBurst.length === CAP, `pending=${pendingAfterBurst.length}`);
+  }
+
   console.log(`\n${passes} passed, ${failures} failed.`);
   process.exit(failures === 0 ? 0 : 1);
 }

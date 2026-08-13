@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { Readable } from "stream";
 import { db, customersTable, invoicesTable, invoiceLineItemsTable, appointmentsTable, estimatesTable, companiesTable, servicesTable, appointmentPhotosTable } from "@workspace/db";
-import { eq, and, ne, desc } from "drizzle-orm";
+import { eq, and, ne, desc, sql } from "drizzle-orm";
 import jwt from "jsonwebtoken";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { hasFeature, getRequiredPlanForFeature } from "../lib/features";
@@ -388,6 +388,9 @@ router.get("/appointments", requirePortalAuth, async (req: any, res) => {
   })));
 });
 
+// Max booking requests a customer may have awaiting company review at once.
+export const MAX_PENDING_PORTAL_REQUESTS = 5;
+
 // POST /portal/appointments — book a new appointment request
 router.post("/appointments", requirePortalAuth, async (req: any, res) => {
   const { customerId, companyId } = req.portal;
@@ -410,16 +413,51 @@ router.post("/appointments", requirePortalAuth, async (req: any, res) => {
   if (isNaN(scheduledDate.getTime())) return res.status(400).json({ error: "ValidationError", message: "Invalid date" });
   if (scheduledDate <= new Date()) return res.status(400).json({ error: "ValidationError", message: "Preferred date must be in the future" });
 
-  const [appointment] = await db.insert(appointmentsTable).values({
-    companyId,
-    customerId,
-    serviceId,
-    status: "pending",
-    origin: "portal_request",
-    scheduledStart: scheduledDate,
-    notes: notes || null,
-    price: service.basePrice ?? null,
-  }).returning();
+  // Cap open (pending) portal booking requests per customer. Each request
+  // emails the company, so an unbounded number lets one customer spam the
+  // owner's inbox and clutter the schedule. Cancelled/confirmed visits don't
+  // count — only requests still awaiting the company's review.
+  //
+  // Admission must be atomic: a plain count-then-insert lets N concurrent
+  // POSTs all observe fewer than the cap and all insert. A transaction-scoped
+  // advisory lock keyed on the customer serializes concurrent bookings for
+  // the SAME customer (other customers are unaffected), so at most
+  // MAX_PENDING_PORTAL_REQUESTS pending requests can ever exist. The lock is
+  // released automatically at commit/rollback.
+  const admission = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`portal_booking:${customerId}`}))`);
+    const [{ pendingCount }] = await tx
+      .select({ pendingCount: sql<number>`count(*)::int` })
+      .from(appointmentsTable)
+      .where(and(
+        eq(appointmentsTable.customerId, customerId),
+        eq(appointmentsTable.companyId, companyId),
+        eq(appointmentsTable.origin, "portal_request"),
+        eq(appointmentsTable.status, "pending"),
+      ));
+    if (pendingCount >= MAX_PENDING_PORTAL_REQUESTS) {
+      return { capped: true as const, pendingCount };
+    }
+    const [appointment] = await tx.insert(appointmentsTable).values({
+      companyId,
+      customerId,
+      serviceId,
+      status: "pending",
+      origin: "portal_request",
+      scheduledStart: scheduledDate,
+      notes: notes || null,
+      price: service.basePrice ?? null,
+    }).returning();
+    return { capped: false as const, appointment };
+  });
+
+  if (admission.capped) {
+    return res.status(429).json({
+      error: "TooManyRequests",
+      message: `You already have ${admission.pendingCount} booking requests awaiting review. Please wait for the company to respond, or cancel a pending request before submitting a new one.`,
+    });
+  }
+  const appointment = admission.appointment;
 
   // Notify the company of the new request AND confirm to the customer.
   // Awaited before responding: on autoscale, async work started after
