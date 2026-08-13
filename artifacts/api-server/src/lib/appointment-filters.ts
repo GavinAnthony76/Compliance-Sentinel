@@ -1,5 +1,5 @@
-import { appointmentsTable } from "@workspace/db";
-import { eq, gte, lte } from "drizzle-orm";
+import { appointmentsTable, customersTable } from "@workspace/db";
+import { eq, gte, lte, sql } from "drizzle-orm";
 
 /**
  * Build the WHERE conditions for listing/exporting a company's appointments.
@@ -32,6 +32,14 @@ export function buildAppointmentFilterConditions(
   if (query.endDate) {
     const d = new Date(String(query.endDate));
     if (!isNaN(d.getTime())) conditions.push(lte(appointmentsTable.scheduledStart, d));
+  }
+  // Free-text search by customer name so pickers/lists can reach every
+  // appointment instead of relying on a capped list.
+  if (query.search) {
+    const term = `%${String(query.search)}%`;
+    conditions.push(
+      sql`${appointmentsTable.customerId} IN (SELECT ${customersTable.id} FROM ${customersTable} WHERE ${customersTable.companyId} = ${user.companyId} AND (${customersTable.firstName} || ' ' || ${customersTable.lastName}) ILIKE ${term})`
+    );
   }
   return conditions;
 }

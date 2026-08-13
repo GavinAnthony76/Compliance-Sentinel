@@ -638,6 +638,7 @@ export const listAppointmentsQueryPageDefault = 1;
 export const listAppointmentsQueryLimitDefault = 50;
 
 export const ListAppointmentsQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
   startDate: zod.coerce.string().optional(),
   endDate: zod.coerce.string().optional(),
   status: zod.coerce.string().optional(),

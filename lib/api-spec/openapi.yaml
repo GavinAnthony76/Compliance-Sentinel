@@ -507,6 +507,10 @@ paths:
       tags: [appointments]
       summary: List appointments
       parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
         - name: startDate
           in: query
           schema:

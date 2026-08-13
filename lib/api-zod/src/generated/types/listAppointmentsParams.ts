@@ -7,6 +7,7 @@
  */
 
 export type ListAppointmentsParams = {
+  search?: string;
   startDate?: string;
   endDate?: string;
   status?: string;

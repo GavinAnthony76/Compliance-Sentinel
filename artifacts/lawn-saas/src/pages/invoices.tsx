@@ -11,6 +11,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getListInvoicesQueryKey } from '@workspace/api-client-react';
 import { format } from 'date-fns';
 import { LineItemsEditor, type LineItem as InvoiceLineItemInput } from '@/components/line-items-editor';
+import { SearchableSelect } from '@/components/searchable-select';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { MdyDateInput } from '@/components/mdy-date-input';
 
 function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
@@ -77,11 +79,56 @@ function NewInvoiceModal({ onClose, preselectedApptId }: { onClose: () => void; 
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateInvoice();
-  const { data: customers } = useListCustomers({ page: 1, limit: 200 } as Parameters<typeof useListCustomers>[0]);
-  const { data: apptData } = useListAppointments({ limit: 200 } as Parameters<typeof useListAppointments>[0]);
+  // Server-side search keeps every record reachable — no hardcoded cap can
+  // silently hide customers/appointments from companies with long lists.
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [apptSearch, setApptSearch] = useState('');
+  const debouncedCustomerSearch = useDebouncedValue(customerSearch, 250);
+  const debouncedApptSearch = useDebouncedValue(apptSearch, 250);
+  const [customerPage, setCustomerPage] = useState(1);
+  const [apptPage, setApptPage] = useState(1);
+  // Accumulated options across pages so "Load more" can reach every record.
+  const [customerOptions, setCustomerOptions] = useState<{ value: string; label: string }[]>([]);
+  const [apptOptions, setApptOptions] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => { setCustomerPage(1); }, [debouncedCustomerSearch]);
+  useEffect(() => { setApptPage(1); }, [debouncedApptSearch]);
+  const { data: customers, isFetching: customersFetching } = useListCustomers({ page: customerPage, limit: 50, ...(debouncedCustomerSearch ? { search: debouncedCustomerSearch } : {}) } as Parameters<typeof useListCustomers>[0]);
+  const { data: apptData, isFetching: apptsFetching } = useListAppointments({ page: apptPage, limit: 50, ...(debouncedApptSearch ? { search: debouncedApptSearch } : {}) } as Parameters<typeof useListAppointments>[0]);
+
+  useEffect(() => {
+    if (!customers) return;
+    const pageOpts = customers.customers.map(c => ({
+      value: String(c.id),
+      label: `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c as { phone?: string }).phone || 'Customer',
+    }));
+    setCustomerOptions(prev => {
+      const base = customers.page === 1 ? [] : prev;
+      const seen = new Set(base.map(o => o.value));
+      return [...base, ...pageOpts.filter(o => !seen.has(o.value))];
+    });
+  }, [customers]);
+
+  useEffect(() => {
+    const d = apptData as { appointments?: Array<{ id: number; scheduledStart: string; customerName?: string; customerId: number; serviceName?: string }>; page?: number } | undefined;
+    if (!d?.appointments) return;
+    const pageOpts = d.appointments.map(a => {
+      const dateStr = new Date(a.scheduledStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const custName = a.customerName || `Customer #${a.customerId}`;
+      const svcName = a.serviceName ? ` — ${a.serviceName}` : '';
+      return { value: String(a.id), label: `${dateStr} · ${custName}${svcName}` };
+    });
+    setApptOptions(prev => {
+      const base = (d.page ?? 1) === 1 ? [] : prev;
+      const seen = new Set(base.map(o => o.value));
+      return [...base, ...pageOpts.filter(o => !seen.has(o.value))];
+    });
+  }, [apptData]);
   const token = localStorage.getItem('greensync_token');
 
   const [form, setForm] = useState({ customerId: '', appointmentId: preselectedApptId ? String(preselectedApptId) : '', tax: '0', notes: '', dueDate: '' });
+  // Labels for selections that may not be present in the current search page.
+  const [selectedCustomerLabel, setSelectedCustomerLabel] = useState<string | undefined>();
+  const [selectedApptLabel, setSelectedApptLabel] = useState<string | undefined>(preselectedApptId ? `Appointment #${preselectedApptId}` : undefined);
   const [lineItems, setLineItems] = useState<InvoiceLineItemInput[]>([{ description: '', quantity: 1, unitPrice: 0, lineTotal: 0 }]);
   const [loadingAppt, setLoadingAppt] = useState(false);
   const didAutoload = useRef(false);
@@ -114,6 +161,7 @@ function NewInvoiceModal({ onClose, preselectedApptId }: { onClose: () => void; 
         return;
       }
       setForm(f => ({ ...f, customerId: String(data.customerId), notes: data.notes || '' }));
+      if (data.customerName) setSelectedCustomerLabel(data.customerName);
       setLineItems(data.lineItems.map((li: InvoiceLineItemInput) => ({
         description: li.description,
         quantity: Number(li.quantity),
@@ -160,31 +208,40 @@ function NewInvoiceModal({ onClose, preselectedApptId }: { onClose: () => void; 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="text-sm font-medium">Customer *</label>
-            <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-              <option value="">Select customer...</option>
-              {customers?.customers.map(c => {
-                const name = `${c.firstName || ''} ${c.lastName || ''}`.trim() || (c as { phone?: string }).phone || 'Customer';
-                return <option key={c.id} value={c.id}>{name}</option>;
-              })}
-            </select>
+            <SearchableSelect
+              value={form.customerId}
+              selectedLabel={selectedCustomerLabel}
+              options={customerOptions}
+              onChange={v => {
+                setForm(f => ({ ...f, customerId: v }));
+                setSelectedCustomerLabel(customerOptions.find(o => o.value === v)?.label);
+              }}
+              onSearchChange={setCustomerSearch}
+              placeholder="Select customer..."
+              loading={customersFetching}
+              total={customers?.total}
+              onLoadMore={() => setCustomerPage(p => p + 1)}
+            />
           </div>
 
           <div>
             <label className="text-sm font-medium">Link to Appointment (optional)</label>
-            <select
-              className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm"
+            <SearchableSelect
               value={form.appointmentId}
-              onChange={e => handleAppointmentChange(e.target.value)}
+              selectedLabel={selectedApptLabel}
+              options={apptOptions}
+              onChange={v => {
+                setSelectedApptLabel(apptOptions.find(o => o.value === v)?.label);
+                handleAppointmentChange(v);
+              }}
+              onSearchChange={setApptSearch}
+              placeholder="None — enter line items manually"
+              emptyOptionLabel="None — enter line items manually"
               disabled={loadingAppt}
-            >
-              <option value="">None — enter line items manually</option>
-              {(apptData as { appointments?: Array<{ id: number; scheduledStart: string; customerName?: string; customerId: number; serviceName?: string }> })?.appointments?.map(a => {
-                const dateStr = new Date(a.scheduledStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                const custName = a.customerName || `Customer #${a.customerId}`;
-                const svcName = a.serviceName ? ` — ${a.serviceName}` : '';
-                return <option key={a.id} value={a.id}>{dateStr} · {custName}{svcName}</option>;
-              })}
-            </select>
+              loading={apptsFetching}
+              total={(apptData as { total?: number })?.total}
+              onLoadMore={() => setApptPage(p => p + 1)}
+            />
             {loadingAppt && <p className="text-xs text-muted-foreground mt-1">Loading appointment data...</p>}
           </div>
 
