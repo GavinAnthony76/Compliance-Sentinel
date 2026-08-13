@@ -255,7 +255,32 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  // 4. Source assertion: both sweep writes carry the stale-claim token.
+  // 4. DB-written timestamp: a stale claim whose updatedAt was written BY THE
+  //    DATABASE (now(), microsecond precision) must still match its own token.
+  //    A JS Date read-back truncates to milliseconds, so a raw eq() guard
+  //    would silently no-op here; the ms-truncated compare must not.
+  // -------------------------------------------------------------------------
+  console.log("\nA stale claim with a DATABASE-written updatedAt is still released:");
+  {
+    const inv = await seedStaleProcessingInvoice();
+    // Overwrite updatedAt server-side so it carries microseconds the JS Date
+    // token loses (simulates a future DB trigger/default writer).
+    await pool.query(
+      "UPDATE invoices SET updated_at = now() - interval '10 minutes' + interval '123.456 milliseconds' WHERE id = $1",
+      [inv.id],
+    );
+    const { rows } = await pool.query("SELECT updated_at FROM invoices WHERE id = $1", [inv.id]);
+    const micros = String(rows[0].updated_at?.toISOString?.() ?? rows[0].updated_at);
+    console.log(`  (seeded DB-written updated_at: ${micros})`);
+
+    await releaseStuckProcessingInvoices();
+    const after = await fetchInvoice(inv.id);
+    check("the DB-timestamped stale claim is released (guard matched its own row)",
+      after.status === "sent", after.status);
+  }
+
+  // -------------------------------------------------------------------------
+  // 5. Source assertion: both sweep writes carry the stale-claim token.
   // -------------------------------------------------------------------------
   console.log("\nOwnership-token guard is present in the sweep's source:");
   {
@@ -263,8 +288,8 @@ try {
     const sweepSrc = readFileSync(path.join(here, "../src/lib/stuck-invoices.ts"), "utf8");
     check("sweep captures the stale claim's updatedAt as an ownership token",
       /staleClaimToken\s*=\s*invoice\.updatedAt/.test(sweepSrc));
-    const tokenGuards = sweepSrc.match(/eq\(invoicesTable\.updatedAt,\s*staleClaimToken\)/g) || [];
-    check("BOTH sweep updates (paid + release) match the stale updatedAt token",
+    const tokenGuards = sweepSrc.match(/date_trunc\('milliseconds',\s*\$\{invoicesTable\.updatedAt\}\)\s*=\s*\$\{staleClaimToken\}/g) || [];
+    check("BOTH sweep updates (paid + release) match the stale updatedAt token (ms-truncated compare)",
       tokenGuards.length === 2, `found ${tokenGuards.length} token guard(s)`);
     check("sweep updates still keep the status === 'processing' guard",
       /eq\(invoicesTable\.status,\s*"processing"\)/.test(sweepSrc));

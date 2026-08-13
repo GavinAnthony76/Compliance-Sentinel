@@ -15,7 +15,7 @@
  * unpaid state so it can be charged again.
  */
 import { db, invoicesTable } from "@workspace/db";
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { logActivity } from "./activity";
 import { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from "./notifications";
@@ -88,7 +88,9 @@ export async function releaseStuckProcessingInvoices(): Promise<void> {
           }).where(and(
             eq(invoicesTable.id, invoice.id),
             eq(invoicesTable.status, "processing"),
-            eq(invoicesTable.updatedAt, staleClaimToken),
+            // ms-truncated compare: DB-written timestamps carry microseconds a
+            // JS Date read-back loses, so a raw eq() would never match them.
+            sql`date_trunc('milliseconds', ${invoicesTable.updatedAt}) = ${staleClaimToken}`,
           )).returning({ id: invoicesTable.id });
 
           if (transitioned.length > 0) {
@@ -111,7 +113,7 @@ export async function releaseStuckProcessingInvoices(): Promise<void> {
           .where(and(
             eq(invoicesTable.id, invoice.id),
             eq(invoicesTable.status, "processing"),
-            eq(invoicesTable.updatedAt, staleClaimToken),
+            sql`date_trunc('milliseconds', ${invoicesTable.updatedAt}) = ${staleClaimToken}`,
           ))
           .returning({ id: invoicesTable.id });
 

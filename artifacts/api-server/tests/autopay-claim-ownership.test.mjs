@@ -321,8 +321,8 @@ try {
     const autopaySrc = readFileSync(path.join(here, "../src/routes/autopay.ts"), "utf8");
     check("claim captures its own updatedAt as an ownership token",
       /claimToken\s*=\s*claimed\[0\]\.updatedAt/.test(autopaySrc));
-    check("revert is guarded by the claim's own updatedAt token",
-      /eq\(invoicesTable\.updatedAt,\s*claimToken\)/.test(autopaySrc));
+    check("revert is guarded by the claim's own updatedAt token (ms-truncated compare)",
+      /date_trunc\('milliseconds',\s*\$\{invoicesTable\.updatedAt\}\)\s*=\s*\$\{claimToken\}/.test(autopaySrc));
     check("revert still keeps the status === 'processing' guard",
       /eq\(invoicesTable\.status,\s*"processing"\)/.test(autopaySrc));
   }

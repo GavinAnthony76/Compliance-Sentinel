@@ -196,7 +196,9 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
       .where(and(
         eq(invoicesTable.id, invoiceId),
         eq(invoicesTable.status, "processing"),
-        eq(invoicesTable.updatedAt, claimToken),
+        // ms-truncated compare: DB-written timestamps carry microseconds a JS
+        // Date read-back loses, so a raw eq() would never match such a row.
+        sql`date_trunc('milliseconds', ${invoicesTable.updatedAt}) = ${claimToken}`,
       ));
   };
 
