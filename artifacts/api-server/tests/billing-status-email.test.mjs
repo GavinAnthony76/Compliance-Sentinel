@@ -88,6 +88,7 @@ const dbNamedExports = {
   customersTable: {},
   usersTable: {},
   companiesTable: { id: "id" },
+  smsConsentEventsTable: {},
 };
 mock.module("@workspace/db", { namedExports: dbNamedExports });
 
@@ -96,12 +97,17 @@ mock.module("@workspace/db", { namedExports: dbNamedExports });
 // "add X to the mock" message instead of an opaque import-time SyntaxError.
 const { assertMockCovers } = await import("./mock-surface-check.mjs");
 const entryFiles = ["../src/lib/notifications.ts", "../src/lib/billing-activity.ts"];
-assertMockCovers({
-  testFile: import.meta.url,
-  packageName: "@workspace/db",
-  providedNames: Object.keys(dbNamedExports),
-  entryFiles,
-});
+for (const [packageName, providedNames] of [
+  ["@workspace/db", Object.keys(dbNamedExports)],
+  ["resend", ["Resend"]],
+]) {
+  assertMockCovers({
+    testFile: import.meta.url,
+    packageName,
+    providedNames,
+    entryFiles,
+  });
+}
 
 const { dispatchBillingStatusEmail } = await import("../src/lib/notifications.ts");
 const { buildStatusFlipLog } = await import("../src/lib/billing-activity.ts");

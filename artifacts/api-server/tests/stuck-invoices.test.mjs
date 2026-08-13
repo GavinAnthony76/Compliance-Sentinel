@@ -66,8 +66,18 @@ let succeededByInvoiceId = new Map(); // invoiceId(string) -> payment intent id
 let searchFailsFor = new Set();
 const searchedInvoiceIds = [];
 
-mock.module("../src/lib/stripe.ts", {
-  namedExports: {
+// Capture the notification dispatches the sweep fires when it reconciles an
+// invoice as paid. (These are the same fire-and-forget helpers the autopay
+// charge handler uses.)
+const receiptCalls = [];
+const ownerNotifCalls = [];
+
+// Every relative production module this suite mocks, keyed by the exact
+// specifier passed to mock.module. Keeping the namedExports in ONE map lets
+// the preflight below verify each mock still covers everything production
+// code imports from it.
+const relativeMocks = {
+  "../src/lib/stripe.ts": {
     getUncachableStripeClient: async () => {
       if (stripeMode === "unavailable") {
         throw new Error("simulated: Stripe client unavailable");
@@ -92,15 +102,7 @@ mock.module("../src/lib/stripe.ts", {
       };
     },
   },
-});
-
-// Capture the notification dispatches the sweep fires when it reconciles an
-// invoice as paid. (These are the same fire-and-forget helpers the autopay
-// charge handler uses.)
-const receiptCalls = [];
-const ownerNotifCalls = [];
-mock.module("../src/lib/notifications.ts", {
-  namedExports: {
+  "../src/lib/notifications.ts": {
     dispatchPaymentReceiptEmail: (invoiceId, companyId) => {
       receiptCalls.push({ invoiceId, companyId });
     },
@@ -108,7 +110,27 @@ mock.module("../src/lib/notifications.ts", {
       ownerNotifCalls.push({ invoiceId, companyId });
     },
   },
-});
+};
+for (const [specifier, namedExports] of Object.entries(relativeMocks)) {
+  mock.module(specifier, { namedExports });
+}
+
+// --- Preflight: mock surface must cover production imports -------------------
+// If the sweep (or anything it reaches) has grown a new named import from one
+// of the mocked relative libs above, fail NOW with an actionable "add X to the
+// mock" message instead of an opaque import-time SyntaxError.
+const { assertRelativeMockCovers } = await import("./mock-surface-check.mjs");
+const entryFiles = ["../src/lib/stuck-invoices.ts"];
+const mockedRelativeModules = Object.keys(relativeMocks);
+for (const [modulePath, exportsObject] of Object.entries(relativeMocks)) {
+  assertRelativeMockCovers({
+    testFile: import.meta.url,
+    modulePath,
+    providedNames: Object.keys(exportsObject),
+    entryFiles,
+    skipModules: mockedRelativeModules,
+  });
+}
 
 // Imported AFTER the mocks so the sweep's module graph picks them up. The DB
 // import is the real @workspace/db pointed at the local test database.

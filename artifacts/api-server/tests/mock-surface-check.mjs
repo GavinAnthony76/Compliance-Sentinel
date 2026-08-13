@@ -50,6 +50,12 @@ const IMPORT_RE =
   /import\s+(type\s+)?(?:([\w$]+)\s*,\s*)?(?:\{([^}]*)\}|\*\s+as\s+[\w$]+|[\w$]+)?\s*from\s*["']([^"']+)["']/g;
 const BARE_IMPORT_RE = /import\s*["']([^"']+)["']/g;
 const EXPORT_FROM_RE = /export\s+(type\s+)?(?:\{([^}]*)\}|\*)\s*from\s*["']([^"']+)["']/g;
+// Dynamic imports:
+//   const { a, b } = await import("../lib/stripe");   -> named runtime imports
+//   (await import("../lib/x")).default                -> traversal only
+const DYNAMIC_DESTRUCTURE_RE =
+  /(?:const|let|var)\s*\{([^}]*)\}\s*=\s*await\s+import\(\s*["']([^"']+)["']\s*\)/g;
+const DYNAMIC_IMPORT_RE = /import\(\s*["']([^"']+)["']\s*\)/g;
 
 /**
  * Walk the runtime import graph starting from entryFiles and collect every
@@ -133,7 +139,23 @@ export function collectNamedImports({ entryFiles, packageName, targetFile, skipM
       }
       handleSpecifier(spec);
     }
+    for (const m of source.matchAll(DYNAMIC_DESTRUCTURE_RE)) {
+      const [, namedBlock, spec] = m;
+      if (isTarget(spec) && namedBlock) {
+        for (const raw of namedBlock.split(",")) {
+          const entry = raw.trim();
+          if (!entry) continue;
+          // `{ a: localName }` destructuring renames — the export is `a`.
+          const name = entry.split(":")[0].trim();
+          if (name && !name.startsWith("...")) record(name, file);
+        }
+      }
+      handleSpecifier(spec);
+    }
     for (const m of source.matchAll(BARE_IMPORT_RE)) {
+      handleSpecifier(m[1]);
+    }
+    for (const m of source.matchAll(DYNAMIC_IMPORT_RE)) {
       handleSpecifier(m[1]);
     }
   }

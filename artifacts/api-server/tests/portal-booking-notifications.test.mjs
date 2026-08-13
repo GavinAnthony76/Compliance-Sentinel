@@ -221,6 +221,7 @@ const relativeMocks = {
     requireRole: () => passthrough,
     hashPassword: async () => "hashed",
     verifyPassword: async () => true,
+    verifyUserToken: async () => null,
   },
   "../src/lib/features.ts": {
     requireWithinPlanLimit: () => passthrough,

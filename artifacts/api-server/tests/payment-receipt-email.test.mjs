@@ -225,6 +225,7 @@ const relativeMocks = {
     requireRole: () => passthrough,
     hashPassword: async () => "hashed",
     verifyPassword: async () => true,
+    verifyUserToken: async () => null,
   },
   "../src/lib/subscription.ts": { requireActiveSubscription: passthrough },
   "../src/lib/features.ts": {

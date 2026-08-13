@@ -59,41 +59,9 @@ register("./ts-resolve.loader.mjs", import.meta.url);
 // after seeding.
 const principal = { companyId: 0, userId: null, role: "owner" };
 
-mock.module("../src/lib/auth.ts", {
-  namedExports: {
-    requireAuth: (req, _res, next) => {
-      req.user = { ...principal };
-      next();
-    },
-  },
-});
-
-mock.module("../src/lib/features.ts", {
-  namedExports: {
-    requireFeature: () => (_req, _res, next) => next(),
-  },
-});
-
-mock.module("../src/lib/sms-consent.ts", {
-  namedExports: {
-    sendSMSWithConsent: async () => {},
-  },
-});
-
 // Notification capture — shared by the charge handler and the sweep.
 const receiptCalls = [];
 const ownerNotifCalls = [];
-mock.module("../src/lib/notifications.ts", {
-  namedExports: {
-    sendEmail: async () => ({ delivered: false, reason: "test" }),
-    dispatchPaymentReceiptEmail: (invoiceId, companyId) => {
-      receiptCalls.push({ invoiceId, companyId });
-    },
-    dispatchOwnerPaymentNotification: (invoiceId, companyId) => {
-      ownerNotifCalls.push({ invoiceId, companyId });
-    },
-  },
-});
 
 // Scripted Stripe client, shared by BOTH writers:
 //   - paymentIntents.create is the charge handler's slow settle moment. Each
@@ -106,8 +74,33 @@ let onCreate = null; // async ({ metadata }) => { id, status } | throws
 let succeededByInvoiceId = new Map();
 const createCalls = [];
 
-mock.module("../src/lib/stripe.ts", {
-  namedExports: {
+// Every relative production module this suite mocks, keyed by the exact
+// specifier passed to mock.module. Keeping the namedExports in ONE map lets
+// the preflight below verify each mock still covers everything production
+// code imports from it.
+const relativeMocks = {
+  "../src/lib/auth.ts": {
+    requireAuth: (req, _res, next) => {
+      req.user = { ...principal };
+      next();
+    },
+  },
+  "../src/lib/features.ts": {
+    requireFeature: () => (_req, _res, next) => next(),
+  },
+  "../src/lib/sms-consent.ts": {
+    sendSMSWithConsent: async () => {},
+  },
+  "../src/lib/notifications.ts": {
+    sendEmail: async () => ({ delivered: false, reason: "test" }),
+    dispatchPaymentReceiptEmail: (invoiceId, companyId) => {
+      receiptCalls.push({ invoiceId, companyId });
+    },
+    dispatchOwnerPaymentNotification: (invoiceId, companyId) => {
+      ownerNotifCalls.push({ invoiceId, companyId });
+    },
+  },
+  "../src/lib/stripe.ts": {
     getUncachableStripeClient: async () => ({
       paymentIntents: {
         create: async (params) => {
@@ -124,7 +117,27 @@ mock.module("../src/lib/stripe.ts", {
       },
     }),
   },
-});
+};
+for (const [specifier, namedExports] of Object.entries(relativeMocks)) {
+  mock.module(specifier, { namedExports });
+}
+
+// --- Preflight: mock surface must cover production imports -------------------
+// If the charge route or the sweep has grown a new named import from one of
+// the mocked relative libs above, fail NOW with an actionable "add X to the
+// mock" message instead of an opaque import-time SyntaxError.
+const { assertRelativeMockCovers } = await import("./mock-surface-check.mjs");
+const entryFiles = ["../src/routes/autopay.ts", "../src/lib/stuck-invoices.ts"];
+const mockedRelativeModules = Object.keys(relativeMocks);
+for (const [modulePath, exportsObject] of Object.entries(relativeMocks)) {
+  assertRelativeMockCovers({
+    testFile: import.meta.url,
+    modulePath,
+    providedNames: Object.keys(exportsObject),
+    entryFiles,
+    skipModules: mockedRelativeModules,
+  });
+}
 
 // Imported AFTER the mocks so both writers pick them up.
 const { db, pool, invoicesTable, companiesTable, customersTable, activityLogsTable } =
