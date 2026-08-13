@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db, customersTable, propertiesTable, appointmentsTable, invoicesTable, companiesTable } from "@workspace/db";
 import { eq, and, ilike, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
+import { buildCustomerFilterConditions } from "../lib/customer-filters";
 import { requireActiveSubscription } from "../lib/subscription";
 import { requireWithinPlanLimit, hasFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
@@ -30,17 +31,12 @@ router.use(requireActiveSubscription);
 
 router.get("/", async (req: any, res) => {
   const { companyId } = req.user;
-  const search = req.query.search as string;
   const page = Number(req.query.page) || 1;
   const limit = Number(req.query.limit) || 20;
   const offset = (page - 1) * limit;
 
-  let conditions = [eq(customersTable.companyId, companyId)];
-  if (search) {
-    conditions.push(
-      sql`(${customersTable.firstName} || ' ' || ${customersTable.lastName} ilike ${'%' + search + '%'} OR ${customersTable.email} ilike ${'%' + search + '%'} OR ${customersTable.phone} ilike ${'%' + search + '%'})`
-    );
-  }
+  // Shared with GET /export/customers so the CSV matches the on-screen search.
+  const conditions = buildCustomerFilterConditions(companyId, req.query);
 
   const [customers, totalResult] = await Promise.all([
     db.select().from(customersTable).where(and(...conditions)).orderBy(desc(customersTable.createdAt)).limit(limit).offset(offset),

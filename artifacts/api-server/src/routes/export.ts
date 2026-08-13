@@ -5,6 +5,7 @@ import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { buildInvoiceFilterConditions } from "../lib/invoice-filters";
 import { buildAppointmentFilterConditions } from "../lib/appointment-filters";
+import { buildCustomerFilterConditions } from "../lib/customer-filters";
 
 import { requireActiveSubscription } from "../lib/subscription";
 
@@ -25,10 +26,13 @@ function toCSV(headers: string[], rows: (string | number | null | undefined)[][]
 
 router.get("/customers", async (req: any, res) => {
   const { companyId } = req.user;
+  // Honor the same search param as GET /customers so the CSV matches what
+  // the customers screen shows.
+  const conditions = buildCustomerFilterConditions(companyId, req.query);
   const customers = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.companyId, companyId))
+    .where(and(...conditions))
     .orderBy(customersTable.firstName);
 
   const csv = toCSV(

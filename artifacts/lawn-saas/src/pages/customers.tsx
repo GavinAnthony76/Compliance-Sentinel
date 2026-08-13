@@ -181,7 +181,13 @@ export function CustomersPage() {
         </div>
         <div className="flex gap-2">
           {plan === 'pro' && (
-            <Button variant="outline" onClick={() => downloadExport('/api/export/customers', 'customers.csv', msg => toast({ title: msg, variant: 'destructive' }))}>
+            <Button variant="outline" onClick={() => {
+              // Pass the active search so the CSV matches the on-screen list.
+              const params = new URLSearchParams();
+              if (search) params.set('search', search);
+              const qs = params.toString();
+              downloadExport(`/api/export/customers${qs ? `?${qs}` : ''}`, 'customers.csv', msg => toast({ title: msg, variant: 'destructive' }));
+            }}>
               <Download className="w-4 h-4 mr-2" />Export CSV
             </Button>
           )}
