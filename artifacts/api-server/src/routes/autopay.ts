@@ -190,6 +190,8 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
   // and make the invoice chargeable again while that newer charge is settling.
   const claimToken = claimed[0].updatedAt;
   const revertClaim = async () => {
+    // paid-guard: reverts OUR failed "processing" claim to the invoice's
+    // prior status, captured from a row the claim verified was not paid.
     await db.update(invoicesTable).set({ status: priorStatus, updatedAt: new Date() })
       .where(and(
         eq(invoicesTable.id, invoiceId),

@@ -26,6 +26,11 @@ import { fileURLToPath } from "node:url";
 //   - Passing the dispatcher as a bare reference/callback without awaiting.
 //   - Writing the paid transition as raw SQL (sql`UPDATE ... SET status='paid'`
 //     or db.execute("UPDATE ...")) — banned outright, dispatchers or not.
+//   - Writing the status as a VARIABLE (db.update(invoices).set({ status: x })
+//     where x holds "paid" at runtime). The guard can't prove x !== "paid",
+//     so variable-status invoice updates must either dispatch both emails in
+//     the window OR carry an explicit `paid-guard:` comment (within 3 lines
+//     above the status property) explaining why the value can never be "paid".
 
 const DISPATCHERS = [
   "dispatchPaymentReceiptEmail",
@@ -116,6 +121,25 @@ const PAID_WRITE_RE = /\bstatus\s*:\s*["']paid["']/g;
 //     (:status) — all dynamic, all banned.
 const RAW_SQL_PAID_WRITE_RE =
   /\bset\b(?:(?!\b(?:where|when|then|else|select|from|case)\b)[^;`])*?["'`]?\bstatus\b["'`]?\s*\}?\s*=\s*(?:["']paid["']|\$\{|\$\d+\b|:\w+|\?)/gi;
+
+// Variable/expression status writes on an INVOICE table update chain:
+// db.update(invoicesTable).set({ ..., status: <not a quoted literal>, ... }).
+// The value could be "paid" at runtime, so these are treated as potential
+// paid-transitions. Between update(...) and .set we forbid `;` (stay in one
+// statement); inside .set({ ... we forbid `}` (stay in the first object).
+const INVOICE_UPDATE_VAR_STATUS_RE =
+  /\bupdate\s*\(\s*[\w$.]*invoice[\w$.]*\s*\)[^;]{0,400}?\.set\s*\(\s*\{[^}]*?\bstatus\s*:\s*(?!\s*["'])/gi;
+
+// Secondary contextual catch: a `status: <non-literal>` property whose nearby
+// context (same + 4 preceding lines) is both invoice-related and part of an
+// update payload (e.g. an updateData object later passed to .set). Broader
+// heuristic than the chain regex above; deduped by line.
+const CONTEXT_VAR_STATUS_RE = /\bstatus\s*:\s*(?!\s*["'])(?=[A-Za-z_$`[(])/g;
+
+// Explicit accept marker for variable-status writes that provably can never
+// be "paid" (e.g. reverting a stranded "processing" claim to sent/overdue).
+// Must appear in the raw source within 3 lines above (or on) the status line.
+const PAID_GUARD_MARKER = "paid-guard:";
 
 // Match the closing bracket for the opener at text[openIdx] ("(" or "{"),
 // ignoring nesting of the same pair. Returns index after the close, or
@@ -254,6 +278,62 @@ export function scanSource(raw, label) {
           "wrapper that is itself awaited within the window.",
       );
     }
+  }
+
+  // Variable-status invoice writes: value could be "paid" at runtime.
+  const rawLines = raw.split("\n");
+  const varSiteLines = new Set();
+  const collectVarSite = (statusIdx) => {
+    const lineNo = code.slice(0, statusIdx).split("\n").length; // 1-based
+    if (varSiteLines.has(lineNo)) return;
+    varSiteLines.add(lineNo);
+    writeSites++;
+
+    // Documented safe pattern: explicit paid-guard comment (checked in RAW
+    // source — comments are stripped from `code`) within 3 lines above.
+    const annotation = rawLines
+      .slice(Math.max(0, lineNo - 4), lineNo)
+      .join("\n");
+    if (annotation.includes(PAID_GUARD_MARKER)) return;
+
+    const windowText = lines
+      .slice(lineNo - 1, lineNo - 1 + WINDOW_LINES)
+      .join("\n");
+    const ranges = findLocalFnRanges(windowText);
+    const missing = DISPATCHERS.filter(
+      (name) => !dispatcherSatisfied(windowText, ranges, name),
+    );
+    if (missing.length > 0) {
+      problems.push(
+        `${label}:${lineNo} — invoice status written from a VARIABLE/expression ` +
+          `(could be "paid" at runtime) without genuinely-invoked call(s) to: ` +
+          `${missing.join(", ")} within ${WINDOW_LINES} lines. Either use a string ` +
+          'literal status, dispatch both payment emails in the window, or — if the ' +
+          'value provably can never be "paid" — add a `// paid-guard: <reason>` ' +
+          "comment within 3 lines above the status property.",
+      );
+    }
+  };
+
+  INVOICE_UPDATE_VAR_STATUS_RE.lastIndex = 0;
+  while ((m = INVOICE_UPDATE_VAR_STATUS_RE.exec(code)) !== null) {
+    collectVarSite(m.index + m[0].toLowerCase().lastIndexOf("status"));
+    INVOICE_UPDATE_VAR_STATUS_RE.lastIndex = m.index + m[0].length;
+  }
+
+  CONTEXT_VAR_STATUS_RE.lastIndex = 0;
+  while ((m = CONTEXT_VAR_STATUS_RE.exec(code)) !== null) {
+    const lineNo = code.slice(0, m.index).split("\n").length;
+    if (varSiteLines.has(lineNo)) continue;
+    // Update-payload shape must appear just above (object being built /
+    // .set({ opened); invoice-relatedness may appear just above OR below
+    // (e.g. `const updateData = { status: x }` later passed to
+    // db.update(invoicesTable).set(updateData)).
+    const before = lines.slice(Math.max(0, lineNo - 5), lineNo).join("\n");
+    const around = lines.slice(Math.max(0, lineNo - 5), lineNo + 4).join("\n");
+    if (!/invoice/i.test(around)) continue;
+    if (!/\.set\s*\(|\bupdateData\b|\bset\s*:\s*\{/.test(before)) continue;
+    collectVarSite(m.index);
   }
 
   // Raw-SQL paid writes: banned outright (see RAW_SQL_PAID_WRITE_RE).
@@ -580,6 +660,112 @@ test("guard fixture: quoted-identifier paid write is flagged", () => {
   assert.equal(res.writeSites, 1);
   assert.equal(res.problems.length, 1);
   assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: variable status write with no dispatch is flagged", () => {
+  // Evasion: `newStatus` holds "paid" at runtime; no literal, no raw SQL.
+  const res = scanFixture(
+    "variable-status.ts",
+    [
+      "export async function setStatus(id: string, newStatus: string) {",
+      "  await db",
+      "    .update(invoices)",
+      "    .set({ status: newStatus, updatedAt: new Date() })",
+      "    .where(eq(invoices.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /VARIABLE/);
+  assert.match(res.problems[0], /dispatchPaymentReceiptEmail/);
+});
+
+test("guard fixture: variable status via updateData object is flagged", () => {
+  const res = scanFixture(
+    "variable-status-updatedata.ts",
+    [
+      "export async function setStatus(id: string, newStatus: string) {",
+      "  const updateData = { updatedAt: new Date(),",
+      "    status: newStatus };",
+      "  await db.update(invoicesTable).set(updateData).where(eq(invoicesTable.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /VARIABLE/);
+});
+
+test("guard fixture: variable status WITH both dispatchers passes", () => {
+  const res = scanFixture(
+    "variable-status-dispatched.ts",
+    [
+      "export async function setStatus(id: string, newStatus: string) {",
+      "  await db",
+      "    .update(invoices)",
+      "    .set({ status: newStatus, updatedAt: new Date() })",
+      "    .where(eq(invoices.id, id));",
+      BOTH_DISPATCH,
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.deepEqual(res.problems, []);
+});
+
+test("guard fixture: paid-guard annotated revert passes without dispatch", () => {
+  const res = scanFixture(
+    "variable-status-annotated.ts",
+    [
+      "export async function releaseClaim(id: string, prior: string) {",
+      '  // paid-guard: reverts a stranded "processing" claim to its prior',
+      "  // unpaid state; prior is captured from a row that was never paid.",
+      "  await db.update(invoices).set({ status: prior, updatedAt: new Date() })",
+      "    .where(eq(invoices.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.deepEqual(res.problems, []);
+});
+
+test("guard fixture: paid-guard comment further than 3 lines above does NOT excuse", () => {
+  const res = scanFixture(
+    "variable-status-far-annotation.ts",
+    [
+      "export async function setStatus(id: string, newStatus: string) {",
+      "  // paid-guard: too far away to count",
+      "  logger.debug('a');",
+      "  logger.debug('b');",
+      "  logger.debug('c');",
+      "  logger.debug('d');",
+      "  await db.update(invoices).set({ status: newStatus }).where(eq(invoices.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+});
+
+test("guard fixture: non-invoice variable status updates are not flagged", () => {
+  const res = scanFixture(
+    "reviews-status.ts",
+    [
+      "export async function moderate(id: string, next: string) {",
+      "  await db.update(reviewsTable).set({ status: next, updatedAt: new Date() })",
+      "    .where(eq(reviewsTable.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 0);
+  assert.deepEqual(res.problems, []);
 });
 
 test("guard fixture: read-only SQL comparisons are not flagged", () => {

@@ -105,6 +105,8 @@ export async function releaseStuckProcessingInvoices(): Promise<void> {
 
         // 2. No successful charge — release back to an unpaid, chargeable state.
         const next = revertStatusFor(invoice);
+        // paid-guard: releases a stranded "processing" claim back to an unpaid
+        // state — revertStatusFor only ever returns "sent" or "overdue".
         const released = await db.update(invoicesTable).set({ status: next, updatedAt: new Date() })
           .where(and(
             eq(invoicesTable.id, invoice.id),
