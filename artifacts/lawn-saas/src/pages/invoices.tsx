@@ -619,15 +619,28 @@ export function InvoicesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  // Once invoice data is loaded and we have a pending open request, find and open it
+  // When a deep link requests a specific invoice, fetch it directly by id so it
+  // opens even when it isn't on the currently loaded page of the list.
   useEffect(() => {
-    if (!pendingOpenInvoiceId || !data?.invoices) return;
-    const inv = data.invoices.find(i => i.id === pendingOpenInvoiceId);
-    if (inv) {
-      setViewingInvoice({ id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status });
-      setPendingOpenInvoiceId(null);
-    }
-  }, [pendingOpenInvoiceId, data]);
+    if (!pendingOpenInvoiceId) return;
+    let cancelled = false;
+    fetch(`/api/invoices/${pendingOpenInvoiceId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` },
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
+      .then((inv: { id: number; invoiceNumber: string; status: string }) => {
+        if (cancelled) return;
+        setViewingInvoice({ id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status });
+        setPendingOpenInvoiceId(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        toast({ title: 'Invoice not found', description: 'The linked invoice could not be loaded.', variant: 'destructive' });
+        setPendingOpenInvoiceId(null);
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOpenInvoiceId]);
 
   const handleSendReminders = async () => {
     setSendingReminders(true);
