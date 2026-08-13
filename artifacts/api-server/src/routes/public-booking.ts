@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, companiesTable, servicesTable, customersTable, propertiesTable, appointmentsTable, leadsTable } from "@workspace/db";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, inArray, sql } from "drizzle-orm";
 import { logActivity } from "../lib/activity";
 import { hasFeature, checkPlanLimit } from "../lib/features";
 import { appendSmsConsentEvent } from "../lib/sms-consent";
@@ -10,6 +10,13 @@ import { logger } from "../lib/logger";
 import { z } from "zod";
 
 const router = Router();
+
+// Max unreviewed (pending) public booking requests a single submitter (matched
+// by email, or phone when no email is given) may have open with a company at
+// once. Mirrors MAX_PENDING_PORTAL_REQUESTS on the authenticated portal route:
+// each request emails the company, so without a cap anyone rotating IPs (or
+// scripting slowly under the IP rate limit) can flood the owner's inbox.
+export const MAX_PENDING_PUBLIC_REQUESTS = 5;
 
 router.get("/sitemap-slugs", async (_req, res) => {
   const rows = await db
@@ -82,51 +89,143 @@ router.post("/book/:slug/submit", async (req, res) => {
     .limit(1);
   if (!service) return res.status(400).json({ error: "ValidationError", message: "Invalid service selection" });
 
-  let [customer] = await db.select().from(customersTable).where(and(
-    eq(customersTable.companyId, company.id),
-    data.email ? eq(customersTable.email, data.email) : eq(customersTable.phone, data.phone),
-  )).limit(1);
+  const scheduledStart = data.preferredDate ? new Date(data.preferredDate) : new Date(Date.now() + 48 * 60 * 60 * 1000);
 
-  if (!customer) {
-    // Public booking creates a brand-new customer record directly (when the company
-    // doesn't have lead-pipeline / Pro-only unlimited customers) — respect the same
-    // company-scoped customer cap that authenticated staff are bound by, so the
-    // public form can't be used to bypass plan limits.
-    const limitCheck = await checkPlanLimit(company.id, "customers");
-    if (!limitCheck.allowed) {
-      return res.status(409).json({
-        error: "BookingUnavailable",
-        message: "We're unable to accept new customer bookings online right now. Please contact us directly to schedule.",
-      });
+  // Cap unreviewed booking requests per submitter, atomically. Submissions
+  // are matched to a customer row by email (or phone when no email is given),
+  // but there is NO unique constraint on (company, email/phone) — so the
+  // customer lookup/creation MUST happen inside the same locked transaction
+  // as the pending-count admission. Otherwise N concurrent first-time
+  // requests with the same identity all see "no customer", create N distinct
+  // rows, and each admit a request (and an email) past the cap.
+  //
+  // The advisory lock key is derived from the company plus the NORMALIZED
+  // submitter identity (lowercased email, else digits-only phone), so
+  // concurrent submissions from the same address serialize even before any
+  // customer row exists. Other submitters take different keys and are
+  // unaffected. The lock is released automatically at commit/rollback.
+  // Canonical identity: lowercased/trimmed email, else digits-only phone.
+  // Lookup, lock, and pending count all use the SAME canonical form, so
+  // "Person@Example.com" vs "person@example.com" or "(555) 123-4567" vs
+  // "5551234567" cannot mint separate customer rows with separate caps.
+  const canonicalEmail = data.email ? data.email.trim().toLowerCase() : null;
+  const canonicalPhone = data.phone.replace(/\D/g, "");
+  const identity = canonicalEmail ? `e:${canonicalEmail}` : `p:${canonicalPhone}`;
+  const identityCondition = canonicalEmail
+    ? sql`lower(trim(${customersTable.email})) = ${canonicalEmail}`
+    : sql`regexp_replace(coalesce(${customersTable.phone}, ''), '[^0-9]', '', 'g') = ${canonicalPhone}`;
+
+  const admission = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`public_booking:${company.id}:${identity}`}))`);
+
+    // Fetch ALL customer rows matching the canonical identity — there is no
+    // unique constraint, so pre-existing duplicates are possible and the cap
+    // must count pending requests across every one of them.
+    const matchingCustomers = await tx.select().from(customersTable).where(and(
+      eq(customersTable.companyId, company.id),
+      identityCondition,
+    )).orderBy(customersTable.id);
+
+    let customer = matchingCustomers[0];
+
+    let createdCustomer = false;
+    if (!customer) {
+      // Public booking creates a brand-new customer record directly (when the company
+      // doesn't have lead-pipeline / Pro-only unlimited customers) — respect the same
+      // company-scoped customer cap that authenticated staff are bound by, so the
+      // public form can't be used to bypass plan limits.
+      const limitCheck = await checkPlanLimit(company.id, "customers");
+      if (!limitCheck.allowed) {
+        return { outcome: "plan_limited" as const };
+      }
+
+      [customer] = await tx.insert(customersTable).values({
+        companyId: company.id,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: canonicalEmail,
+        phone: data.phone,
+        addressLine1: data.addressLine1,
+        city: data.city ?? null,
+        state: data.state ?? null,
+        zip: data.zip ?? null,
+        leadSource: "booking_page",
+        tags: [],
+        ...(data.smsConsent ? { smsOptIn: true, smsOptInAt: new Date(), smsOptInSource: "booking_form" } : {}),
+      }).returning();
+      createdCustomer = true;
     }
 
-    [customer] = await db.insert(customersTable).values({
+    // Count pending requests across EVERY customer row matching the
+    // canonical identity, so pre-existing duplicates share one cap.
+    const matchingIds = matchingCustomers.map((c) => c.id);
+    if (!matchingIds.includes(customer.id)) matchingIds.push(customer.id);
+    const [{ pendingCount }] = await tx
+      .select({ pendingCount: sql<number>`count(*)::int` })
+      .from(appointmentsTable)
+      .where(and(
+        inArray(appointmentsTable.customerId, matchingIds),
+        eq(appointmentsTable.companyId, company.id),
+        eq(appointmentsTable.origin, "portal_request"),
+        eq(appointmentsTable.status, "pending"),
+      ));
+    if (pendingCount >= MAX_PENDING_PUBLIC_REQUESTS) {
+      // Only an EXISTING customer can be capped (a just-created row has zero
+      // pending requests), so there is no partial write to undo here.
+      return { outcome: "capped" as const };
+    }
+
+    const [property] = await tx.insert(propertiesTable).values({
       companyId: company.id,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      email: data.email ?? null,
-      phone: data.phone,
+      customerId: customer.id,
       addressLine1: data.addressLine1,
       city: data.city ?? null,
       state: data.state ?? null,
       zip: data.zip ?? null,
-      leadSource: "booking_page",
-      tags: [],
-      ...(data.smsConsent ? { smsOptIn: true, smsOptInAt: new Date(), smsOptInSource: "booking_form" } : {}),
+      gateNotes: data.gateNotes ?? null,
+      yardSize: data.yardSize ?? null,
     }).returning();
 
-    // Record SMS consent audit event if the checkbox was checked
-    if (data.smsConsent) {
-      await appendSmsConsentEvent({
-        subjectType: "customer",
-        subjectId: customer.id,
-        phone: data.phone,
-        eventType: "opt_in",
-        source: "booking_form",
-        ipAddress: req.ip ?? null,
-        userAgent: req.headers["user-agent"] ?? null,
-      });
-    }
+    const [appointment] = await tx.insert(appointmentsTable).values({
+      companyId: company.id,
+      customerId: customer.id,
+      propertyId: property.id,
+      serviceId: data.serviceId,
+      status: "pending",
+      scheduledStart,
+      notes: data.notes ?? null,
+      origin: "portal_request",
+    }).returning();
+    return { outcome: "admitted" as const, customer, createdCustomer, property, appointment };
+  });
+
+  if (admission.outcome === "plan_limited") {
+    return res.status(409).json({
+      error: "BookingUnavailable",
+      message: "We're unable to accept new customer bookings online right now. Please contact us directly to schedule.",
+    });
+  }
+  if (admission.outcome === "capped") {
+    return res.status(429).json({
+      error: "TooManyRequests",
+      message: "You already have several booking requests awaiting review with this company. Please wait for them to get back to you, or contact them directly.",
+    });
+  }
+  const { customer, createdCustomer, property, appointment } = admission;
+
+  // SMS consent bookkeeping happens after admission so a capped/rejected
+  // request records nothing.
+  if (data.smsConsent && createdCustomer) {
+    // New customer created with opt-in flags — record the audit event.
+    await appendSmsConsentEvent({
+      subjectType: "customer",
+      subjectId: customer.id,
+      phone: data.phone,
+      eventType: "opt_in",
+      source: "booking_form",
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers["user-agent"] ?? null,
+    });
   } else if (data.smsConsent && !customer.smsOptIn) {
     // Existing customer who newly checked the SMS consent box
     await db.update(customersTable).set({ smsOptIn: true, smsOptInAt: new Date(), smsOptInSource: "booking_form", smsOptOut: false, updatedAt: new Date() }).where(eq(customersTable.id, customer.id));
@@ -140,30 +239,6 @@ router.post("/book/:slug/submit", async (req, res) => {
       userAgent: req.headers["user-agent"] ?? null,
     });
   }
-
-  const [property] = await db.insert(propertiesTable).values({
-    companyId: company.id,
-    customerId: customer.id,
-    addressLine1: data.addressLine1,
-    city: data.city ?? null,
-    state: data.state ?? null,
-    zip: data.zip ?? null,
-    gateNotes: data.gateNotes ?? null,
-    yardSize: data.yardSize ?? null,
-  }).returning();
-
-  const scheduledStart = data.preferredDate ? new Date(data.preferredDate) : new Date(Date.now() + 48 * 60 * 60 * 1000);
-
-  const [appointment] = await db.insert(appointmentsTable).values({
-    companyId: company.id,
-    customerId: customer.id,
-    propertyId: property.id,
-    serviceId: data.serviceId,
-    status: "pending",
-    scheduledStart,
-    notes: data.notes ?? null,
-    origin: "portal_request",
-  }).returning();
 
   await logActivity({
     companyId: company.id,

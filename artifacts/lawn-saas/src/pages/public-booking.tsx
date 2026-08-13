@@ -110,8 +110,17 @@ export function PublicBookingPage() {
         } as any,
       });
       setSubmitted(true);
-    } catch {
-      toast({ title: 'Error submitting request', variant: 'destructive' });
+    } catch (err: any) {
+      const apiMessage = err?.data?.message;
+      if (err?.status === 429) {
+        toast({
+          title: 'Too many pending requests',
+          description: apiMessage ?? 'You already have several booking requests awaiting review. Please wait for the company to respond.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({ title: 'Error submitting request', description: apiMessage, variant: 'destructive' });
+      }
     }
   };
 
