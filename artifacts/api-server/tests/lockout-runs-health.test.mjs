@@ -95,6 +95,7 @@ const dbMock = {
 mock.module("@workspace/db", {
   namedExports: {
     db: dbMock,
+    pool: { connect: async () => ({ query: async () => ({ rows: [{ locked: true }] }), release: () => {} }) },
     platformAdminsTable,
     activityLogsTable,
     platformSettingsTable,

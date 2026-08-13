@@ -1,5 +1,5 @@
-import { db, platformAdminsTable, DEFAULT_STALE_ADMIN_DAYS } from "@workspace/db";
-import { and, eq, or, sql } from "drizzle-orm";
+import { db, pool, platformAdminsTable, activityLogsTable, DEFAULT_STALE_ADMIN_DAYS } from "@workspace/db";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { logActivity } from "./activity";
 import { sendAdminDeactivationEmail } from "./notifications";
 import { getPlatformSettings } from "./platform-settings";
@@ -7,6 +7,10 @@ import { getPlatformSettings } from "./platform-settings";
 // Fallback dormancy threshold (days) used when no platform settings row exists
 // yet. The live threshold is configurable via platform settings.
 export const STALE_ADMIN_DAYS = DEFAULT_STALE_ADMIN_DAYS;
+
+// Persisted cadence for the scheduled sweep. The app checks more frequently than
+// this so restarts and scale-to-zero cannot reset an in-memory 24h timer.
+export const STALE_ADMIN_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 // Contact address surfaced to a deactivated admin so they know who to reach to
 // restore access. Falls back to a sensible default when no override is set.
@@ -101,4 +105,90 @@ export async function deactivateStaleAdmins(opts: {
   }
 
   return { deactivatedCount: deactivatedIds.length, deactivatedIds, thresholdDays };
+}
+
+// Advisory lock key ensuring only one instance runs the scheduled sweep at a
+// time when multiple server instances boot or tick concurrently (autoscale).
+const STALE_ADMIN_SWEEP_LOCK_KEY = 728394652;
+
+// The persisted cadence marker: the newest activity-log row with this action.
+const SWEEP_RUN_ACTION = "admin.admins_auto_deactivated";
+
+async function latestSweepRunAt(): Promise<Date | null> {
+  const [lastRun] = await db
+    .select({ createdAt: activityLogsTable.createdAt })
+    .from(activityLogsTable)
+    .where(eq(activityLogsTable.action, SWEEP_RUN_ACTION))
+    .orderBy(desc(activityLogsTable.createdAt))
+    .limit(1);
+  return lastRun?.createdAt ? new Date(lastRun.createdAt) : null;
+}
+
+/**
+ * Run the scheduled sweep only when the persisted activity log says it is due.
+ *
+ * Concurrency-safe across instances: the due-check + sweep are guarded by a
+ * Postgres advisory try-lock, and the due-check is repeated under the lock so
+ * a contender that waited out another instance's run doesn't run again.
+ * The cadence marker write is verified after the sweep — logActivity is
+ * best-effort, so if its insert was swallowed we re-insert directly and let
+ * failures propagate to the caller's error logging instead of silently
+ * retrying the sweep every hour.
+ */
+export async function runStaleAdminSweepIfDue(now = new Date()): Promise<{
+  ran: boolean;
+  // True when another instance held the sweep lock and we deferred to it.
+  lockBusy?: boolean;
+  result?: DeactivateStaleResult;
+}> {
+  const isDue = async () => {
+    const lastRun = await latestSweepRunAt();
+    return !(lastRun && now.getTime() - lastRun.getTime() < STALE_ADMIN_SWEEP_INTERVAL_MS);
+  };
+
+  // Cheap pre-check without taking the lock.
+  if (!(await isDue())) return { ran: false };
+
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query<{ locked: boolean }>(
+      "SELECT pg_try_advisory_lock($1) AS locked",
+      [STALE_ADMIN_SWEEP_LOCK_KEY],
+    );
+    if (!rows[0]?.locked) {
+      // Another instance is running the sweep right now; defer to it.
+      return { ran: false, lockBusy: true };
+    }
+    try {
+      // Re-check under the lock: a contender may have just completed the run.
+      if (!(await isDue())) return { ran: false };
+
+      const result = await deactivateStaleAdmins({ trigger: "scheduled" });
+
+      // deactivateStaleAdmins records the cadence marker via best-effort
+      // logActivity (skipped runs return before logging). Ensure a durable
+      // marker exists so the hourly check doesn't re-run the sweep forever
+      // and the sweep-health watchdog sees real runs.
+      const marker = await latestSweepRunAt();
+      if (!result.skipped && (!marker || marker.getTime() < now.getTime())) {
+        await db.insert(activityLogsTable).values({
+          action: SWEEP_RUN_ACTION,
+          entityType: "admin",
+          metadataJson: {
+            count: result.deactivatedCount,
+            ids: result.deactivatedIds,
+            thresholdDays: result.thresholdDays,
+            trigger: "scheduled",
+            markerRepair: true,
+          },
+        });
+      }
+
+      return { ran: true, result };
+    } finally {
+      await client.query("SELECT pg_advisory_unlock($1)", [STALE_ADMIN_SWEEP_LOCK_KEY]).catch(() => {});
+    }
+  } finally {
+    client.release();
+  }
 }

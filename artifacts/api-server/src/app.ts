@@ -174,13 +174,26 @@ import("./lib/stuck-invoices").then(({ releaseStuckProcessingInvoices }) => {
 // admin to click the button. The inactivity threshold (days) and whether this
 // automated sweep runs at all are both configurable via platform settings, read
 // fresh on each run inside deactivateStaleAdmins. Each run records an
-// activity-log entry and emails any newly deactivated admin. We deliberately do
-// NOT run on startup — the sweep is destructive (deactivates + emails), so we
-// let the 24h interval drive it rather than firing on every server restart.
-import("./lib/stale-admins").then(({ deactivateStaleAdmins }) => {
-  setInterval(() => {
-    deactivateStaleAdmins({ trigger: "scheduled" }).catch(() => {});
-  }, 24 * 60 * 60 * 1000);
+// activity-log entry and emails any newly deactivated admin.
+// Check a persisted daily cadence at startup and hourly so restarts or
+// scale-to-zero cannot keep resetting an in-memory 24h timer.
+import("./lib/stale-admins").then(({ runStaleAdminSweepIfDue }) => {
+  const checkStaleAdmins = () => {
+    runStaleAdminSweepIfDue()
+      .then(({ ran, result }) => {
+        if (ran && !result?.skipped) {
+          logger.info({
+            deactivatedCount: result?.deactivatedCount ?? 0,
+            skipped: result?.skipped ?? false,
+            thresholdDays: result?.thresholdDays,
+          }, "Scheduled stale-admin sweep completed");
+        }
+      })
+      .catch((err) => logger.error({ err }, "Scheduled stale-admin sweep failed"));
+  };
+
+  checkStaleAdmins();
+  setInterval(checkStaleAdmins, 60 * 60 * 1000);
 });
 
 // Watchdog for the sweep above: if the automated lockout sweep is enabled but
