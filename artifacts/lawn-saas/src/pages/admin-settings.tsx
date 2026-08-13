@@ -50,11 +50,20 @@ export function AdminSettingsPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Live client-side validation against the server-provided bounds so admins see
+  // the problem as they type, not after a failed save.
+  const lockoutDays = Number(lockout.staleAdminDays);
+  const lockoutDaysError = !Number.isInteger(lockoutDays)
+    ? 'Enter a whole number of days.'
+    : lockoutDays < lockoutBounds.minStaleAdminDays || lockoutDays > lockoutBounds.maxStaleAdminDays
+      ? `Threshold must be between ${lockoutBounds.minStaleAdminDays} and ${lockoutBounds.maxStaleAdminDays} days.`
+      : null;
+
   const handleLockoutSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const days = Number(lockout.staleAdminDays);
-    if (!Number.isFinite(days) || days < lockoutBounds.minStaleAdminDays || days > lockoutBounds.maxStaleAdminDays) {
-      toast({ title: `Days must be between ${lockoutBounds.minStaleAdminDays} and ${lockoutBounds.maxStaleAdminDays}`, variant: 'destructive' });
+    if (lockoutDaysError) {
+      toast({ title: lockoutDaysError, variant: 'destructive' });
       return;
     }
     setLockoutSaving(true);
@@ -63,7 +72,15 @@ export function AdminSettingsPage() {
         method: 'PUT',
         body: JSON.stringify({ staleAdminDays: days, staleAdminSweepEnabled: lockout.staleAdminSweepEnabled }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update lockout policy'); }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        // Surface a specific message for validation failures rather than a generic error.
+        const fieldErrors = err?.details?.fieldErrors?.staleAdminDays;
+        const specific = Array.isArray(fieldErrors) && fieldErrors.length > 0
+          ? `Lockout threshold must be between ${lockoutBounds.minStaleAdminDays} and ${lockoutBounds.maxStaleAdminDays} days.`
+          : err.message;
+        throw new Error(specific || 'Failed to update lockout policy');
+      }
       const data = await res.json();
       setLockout({ staleAdminDays: data.staleAdminDays, staleAdminSweepEnabled: data.staleAdminSweepEnabled });
       toast({ title: 'Lockout policy updated' });
@@ -247,7 +264,11 @@ export function AdminSettingsPage() {
                 disabled={!lockoutLoaded}
                 onChange={e => setLockout(l => ({ ...l, staleAdminDays: Number(e.target.value) }))}
                 required
+                aria-invalid={lockoutLoaded && !!lockoutDaysError}
               />
+              {lockoutLoaded && lockoutDaysError && (
+                <p className="mt-1.5 text-xs text-red-400" role="alert">{lockoutDaysError}</p>
+              )}
               <p className="mt-1.5 text-xs text-slate-500">
                 Admins with no sign-in for this many days (or who have never signed in) become eligible for lockout. Allowed range: {lockoutBounds.minStaleAdminDays}–{lockoutBounds.maxStaleAdminDays} days.
               </p>
@@ -270,7 +291,7 @@ export function AdminSettingsPage() {
             <div className="flex justify-end pt-1">
               <button
                 type="submit"
-                disabled={lockoutSaving || !lockoutLoaded}
+                disabled={lockoutSaving || !lockoutLoaded || !!lockoutDaysError}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-medium rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-60"
               >
                 <Save className="w-4 h-4" />
