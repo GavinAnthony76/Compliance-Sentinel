@@ -24,6 +24,8 @@ import { fileURLToPath } from "node:url";
 //   - Spacing the dispatch more than WINDOW_LINES below the write.
 //   - Wrapping the dispatchers in a local function that is never invoked.
 //   - Passing the dispatcher as a bare reference/callback without awaiting.
+//   - Writing the paid transition as raw SQL (sql`UPDATE ... SET status='paid'`
+//     or db.execute("UPDATE ...")) — banned outright, dispatchers or not.
 
 const DISPATCHERS = [
   "dispatchPaymentReceiptEmail",
@@ -93,6 +95,27 @@ function stripComments(source) {
 // Comparisons look different (`status === "paid"`, `eq(x.status, "paid")`,
 // SQL strings use `status='paid'`) and are not matched.
 const PAID_WRITE_RE = /\bstatus\s*:\s*["']paid["']/g;
+
+// Raw-SQL paid WRITES are banned outright. An UPDATE written as a SQL string
+// or template (drizzle sql`UPDATE invoices SET status = 'paid' ...`, or
+// db.execute("UPDATE ...")) bypasses the object-literal pattern above, so the
+// window/dispatcher analysis never sees it. Rather than trying to prove the
+// dispatchers run near an opaque string, any `SET ... status = 'paid'`
+// expressed in raw SQL is rejected — such transitions must go through
+// db.update(...).set({ status: "paid" }) so the guard above applies.
+// Read-only SQL (`CASE WHEN status='paid'`, `WHERE status = 'paid'`) has no
+// preceding SET clause and is not matched. The lookbehind-free scan below
+// finds a SET keyword followed by a status='paid' assignment with no
+// statement-terminating punctuation between them.
+// The identifier may be bare, quoted ("status", `status`) or a drizzle column
+// interpolation (`${invoices.status}` — matched via the trailing `}`), and the
+// assigned value may be:
+//   - the literal 'paid' / "paid"
+//   - a JS template interpolation `${...}` (dynamic — could be 'paid')
+//   - any SQL bind parameter: positional ($1), question-mark (?), or named
+//     (:status) — all dynamic, all banned.
+const RAW_SQL_PAID_WRITE_RE =
+  /\bset\b(?:(?!\b(?:where|when|then|else|select|from|case)\b)[^;`])*?["'`]?\bstatus\b["'`]?\s*\}?\s*=\s*(?:["']paid["']|\$\{|\$\d+\b|:\w+|\?)/gi;
 
 // Match the closing bracket for the opener at text[openIdx] ("(" or "{"),
 // ignoring nesting of the same pair. Returns index after the close, or
@@ -189,7 +212,12 @@ function dispatcherSatisfied(windowText, ranges, dispatcher) {
 export function scanSource(raw, label) {
   const problems = [];
   let writeSites = 0;
-  if (!raw.includes("paid")) return { writeSites, problems };
+  // Fast path: nothing paid-related and no SQL SET keyword — skip. (The
+  // dynamic raw-SQL evasion `SET status = ${...}` contains no "paid" literal,
+  // so the gate must also let SET-bearing sources through.)
+  if (!raw.includes("paid") && !/\bset\b/i.test(raw)) {
+    return { writeSites, problems };
+  }
   const code = stripComments(raw);
   const lines = code.split("\n");
 
@@ -227,6 +255,23 @@ export function scanSource(raw, label) {
       );
     }
   }
+
+  // Raw-SQL paid writes: banned outright (see RAW_SQL_PAID_WRITE_RE).
+  RAW_SQL_PAID_WRITE_RE.lastIndex = 0;
+  while ((m = RAW_SQL_PAID_WRITE_RE.exec(code)) !== null) {
+    const lineNo = code.slice(0, m.index).split("\n").length; // 1-based
+    writeSites++;
+    problems.push(
+      `${label}:${lineNo} — raw-SQL write of invoice status to "paid" detected ` +
+        "(e.g. sql`UPDATE ... SET status = 'paid'` or db.execute of an UPDATE string). " +
+        "Raw-SQL paid transitions bypass the dispatcher guard and are banned: " +
+        'use db.update(invoices).set({ status: "paid", ... }) so the paid-transition ' +
+        "guard can verify the payment emails are dispatched.",
+    );
+    // Avoid re-matching inside the same region.
+    RAW_SQL_PAID_WRITE_RE.lastIndex = m.index + m[0].length;
+  }
+
   return { writeSites, problems };
 }
 
@@ -405,6 +450,157 @@ test("guard fixture: local wrapper that IS awaited passes", () => {
     ].join("\n"),
   );
   assert.equal(res.writeSites, 1);
+  assert.deepEqual(res.problems, []);
+});
+
+test("guard fixture: raw SQL template paid write is flagged even WITH dispatchers", () => {
+  // Raw-SQL evasion: drizzle sql template flips status to paid. Banned
+  // outright — even if the dispatchers are present, we can't statically tie
+  // an opaque SQL string to the guard's window analysis reliably.
+  const res = scanFixture(
+    "raw-sql-template.ts",
+    [
+      "export async function markPaid(id: string) {",
+      "  await db.execute(",
+      "    sql`UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = ${id}`,",
+      "  );",
+      BOTH_DISPATCH,
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: db.execute with a plain UPDATE string is flagged", () => {
+  const res = scanFixture(
+    "raw-sql-string.ts",
+    [
+      "export async function markPaid(id: string) {",
+      '  await db.execute("UPDATE invoices SET paid_at = now(), status = \'paid\' WHERE id = $1");',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: raw SQL with interpolated status value is flagged", () => {
+  // Dynamic evasion: SET status = ${someVar} could be 'paid' at runtime; the
+  // guard can't prove otherwise, so it's banned too.
+  const res = scanFixture(
+    "raw-sql-dynamic.ts",
+    [
+      "export async function setStatus(id: string, status: string) {",
+      "  await db.execute(sql`UPDATE invoices SET status = ${status} WHERE id = ${id}`);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: drizzle column-ref raw SQL paid write is flagged", () => {
+  const res = scanFixture(
+    "raw-sql-colref.ts",
+    [
+      "export async function markPaid(id: string) {",
+      "  await db.execute(sql`UPDATE invoices SET ${invoices.status} = 'paid' WHERE ${invoices.id} = ${id}`);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: parameterized $1 bind paid write is flagged", () => {
+  // Positional bind: the value arrives at runtime and could be 'paid'.
+  const res = scanFixture(
+    "raw-sql-positional.ts",
+    [
+      "export async function setStatus(id: string, status: string) {",
+      '  await db.execute("UPDATE invoices SET status = $1 WHERE id = $2", [status, id]);',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: question-mark bind paid write is flagged", () => {
+  const res = scanFixture(
+    "raw-sql-qmark.ts",
+    [
+      "export async function setStatus(id: string, status: string) {",
+      '  await db.execute("UPDATE invoices SET status = ? WHERE id = ?", [status, id]);',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: named bind paid write is flagged", () => {
+  const res = scanFixture(
+    "raw-sql-named.ts",
+    [
+      "export async function setStatus(id: string, status: string) {",
+      '  await db.execute("UPDATE invoices SET status = :status WHERE id = :id", { status, id });',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: quoted-identifier paid write is flagged", () => {
+  const res = scanFixture(
+    "raw-sql-quoted-ident.ts",
+    [
+      "export async function markPaid(id: string) {",
+      "  await db.execute(`UPDATE invoices SET \"status\" = 'paid' WHERE id = $1`);",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 1);
+  assert.equal(res.problems.length, 1);
+  assert.match(res.problems[0], /raw-SQL/i);
+});
+
+test("guard fixture: read-only SQL comparisons are not flagged", () => {
+  // CASE WHEN / WHERE comparisons on status='paid' are reads, not writes.
+  const res = scanFixture(
+    "raw-sql-reads.ts",
+    [
+      "export async function stats(companyId: string) {",
+      "  const rows = await db",
+      "    .select({",
+      "      paid: sql<number>`sum(case when status='paid' then 1 else 0 end)`,",
+      "      effective: sql`(case when ${invoicesTable.status} = 'paid' then coalesce(paid_at, created_at) else created_at end)`,",
+      "    })",
+      "    .from(invoicesTable)",
+      "    .where(sql`status = 'paid'`);",
+      "  return rows;",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.writeSites, 0);
   assert.deepEqual(res.problems, []);
 });
 
