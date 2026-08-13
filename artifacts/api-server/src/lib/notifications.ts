@@ -1930,6 +1930,54 @@ export async function sendSweepHealthAlertEmail(opts: {
   });
 }
 
+// Positive "all clear" counterpart to sendSweepHealthAlertEmail: sent once when
+// the lockout sweep records a run again after an outage alert had gone out.
+export async function sendSweepHealthRecoveredEmail(opts: {
+  to: string;
+  firstName?: string | null;
+  /** Timestamp of the sweep run that ended the outage. */
+  recoveredRunAt: Date;
+  /** Timestamp of the outage alert this recovery closes out. */
+  alertSentAt: Date;
+  adminUsersUrl: string;
+  supportEmail: string;
+}): Promise<EmailResult> {
+  const name = (opts.firstName || "there").trim();
+  const runText = opts.recoveredRunAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
+  const alertText = opts.alertSentAt.toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" });
+
+  const paragraphs = [
+    `Hi ${escapeHtml(name)},`,
+    `Good news — the automated inactivity-lockout sweep is <strong>running again</strong>. A new scheduled run was recorded on ${escapeHtml(runText)} UTC, after the outage alert sent on ${escapeHtml(alertText)} UTC.`,
+    `Dormant admin accounts are being locked out on schedule again. No further action is needed; this closes out the earlier alert.`,
+  ];
+
+  const body = [
+    `Hi ${name},`,
+    ``,
+    `Good news — the automated inactivity-lockout sweep is running again. A new scheduled run was recorded on ${runText} UTC, after the outage alert sent on ${alertText} UTC.`,
+    ``,
+    `Dormant admin accounts are being locked out on schedule again. No further action is needed; this closes out the earlier alert.`,
+    ``,
+    `You can review recent runs on the Admin Users page:`,
+    opts.adminUsersUrl,
+    ``,
+    `— The GreenSynk Team`,
+  ].join("\n");
+
+  return sendEmail({
+    to: opts.to,
+    subject: "Resolved: GreenSynk inactivity-lockout sweep is running again",
+    body,
+    html: buildPlatformEmailHtml({
+      title: "Lockout sweep has recovered",
+      paragraphs,
+      button: { label: "Open Admin Users", url: opts.adminUsersUrl },
+    }),
+    replyTo: opts.supportEmail,
+  });
+}
+
 export async function sendTeamInviteEmail(opts: {
   to: string;
   firstName: string;

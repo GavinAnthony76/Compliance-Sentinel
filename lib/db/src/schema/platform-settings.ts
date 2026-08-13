@@ -38,6 +38,12 @@ export const platformSettingsTable = pgTable("platform_settings", {
   contactEmailSales: text("contact_email_sales").notNull().default(DEFAULT_CONTACT_EMAIL_SALES),
   contactEmailPrivacy: text("contact_email_privacy").notNull().default(DEFAULT_CONTACT_EMAIL_PRIVACY),
   contactEmailLegal: text("contact_email_legal").notNull().default(DEFAULT_CONTACT_EMAIL_LEGAL),
+  // Timestamp of the sweep-outage alert whose "sweep recovered" all-clear email
+  // has already been sent. Acts as an atomic per-incident claim: the recovery
+  // notifier does a conditional UPDATE (only when this differs from the alert
+  // being closed out), so overlapping monitor ticks / multiple instances can't
+  // double-send the one-time recovery email.
+  sweepRecoveryNotifiedAlertAt: timestamp("sweep_recovery_notified_alert_at"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

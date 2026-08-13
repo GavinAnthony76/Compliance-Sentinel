@@ -35,6 +35,22 @@ register("./ts-resolve.loader.mjs", import.meta.url);
 process.env.SESSION_SECRET = process.env.SESSION_SECRET || "test-session-secret";
 process.env.NODE_ENV = "test";
 
+// Mock the notifications module so tests can control per-send delivery
+// outcomes ({ delivered: false }, thrown sends) — the real sendEmail
+// short-circuits to delivered:true under NODE_ENV=test.
+let recoveryEmailImpl = async () => ({ delivered: true });
+let recoverySends = [];
+mock.module("../src/lib/notifications.ts", {
+  namedExports: {
+    resolveBaseUrl: () => "http://test.local",
+    sendSweepHealthAlertEmail: async () => ({ delivered: true }),
+    sendSweepHealthRecoveredEmail: async (opts) => {
+      recoverySends.push(opts);
+      return recoveryEmailImpl(opts);
+    },
+  },
+});
+
 mock.module("resend", {
   namedExports: {
     Resend: class {
@@ -96,6 +112,10 @@ let settingsRows = [{ staleAdminDays: 90, staleAdminSweepEnabled: true }];
 let activityRows = []; // [{action, createdAt, ...}]
 let adminRows = [];    // [{id, email, firstName}]
 let insertedLogs = []; // captured activity-log inserts
+// Simulated persistent recovery claim (platform_settings.sweep_recovery_notified_alert_at).
+let claimedAlertAt = null;   // Date | null
+let claimShouldFail = false; // simulate a DB write failure on the claim UPDATE
+let claimAttempts = 0;       // how many claim UPDATEs were attempted
 
 const dbMock = {
   select: () => {
@@ -131,8 +151,31 @@ const dbMock = {
     };
     return c;
   },
-  update: () => {
-    const c = { set: () => c, where: () => c, returning: () => c, then: (f, r) => Promise.resolve([]).then(f, r) };
+  update: (t) => {
+    // Models the atomic per-incident recovery claim: the conditional UPDATE on
+    // platform_settings succeeds (returns a row) only when the stored claim
+    // differs from the alert timestamp being claimed — mirroring
+    // `sweep_recovery_notified_alert_at IS DISTINCT FROM $alertAt`.
+    let setValues = null;
+    const c = {
+      set(v) { setValues = v; return c; },
+      where() { return c; },
+      returning() { return c; },
+      then(onFulfilled, onRejected) {
+        return Promise.resolve().then(() => {
+          if (t?.__table !== "platform_settings") return [];
+          claimAttempts++;
+          if (claimShouldFail) throw new Error("simulated: claim write failed");
+          const next = setValues?.sweepRecoveryNotifiedAlertAt ?? null;
+          const same =
+            claimedAlertAt !== null && next !== null &&
+            claimedAlertAt.getTime() === next.getTime();
+          if (same) return []; // claim already held for this incident
+          claimedAlertAt = next;
+          return [{ id: 1 }];
+        }).then(onFulfilled, onRejected);
+      },
+    };
     return c;
   },
   insert: (t) => ({
@@ -155,7 +198,7 @@ mock.module("@workspace/db", {
   },
 });
 
-const { checkSweepHealth, SWEEP_ALERT_ACTION } = await import("../src/lib/sweep-health.ts");
+const { checkSweepHealth, SWEEP_ALERT_ACTION, SWEEP_RECOVERED_ACTION } = await import("../src/lib/sweep-health.ts");
 
 let failures = 0;
 function check(name, condition, detail) {
@@ -172,6 +215,11 @@ function reset() {
   activityRows = [];
   adminRows = [{ id: 1, email: "root@greensynk.com", firstName: "Root" }];
   insertedLogs = [];
+  claimedAlertAt = null;
+  claimShouldFail = false;
+  claimAttempts = 0;
+  recoveryEmailImpl = async () => ({ delivered: true });
+  recoverySends = [];
 }
 
 console.log("checkSweepHealth():");
@@ -242,6 +290,159 @@ activityRows = [{ action: RUN_ACTION, createdAt: hoursAgo(60) }];
 r = await checkSweepHealth(NOW);
 check("no recipients: no alert, reason=no_recipients", r.alerted === false && r.reason === "no_recipients", JSON.stringify(r));
 check("no recipients: dedupe marker not logged", insertedLogs.length === 0);
+
+// 8. Recovery: sweep ran again AFTER an outage alert — one-time all-clear.
+reset();
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+r = await checkSweepHealth(NOW);
+check("run newer than alert sends recovery notice",
+  r.alerted === false && r.reason === "recovered" && r.recovered === true, JSON.stringify(r));
+check("recovery logs its own dedupe marker",
+  insertedLogs.length === 1 && insertedLogs[0].action === SWEEP_RECOVERED_ACTION,
+  JSON.stringify(insertedLogs));
+check("recovery marker metadata carries run + alert timestamps",
+  insertedLogs[0]?.metadataJson?.recoveredRunAt === hoursAgo(2).toISOString() &&
+  insertedLogs[0]?.metadataJson?.alertSentAt === hoursAgo(30).toISOString(),
+  JSON.stringify(insertedLogs[0]?.metadataJson));
+
+// 8b. Recovery dedupe: an existing claim for THIS alert suppresses resend.
+reset();
+claimedAlertAt = hoursAgo(30); // claim already held for this incident
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+r = await checkSweepHealth(NOW);
+check("recovery notice is one-time (held claim suppresses resend)",
+  r.alerted === false && r.reason === "run_recent", JSON.stringify(r));
+check("suppressed recovery logs no new marker", insertedLogs.length === 0);
+
+// 8c. Claim from a PREVIOUS incident doesn't suppress a new one.
+reset();
+claimedAlertAt = hoursAgo(200); // old incident's claim
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+r = await checkSweepHealth(NOW);
+check("stale claim from prior incident doesn't suppress",
+  r.reason === "recovered" && insertedLogs.length === 1 &&
+  insertedLogs[0].action === SWEEP_RECOVERED_ACTION,
+  JSON.stringify({ r, insertedLogs }));
+
+// 8g. Concurrency: two overlapping ticks — only the claim winner sends.
+reset();
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+const [r1, r2] = await Promise.all([checkSweepHealth(NOW), checkSweepHealth(NOW)]);
+const recoveredCount = [r1, r2].filter((x) => x.reason === "recovered").length;
+check("concurrent ticks: exactly one wins the claim and sends",
+  recoveredCount === 1 && claimAttempts === 2, JSON.stringify({ r1, r2, claimAttempts }));
+check("concurrent ticks: exactly one dashboard marker logged",
+  insertedLogs.filter((l) => l.action === SWEEP_RECOVERED_ACTION).length === 1,
+  JSON.stringify(insertedLogs));
+
+// 8i. Delivery failure ({delivered:false}): claim released, retried next tick,
+// and the successful retry stays deduped afterwards.
+reset();
+recoveryEmailImpl = async () => ({ delivered: false });
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+r = await checkSweepHealth(NOW);
+check("all sends undelivered: not reported as recovered",
+  r.reason === "run_recent" && recoverySends.length === 1, JSON.stringify(r));
+check("all sends undelivered: claim released for retry", claimedAlertAt === null, String(claimedAlertAt));
+check("all sends undelivered: no dashboard marker logged", insertedLogs.length === 0, JSON.stringify(insertedLogs));
+// Retry tick with delivery working again — sends and holds the claim.
+recoveryEmailImpl = async () => ({ delivered: true });
+r = await checkSweepHealth(NOW);
+check("retry after released claim sends the recovery notice",
+  r.reason === "recovered" && recoverySends.length === 2, JSON.stringify(r));
+check("successful retry logs marker with delivery counts",
+  insertedLogs.length === 1 && insertedLogs[0].metadataJson?.delivered === 1 && insertedLogs[0].metadataJson?.failed === 0,
+  JSON.stringify(insertedLogs));
+// Third tick — dedupe holds after the successful retry.
+r = await checkSweepHealth(NOW);
+check("dedupe holds after successful retry",
+  r.reason === "run_recent" && recoverySends.length === 2, JSON.stringify(r));
+
+// 8j. Thrown delivery behaves like undelivered: claim released, no marker.
+reset();
+recoveryEmailImpl = async () => { throw new Error("simulated: provider down"); };
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+r = await checkSweepHealth(NOW);
+check("thrown send: not recovered, claim released",
+  r.reason === "run_recent" && claimedAlertAt === null && insertedLogs.length === 0,
+  JSON.stringify({ r, claimedAlertAt }));
+
+// 8k. Partial delivery: one admin reached — counts as sent, claim held.
+reset();
+adminRows = [
+  { id: 1, email: "root@greensynk.com", firstName: "Root" },
+  { id: 2, email: "ops@greensynk.com", firstName: "Ops" },
+];
+recoveryEmailImpl = async (opts) =>
+  opts.to === "root@greensynk.com" ? { delivered: true } : { delivered: false };
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+r = await checkSweepHealth(NOW);
+check("partial delivery still counts as recovered",
+  r.reason === "recovered" && claimedAlertAt !== null, JSON.stringify(r));
+check("partial delivery marker records delivered=1 failed=1",
+  insertedLogs[0]?.metadataJson?.delivered === 1 && insertedLogs[0]?.metadataJson?.failed === 1,
+  JSON.stringify(insertedLogs[0]?.metadataJson));
+
+// 8h. Claim write failure: the error propagates and NO un-deduped email/marker.
+reset();
+claimShouldFail = true;
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+let threw = false;
+try { await checkSweepHealth(NOW); } catch { threw = true; }
+check("claim write failure propagates (send aborted)", threw === true);
+check("claim write failure logs no marker", insertedLogs.length === 0, JSON.stringify(insertedLogs));
+
+// 8d. No recovery notice when the run predates the alert (outage still open).
+reset();
+activityRows = [
+  { action: RUN_ACTION, createdAt: hoursAgo(80) },
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(5) },
+];
+r = await checkSweepHealth(NOW);
+check("run older than alert: no recovery, still deduped alert",
+  r.alerted === false && r.reason === "recently_alerted", JSON.stringify(r));
+
+// 8e. Recent run with no prior alert: plain healthy, no recovery email.
+reset();
+activityRows = [{ action: RUN_ACTION, createdAt: hoursAgo(2) }];
+r = await checkSweepHealth(NOW);
+check("recent run without prior alert is just run_recent",
+  r.reason === "run_recent" && insertedLogs.length === 0, JSON.stringify(r));
+
+// 8f. Recovery with no recipients: no marker burned, falls through to healthy.
+reset();
+adminRows = [{ id: 1, email: "", firstName: "NoMail" }];
+activityRows = [
+  { action: SWEEP_ALERT_ACTION, createdAt: hoursAgo(30) },
+  { action: RUN_ACTION, createdAt: hoursAgo(2) },
+];
+r = await checkSweepHealth(NOW);
+check("recovery with no recipients burns no marker",
+  r.reason === "run_recent" && insertedLogs.length === 0, JSON.stringify(r));
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);
