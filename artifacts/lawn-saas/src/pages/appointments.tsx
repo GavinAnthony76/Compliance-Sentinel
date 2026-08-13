@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, Calendar, Download, FileText, Images, X, ImageIcon, Loader2 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
+import { toDateRangeParams } from '@/lib/appointment-date-range';
 import { useLocation } from 'wouter';
 
 function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
@@ -336,12 +337,17 @@ export function AppointmentsPage() {
   const [editing, setEditing] = useState<any>(null);
   const [viewingPhotos, setViewingPhotos] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [creatingInvoice, setCreatingInvoice] = useState<number | null>(null);
+  const { startDate: startDateParam, endDate: endDateParam } = toDateRangeParams(startDate, endDate);
   const { user } = useAuthState();
   const plan = user?.company?.subscriptionPlan ?? 'starter';
   const isStaff = user?.role === 'staff';
   const { data, isLoading } = useListAppointments({
     status: statusFilter || undefined,
+    startDate: startDateParam,
+    endDate: endDateParam,
     page: 1,
     limit: 50,
     ...(isStaff && user?.id ? { assignedUserId: user.id } : {}),
@@ -395,6 +401,8 @@ export function AppointmentsPage() {
               // Pass the active on-screen filters so the CSV matches the list.
               const params = new URLSearchParams();
               if (statusFilter) params.set('status', statusFilter);
+              if (startDateParam) params.set('startDate', startDateParam);
+              if (endDateParam) params.set('endDate', endDateParam);
               if (isStaff && user?.id) params.set('assignedUserId', String(user.id));
               const qs = params.toString();
               downloadExport(`/api/export/appointments${qs ? `?${qs}` : ''}`, 'appointments.csv', msg => toast({ title: msg, variant: 'destructive' }));
@@ -406,7 +414,8 @@ export function AppointmentsPage() {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-6">
+        <div className="flex gap-2 flex-wrap">
         {statuses.map(s => (
           <button
             key={s}
@@ -416,6 +425,18 @@ export function AppointmentsPage() {
             {s ? s.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()) : 'All'}
           </button>
         ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <label className="text-sm text-muted-foreground font-medium">From</label>
+          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-10 w-40" aria-label="From date" />
+          <label className="text-sm text-muted-foreground font-medium">To</label>
+          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-10 w-40" aria-label="To date" />
+          {(startDate || endDate) && (
+            <Button variant="ghost" size="sm" onClick={() => { setStartDate(''); setEndDate(''); }}>
+              <X className="w-4 h-4 mr-1" />Clear dates
+            </Button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
