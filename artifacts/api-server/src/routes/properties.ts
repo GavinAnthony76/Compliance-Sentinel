@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, propertiesTable } from "@workspace/db";
+import { db, propertiesTable, customersTable } from "@workspace/db";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireActiveSubscription } from "../lib/subscription";
@@ -19,7 +19,7 @@ const createPropertySchema = z.object({
   propertyNotes: z.string().max(2000).optional().nullable(),
 });
 
-const updatePropertySchema = createPropertySchema.partial().omit({ customerId: true });
+const updatePropertySchema = createPropertySchema.partial();
 
 const router = Router();
 router.use(requireAuth);
@@ -67,6 +67,10 @@ router.put("/:id", async (req: any, res) => {
   if (!existing) return res.status(404).json({ error: "NotFound" });
   const bodyParsed = updatePropertySchema.safeParse(req.body);
   if (!bodyParsed.success) return res.status(400).json({ error: "ValidationError", message: bodyParsed.error.message });
+  if (bodyParsed.data.customerId !== undefined && bodyParsed.data.customerId !== existing.customerId) {
+    const [customer] = await db.select({ id: customersTable.id }).from(customersTable).where(and(eq(customersTable.id, bodyParsed.data.customerId), eq(customersTable.companyId, companyId))).limit(1);
+    if (!customer) return res.status(400).json({ error: "ValidationError", message: "Customer not found for this company" });
+  }
   const [updated] = await db.update(propertiesTable).set({ ...bodyParsed.data, updatedAt: new Date() }).where(and(eq(propertiesTable.id, id), eq(propertiesTable.companyId, companyId))).returning();
   await logActivity({ companyId, userId, action: "property.updated", entityType: "property", entityId: id });
   return res.json(updated);
