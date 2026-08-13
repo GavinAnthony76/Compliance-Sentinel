@@ -4,6 +4,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { buildInvoiceFilterConditions } from "../lib/invoice-filters";
+import { buildAppointmentFilterConditions } from "../lib/appointment-filters";
 
 import { requireActiveSubscription } from "../lib/subscription";
 
@@ -41,11 +42,13 @@ router.get("/customers", async (req: any, res) => {
 });
 
 router.get("/appointments", async (req: any, res) => {
-  const { companyId } = req.user;
+  // Honor the same status/customerId/assignedUserId/startDate/endDate filters
+  // as GET /appointments so the CSV matches what the appointments screen shows.
+  const conditions = buildAppointmentFilterConditions(req.user, req.query);
   const appointments = await db
     .select()
     .from(appointmentsTable)
-    .where(eq(appointmentsTable.companyId, companyId))
+    .where(and(...conditions))
     .orderBy(desc(appointmentsTable.scheduledStart));
 
   const customerIds = [...new Set(appointments.map(a => a.customerId))];

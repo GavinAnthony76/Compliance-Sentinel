@@ -390,7 +390,14 @@ export function AppointmentsPage() {
         </div>
         <div className="flex gap-2">
           {plan === 'pro' && (
-            <Button variant="outline" onClick={() => downloadExport('/api/export/appointments', 'appointments.csv', msg => toast({ title: msg, variant: 'destructive' }))}>
+            <Button variant="outline" onClick={() => {
+              // Pass the active on-screen filters so the CSV matches the list.
+              const params = new URLSearchParams();
+              if (statusFilter) params.set('status', statusFilter);
+              if (isStaff && user?.id) params.set('assignedUserId', String(user.id));
+              const qs = params.toString();
+              downloadExport(`/api/export/appointments${qs ? `?${qs}` : ''}`, 'appointments.csv', msg => toast({ title: msg, variant: 'destructive' }));
+            }}>
               <Download className="w-4 h-4 mr-2" />Export CSV
             </Button>
           )}

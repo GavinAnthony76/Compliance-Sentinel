@@ -10,6 +10,7 @@ import { logCommunicationEvent } from "../lib/communications";
 import { sendReminder, sendEmail, sendAppointmentStatusEmail, sendAppointmentConfirmationEmail, sendAppointmentRescheduledEmail } from "../lib/notifications";
 import { sendSMSWithConsent } from "../lib/sms-consent";
 import { fireAutomations } from "../lib/automations";
+import { buildAppointmentFilterConditions } from "../lib/appointment-filters";
 
 // ─── GPS job-tracking helpers ────────────────────────────────────────────────
 
@@ -268,14 +269,8 @@ router.get("/", async (req: any, res) => {
   const limit = Number(req.query.limit) || 50;
   const offset = (page - 1) * limit;
 
-  const conditions: any[] = [eq(appointmentsTable.companyId, companyId)];
-  // Staff only ever see the appointments assigned to them.
-  if (role === "staff") conditions.push(eq(appointmentsTable.assignedUserId, userId));
-  if (req.query.status) conditions.push(eq(appointmentsTable.status, req.query.status as string));
-  if (req.query.customerId) conditions.push(eq(appointmentsTable.customerId, Number(req.query.customerId)));
-  if (req.query.assignedUserId) conditions.push(eq(appointmentsTable.assignedUserId, Number(req.query.assignedUserId)));
-  if (req.query.startDate) conditions.push(gte(appointmentsTable.scheduledStart, new Date(req.query.startDate as string)));
-  if (req.query.endDate) conditions.push(lte(appointmentsTable.scheduledStart, new Date(req.query.endDate as string)));
+  // Shared with GET /export/appointments so the CSV always matches the list.
+  const conditions = buildAppointmentFilterConditions({ companyId, userId, role }, req.query);
 
   const [appointments, totalResult] = await Promise.all([
     db.select().from(appointmentsTable).where(and(...conditions)).orderBy(desc(appointmentsTable.scheduledStart)).limit(limit).offset(offset),
