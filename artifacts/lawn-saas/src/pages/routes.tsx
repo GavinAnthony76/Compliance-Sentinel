@@ -2,9 +2,10 @@ import { useState } from 'react';
 import {
   useListRoutes, useCreateRoute, useUpdateRoute, useDeleteRoute,
   useGetRoute, useAddRouteStop, useDeleteRouteStop,
-  useListTeam, useListAppointments,
+  useListTeam,
   getListRoutesQueryKey, getGetRouteQueryKey,
 } from '@workspace/api-client-react';
+import { AppointmentSearchSelect } from '@/components/entity-search-selects';
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
@@ -121,7 +122,6 @@ function RouteFormModal({ route, onClose }: { route?: any; onClose: () => void }
 
 function StopsModal({ routeId, routeName, onClose }: { routeId: number; routeName: string; onClose: () => void }) {
   const { data, isLoading } = useGetRoute(routeId);
-  const { data: apptList } = useListAppointments({ page: 1, limit: 100, status: 'confirmed' } as any);
   const { toast } = useToast();
   const qc = useQueryClient();
   const addStopMut = useAddRouteStop();
@@ -131,9 +131,7 @@ function StopsModal({ routeId, routeName, onClose }: { routeId: number; routeNam
   const [etaMinutes, setEtaMinutes] = useState('');
   const [optimizing, setOptimizing] = useState(false);
 
-  const existingApptIds = new Set((data as any)?.stops?.map((s: any) => s.appointmentId) ?? []);
-
-  const availableAppts = (apptList?.appointments ?? []).filter(a => !existingApptIds.has(a.id));
+  const existingApptIds = new Set<number>((data as any)?.stops?.map((s: any) => s.appointmentId) ?? []);
 
   const handleAddStop = async () => {
     if (!selectedApptId) return;
@@ -241,18 +239,15 @@ function StopsModal({ routeId, routeName, onClose }: { routeId: number; routeNam
           <div>
             <p className="text-sm font-medium mb-2">Add Stop</p>
             <div className="flex gap-2">
-              <select
-                className="flex-1 h-10 px-3 rounded-xl border border-input bg-background text-sm"
-                value={selectedApptId}
-                onChange={e => setSelectedApptId(e.target.value)}
-              >
-                <option value="">Pick an appointment...</option>
-                {availableAppts.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.customerName} — {format(new Date(a.scheduledStart), 'MMM d, h:mm a')} {a.serviceName ? `(${a.serviceName})` : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="flex-1">
+                <AppointmentSearchSelect
+                  value={selectedApptId}
+                  onChange={setSelectedApptId}
+                  placeholder="Pick an appointment..."
+                  status="confirmed"
+                  excludeIds={existingApptIds}
+                />
+              </div>
               <Button size="sm" onClick={handleAddStop} disabled={!selectedApptId} isLoading={addStopMut.isPending}>
                 <Plus className="w-4 h-4 mr-1" />Add
               </Button>

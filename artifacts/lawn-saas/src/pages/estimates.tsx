@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useListCustomers, useGetEstimate, useListServices } from '@workspace/api-client-react';
+import { useListEstimates, useCreateEstimate, useDeleteEstimate, useUpdateEstimate, useGetEstimate, useListServices } from '@workspace/api-client-react';
+import { CustomerSearchSelect } from '@/components/entity-search-selects';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
 import { LineItemsEditor, type LineItem } from '@/components/line-items-editor';
@@ -34,8 +35,8 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
   const qc = useQueryClient();
   const createMut = useCreateEstimate();
   const updateMut = useUpdateEstimate();
-  const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
-  const { data: services } = useListServices({ limit: 200 } as any);
+  // Services endpoint returns the full list (no server-side cap).
+  const { data: services } = useListServices();
   const { data: detail } = useGetEstimate(estimate?.id ?? 0, { query: { enabled: isEdit } } as any);
 
   useEffect(() => {
@@ -204,10 +205,10 @@ function EstimateModal({ onClose, estimate }: { onClose: () => void; estimate?: 
                   <p className="text-[11px] text-muted-foreground">They'll be saved as a lead so you can follow up — no account needed to receive the estimate.</p>
                 </div>
               ) : (
-                <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-                  <option value="">Select customer...</option>
-                  {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-                </select>
+                <CustomerSearchSelect
+                  value={form.customerId}
+                  onChange={v => setForm(f => ({ ...f, customerId: v }))}
+                />
               )}
             </div>
           )}

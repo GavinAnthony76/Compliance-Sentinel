@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useListReviewRequests, useSendReviewRequest, useListCustomers } from '@workspace/api-client-react';
+import { useListReviewRequests, useSendReviewRequest } from '@workspace/api-client-react';
+import { CustomerSearchSelect } from '@/components/entity-search-selects';
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button } from '@/components/ui';
@@ -16,10 +17,10 @@ export function ReviewsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const sendMut = useSendReviewRequest();
-  const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.customerId) { toast({ title: 'Please select a customer', variant: 'destructive' }); return; }
     try {
       await sendMut.mutateAsync({ data: { customerId: Number(form.customerId), channel: form.channel } });
       toast({ title: 'Review request sent!' });
@@ -40,10 +41,10 @@ export function ReviewsPage() {
             <form onSubmit={handleSend} className="space-y-4">
               <div>
                 <label className="text-sm font-medium">Customer *</label>
-                <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-                  <option value="">Select customer...</option>
-                  {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-                </select>
+                <CustomerSearchSelect
+                  value={form.customerId}
+                  onChange={v => setForm(f => ({ ...f, customerId: v }))}
+                />
               </div>
               <div>
                 <label className="text-sm font-medium">Channel</label>

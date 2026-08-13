@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useListRecurringPlans, useCreateRecurringPlan, useUpdateRecurringPlan, useDeleteRecurringPlan, useListCustomers, useListServices } from '@workspace/api-client-react';
+import { useListRecurringPlans, useCreateRecurringPlan, useUpdateRecurringPlan, useDeleteRecurringPlan, useListServices } from '@workspace/api-client-react';
+import { CustomerSearchSelect } from '@/components/entity-search-selects';
 import { AppLayout } from '@/components/layout';
 import { PlanGate } from '@/components/plan-gate';
 import { Card, Button, Input } from '@/components/ui';
@@ -18,11 +19,11 @@ function PlanModal({ plan, onClose }: { plan?: any; onClose: () => void }) {
   const qc = useQueryClient();
   const createMut = useCreateRecurringPlan();
   const updateMut = useUpdateRecurringPlan();
-  const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
   const { data: services } = useListServices();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.customerId) { toast({ title: 'Please select a customer', variant: 'destructive' }); return; }
     const data = { ...form, customerId: Number(form.customerId), serviceId: form.serviceId ? Number(form.serviceId) : undefined, price: form.price ? Number(form.price) : undefined };
     try {
       if (plan?.id) {
@@ -45,10 +46,11 @@ function PlanModal({ plan, onClose }: { plan?: any; onClose: () => void }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium">Customer *</label>
-            <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-              <option value="">Select customer...</option>
-              {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-            </select>
+            <CustomerSearchSelect
+              value={String(form.customerId)}
+              selectedLabel={plan?.customerName}
+              onChange={v => setForm(f => ({ ...f, customerId: v }))}
+            />
           </div>
           <div>
             <label className="text-sm font-medium">Service</label>

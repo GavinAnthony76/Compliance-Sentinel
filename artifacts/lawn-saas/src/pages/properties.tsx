@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useListProperties, useCreateProperty, useUpdateProperty, useDeleteProperty, useListCustomers } from '@workspace/api-client-react';
+import { useListProperties, useCreateProperty, useUpdateProperty, useDeleteProperty } from '@workspace/api-client-react';
+import { CustomerSearchSelect } from '@/components/entity-search-selects';
 import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, MapPin } from 'lucide-react';
@@ -23,10 +24,10 @@ function PropertyModal({ property, onClose }: { property?: any; onClose: () => v
   const qc = useQueryClient();
   const createMut = useCreateProperty();
   const updateMut = useUpdateProperty();
-  const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.customerId) { toast({ title: 'Please select a customer', variant: 'destructive' }); return; }
     const data = { ...form, customerId: Number(form.customerId) };
     try {
       if (property?.id) {
@@ -50,10 +51,10 @@ function PropertyModal({ property, onClose }: { property?: any; onClose: () => v
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-sm font-medium">Customer *</label>
-            <select className="w-full mt-1 h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-              <option value="">Select customer...</option>
-              {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-            </select>
+            <CustomerSearchSelect
+              value={String(form.customerId)}
+              onChange={v => setForm(f => ({ ...f, customerId: v }))}
+            />
           </div>
           <div>
             <label className="text-sm font-medium">Property Name</label>

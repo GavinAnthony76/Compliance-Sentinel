@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { useListAppointments, useCreateAppointment, useListCustomers, useListServices, useListTeam, getListAppointmentsQueryKey } from '@workspace/api-client-react';
+import { useEffect, useState } from 'react';
+import { useListAppointments, useCreateAppointment, useListServices, useListTeam, getListAppointmentsQueryKey } from '@workspace/api-client-react';
+import { CustomerSearchSelect } from '@/components/entity-search-selects';
 import { AppLayout } from '@/components/layout';
 import { Button, Input } from '@/components/ui';
 import { AppointmentStatusBadge } from '@/components/status-badge';
@@ -105,12 +106,12 @@ function NewJobModal({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const createMut = useCreateAppointment();
-  const { data: customers } = useListCustomers({ page: 1, limit: 100 } as any);
   const { data: services } = useListServices();
   const { data: team } = useListTeam();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.customerId) { toast({ title: 'Please select a customer', variant: 'destructive' }); return; }
     try {
       await createMut.mutateAsync({
         data: {
@@ -139,10 +140,10 @@ function NewJobModal({ onClose }: { onClose: () => void }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label className="text-sm font-medium">Customer *</label>
-            <select className="w-full h-11 px-3 rounded-xl border border-input bg-background text-sm" value={form.customerId} onChange={e => setForm(f => ({ ...f, customerId: e.target.value }))} required>
-              <option value="">Select customer...</option>
-              {customers?.customers.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-            </select>
+            <CustomerSearchSelect
+              value={form.customerId}
+              onChange={v => setForm(f => ({ ...f, customerId: v }))}
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -218,14 +219,31 @@ export function CalendarPage() {
   const fetchStart = view === 'week' ? weekStart : calStart;
   const fetchEnd = view === 'week' ? weekEnd : calEnd;
 
+  // Accumulate every page in the visible range so busy months aren't
+  // silently truncated at a fixed cap.
+  const [page, setPage] = useState(1);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const rangeKey = `${fetchStart.toISOString()}|${fetchEnd.toISOString()}`;
+  useEffect(() => { setPage(1); }, [rangeKey]);
+
   const { data } = useListAppointments({
     startDate: fetchStart.toISOString(),
     endDate: fetchEnd.toISOString(),
-    page: 1,
+    page,
     limit: 200,
   } as any);
 
-  const appointments = data?.appointments ?? [];
+  useEffect(() => {
+    const d = data as { appointments?: any[]; page?: number; limit?: number; total?: number } | undefined;
+    if (!d?.appointments) return;
+    setAppointments(prev => {
+      const base = (d.page ?? 1) === 1 ? [] : prev;
+      const seen = new Set(base.map(a => a.id));
+      return [...base, ...d.appointments!.filter(a => !seen.has(a.id))];
+    });
+    const fetched = (d.page ?? 1) * (d.limit ?? 200);
+    if ((d.total ?? 0) > fetched) setPage((d.page ?? 1) + 1);
+  }, [data]);
 
   const getAppsForDay = (day: Date) =>
     appointments.filter(a => isSameDay(new Date(a.scheduledStart), day));
