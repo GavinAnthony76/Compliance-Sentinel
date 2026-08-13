@@ -190,7 +190,20 @@ const drizzleNamedExports = {
   isNull: (col) => (row) => row[col.__col] == null,
   inArray: (col, arr) => (row) => arr.includes(row[col.__col]),
   desc: (col) => col,
-  sql: Object.assign(() => ({}), { raw: () => ({}) }),
+  // Tagged-template use must yield a row predicate: the portal claim-ownership
+  // guards compare `date_trunc('milliseconds', col) = token`. Model that as a
+  // ms-equality between the referenced column and the bound value.
+  sql: Object.assign((strings, ...vals) => {
+    if (Array.isArray(strings)) {
+      const col = vals.find((v) => v && v.__col);
+      const bound = vals.find((v) => !(v && v.__col));
+      if (col) {
+        const toMs = (v) => (v instanceof Date ? v.getTime() : v);
+        return (row) => toMs(row[col.__col]) === toMs(bound);
+      }
+    }
+    return () => true;
+  }, { raw: () => ({}) }),
 };
 mock.module("drizzle-orm", { namedExports: drizzleNamedExports });
 

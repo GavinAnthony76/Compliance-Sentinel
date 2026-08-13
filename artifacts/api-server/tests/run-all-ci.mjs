@@ -144,6 +144,16 @@ async function main() {
     { env: { ...process.env, NODE_ENV: "test" } },
   );
 
+  // Portal payment claim-ownership race suite: the portal confirm-payment and
+  // pay-session writers must not touch a claim created after their pre-read.
+  console.log("\n########## Portal claim-ownership race validation ##########\n");
+  console.log("=== tests/portal-claim-ownership.test.mjs ===");
+  results["portal-claim-ownership"] = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/portal-claim-ownership.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+
   // Notification-email module-mock suites: no server/DB needed (they mock
   // @workspace/db + resend entirely in-memory). Each starts with a preflight
   // (tests/mock-surface-check.mjs) that fails with an actionable "add X to the
@@ -192,6 +202,9 @@ async function main() {
   const sweepOwnershipOk = results["sweep-claim-ownership"] === 0;
   if (!sweepOwnershipOk) failed++;
   console.log(`  ${sweepOwnershipOk ? "PASS" : "FAIL"}  Sweep claim-ownership race validation`);
+  const portalOwnershipOk = results["portal-claim-ownership"] === 0;
+  if (!portalOwnershipOk) failed++;
+  console.log(`  ${portalOwnershipOk ? "PASS" : "FAIL"}  Portal claim-ownership race validation`);
   for (const [key] of emailSuites) {
     const ok = results[key] === 0;
     if (!ok) failed++;

@@ -90,6 +90,13 @@ router.post("/webhook", async (req: Request, res) => {
             // Conditional update so Stripe retries/replays of the same event
             // don't fire duplicate receipt + owner notification emails: only
             // rows transitioning out of "paid" are updated and notified.
+            //
+            // Claim-ownership audit (see lib/stuck-invoices.ts): unlike the
+            // portal confirm-payment fallback, this writer does NO prior
+            // select of the invoice — it acts solely on the Stripe-signed
+            // event, so there is no stale "observed row" to protect and no
+            // select-then-update race to close with an updatedAt token. The
+            // single conditional UPDATE here is already atomic.
             const transitioned = await db.update(invoicesTable).set({
               status: "paid",
               paidAt: new Date(),

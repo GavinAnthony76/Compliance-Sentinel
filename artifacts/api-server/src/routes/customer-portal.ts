@@ -856,10 +856,24 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
   });
 
   // Store checkout session ID so confirm-payment can retrieve and verify it.
-  // Guard on status so a session id can't clobber an invoice that was paid in
-  // the meantime.
+  // Claim-ownership guard (mirrors lib/stuck-invoices.ts): besides the status
+  // guard, only write onto the exact row version this handler read at the top
+  // (updatedAt token). A lot of slow Stripe I/O happened since that read — a
+  // concurrent writer (e.g. an autopay charge claiming the invoice with
+  // status "processing") may have re-claimed the row, and overwriting its
+  // stripePaymentIntentId/updatedAt would clobber that live claim's token.
+  // If the token no longer matches, skip the write: the webhook path will
+  // still record the payment if this session completes.
+  //
+  // Millisecond truncation: DB-written timestamps (defaultNow()) carry
+  // microseconds that a JS Date read-back loses, so a raw equality against
+  // the observed Date would never match its own row. Compare at ms precision.
   await db.update(invoicesTable).set({ stripePaymentIntentId: session.id, updatedAt: new Date() })
-    .where(and(eq(invoicesTable.id, id), ne(invoicesTable.status, "paid")));
+    .where(and(
+      eq(invoicesTable.id, id),
+      ne(invoicesTable.status, "paid"),
+      sql`date_trunc('milliseconds', ${invoicesTable.updatedAt}) = ${invoice.updatedAt}`,
+    ));
 
   return res.json({ url: session.url });
 });
@@ -900,11 +914,27 @@ router.post("/invoices/:id/confirm-payment", requirePortalAuth, async (req: any,
   // paid concurrently between the pre-read guard above and here, so only the
   // request that actually flips status -> paid sends notifications. Prevents
   // duplicate receipt + owner emails in the webhook/fallback race.
+  //
+  // Claim-ownership guard (mirrors lib/stuck-invoices.ts): the update also
+  // matches the exact updatedAt this handler observed in its pre-read
+  // (claimToken). Between that read and this write we did a slow Stripe
+  // round-trip; a concurrent writer — e.g. an autopay charge flipping the
+  // invoice to "processing" with a fresh updatedAt — may have re-claimed the
+  // row, and a bare `status != paid` guard would overwrite that LIVE claim.
+  // If the token no longer matches, write nothing: whichever writer owns the
+  // row now (autopay success path or the webhook) records the payment.
+  const claimToken = invoice.updatedAt;
   const transitioned = await db.update(invoicesTable).set({
     status: "paid",
     paidAt: new Date(),
     updatedAt: new Date(),
-  }).where(and(eq(invoicesTable.id, id), ne(invoicesTable.status, "paid"))).returning({ id: invoicesTable.id });
+  }).where(and(
+    eq(invoicesTable.id, id),
+    ne(invoicesTable.status, "paid"),
+    // ms-truncated compare: DB-written timestamps carry microseconds a JS
+    // Date read-back loses; raw equality would never match its own row.
+    sql`date_trunc('milliseconds', ${invoicesTable.updatedAt}) = ${claimToken}`,
+  )).returning({ id: invoicesTable.id });
 
   if (transitioned.length > 0) {
     const { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } = await import("../lib/notifications");
