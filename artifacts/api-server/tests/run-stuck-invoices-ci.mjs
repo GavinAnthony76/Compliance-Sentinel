@@ -64,7 +64,13 @@ async function main() {
     ["--experimental-test-module-mocks", "tests/autopay-claim-ownership.test.mjs"],
     { env: { ...process.env, NODE_ENV: "test" } },
   );
-  process.exit(code !== 0 ? code : raceCode !== 0 ? raceCode : ownershipCode);
+  console.log("\n=== tests/sweep-claim-ownership.test.mjs ===");
+  const sweepOwnershipCode = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/sweep-claim-ownership.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+  process.exit(code !== 0 ? code : raceCode !== 0 ? raceCode : ownershipCode !== 0 ? ownershipCode : sweepOwnershipCode);
 }
 
 main().catch((err) => {

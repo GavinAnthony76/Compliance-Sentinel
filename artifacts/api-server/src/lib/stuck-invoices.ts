@@ -56,6 +56,11 @@ export async function releaseStuckProcessingInvoices(): Promise<void> {
 
     for (const invoice of stuck) {
       try {
+        // Ownership token: the exact stale updatedAt this pass selected. Every
+        // write below must match it so the sweep only acts on the claim it
+        // actually judged stale — never on a fresh claim that re-claimed the
+        // invoice between our select and update.
+        const staleClaimToken = invoice.updatedAt;
         // 1. Reconcile with the card processor first.
         let succeededIntent: { id: string } | null = null;
         try {
@@ -80,8 +85,11 @@ export async function releaseStuckProcessingInvoices(): Promise<void> {
             paymentMethod: "card",
             stripePaymentIntentId: succeededIntent.id,
             updatedAt: new Date(),
-          }).where(and(eq(invoicesTable.id, invoice.id), eq(invoicesTable.status, "processing")))
-            .returning({ id: invoicesTable.id });
+          }).where(and(
+            eq(invoicesTable.id, invoice.id),
+            eq(invoicesTable.status, "processing"),
+            eq(invoicesTable.updatedAt, staleClaimToken),
+          )).returning({ id: invoicesTable.id });
 
           if (transitioned.length > 0) {
             await logActivity({ companyId: invoice.companyId, action: "invoice.autopay_reconciled_paid", entityType: "invoice", entityId: invoice.id });
@@ -98,7 +106,11 @@ export async function releaseStuckProcessingInvoices(): Promise<void> {
         // 2. No successful charge — release back to an unpaid, chargeable state.
         const next = revertStatusFor(invoice);
         const released = await db.update(invoicesTable).set({ status: next, updatedAt: new Date() })
-          .where(and(eq(invoicesTable.id, invoice.id), eq(invoicesTable.status, "processing")))
+          .where(and(
+            eq(invoicesTable.id, invoice.id),
+            eq(invoicesTable.status, "processing"),
+            eq(invoicesTable.updatedAt, staleClaimToken),
+          ))
           .returning({ id: invoicesTable.id });
 
         if (released.length > 0) {

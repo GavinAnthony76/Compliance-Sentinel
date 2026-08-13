@@ -134,6 +134,16 @@ async function main() {
     { env: { ...process.env, NODE_ENV: "test" } },
   );
 
+  // Sweep claim-ownership race suite: a sweep pass must not release (or
+  // overwrite) a claim re-created between its stale select and its update.
+  console.log("\n########## Sweep claim-ownership race validation ##########\n");
+  console.log("=== tests/sweep-claim-ownership.test.mjs ===");
+  results["sweep-claim-ownership"] = await run(
+    "node",
+    ["--experimental-test-module-mocks", "tests/sweep-claim-ownership.test.mjs"],
+    { env: { ...process.env, NODE_ENV: "test" } },
+  );
+
   // Notification-email module-mock suites: no server/DB needed (they mock
   // @workspace/db + resend entirely in-memory). Each starts with a preflight
   // (tests/mock-surface-check.mjs) that fails with an actionable "add X to the
@@ -179,6 +189,9 @@ async function main() {
   const ownershipOk = results["autopay-claim-ownership"] === 0;
   if (!ownershipOk) failed++;
   console.log(`  ${ownershipOk ? "PASS" : "FAIL"}  Claim-ownership race validation`);
+  const sweepOwnershipOk = results["sweep-claim-ownership"] === 0;
+  if (!sweepOwnershipOk) failed++;
+  console.log(`  ${sweepOwnershipOk ? "PASS" : "FAIL"}  Sweep claim-ownership race validation`);
   for (const [key] of emailSuites) {
     const ok = results[key] === 0;
     if (!ok) failed++;
