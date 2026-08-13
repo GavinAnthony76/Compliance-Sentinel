@@ -74,16 +74,42 @@ function chain(resolveRows) {
   return c;
 }
 
+// The route now issues two differently-filtered activity_logs queries (sweep
+// runs vs alert markers), so the mock must honor the eq(action, ...) filter.
+// Drizzle's condition object embeds the bound value; walk it and pull out any
+// "admin.*" action strings to use as the filter.
+function extractActionFilters(cond, found = new Set(), seen = new Set()) {
+  if (!cond || typeof cond !== "object" || seen.has(cond)) return found;
+  seen.add(cond);
+  for (const v of Object.values(cond)) {
+    if (typeof v === "string" && v.startsWith("admin.")) found.add(v);
+    else if (v && typeof v === "object") extractActionFilters(v, found, seen);
+  }
+  return found;
+}
+
 const dbMock = {
   select: () => {
     let fromTable = null;
+    let whereCond = null;
     const c = chain(() => {
       if (fromTable?.__table === "platform_settings") return settingsRows;
-      if (fromTable?.__table === "activity_logs") return activityRows;
+      if (fromTable?.__table === "activity_logs") {
+        const actions = extractActionFilters(whereCond);
+        const rows = actions.size > 0
+          ? activityRows.filter((r) => actions.has(r.action))
+          : activityRows;
+        // Route always orders by createdAt DESC.
+        return [...rows].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      }
       return [];
     });
     c.from = (t) => {
       fromTable = t;
+      return c;
+    };
+    c.where = (cond) => {
+      whereCond = cond;
       return c;
     };
     return c;
@@ -163,6 +189,40 @@ r = await callHandler();
 check("empty history yields lastRun=null with sweepEnabled still present",
   r.body?.lastRun === null && Array.isArray(r.body?.runs) && r.body.runs.length === 0 && r.body?.sweepEnabled === true,
   JSON.stringify(r.body));
+
+// 4. Active outage: alert marker NEWER than the latest run → surfaced.
+const runAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+const alertAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+activityRows = [
+  { id: 10, createdAt: runAt, action: "admin.admins_auto_deactivated", metadataJson: { count: 0, thresholdDays: 90 } },
+  { id: 11, createdAt: alertAt, action: "admin.sweep_health_alert_sent", metadataJson: { recipients: 3 } },
+];
+r = await callHandler();
+check("alert newer than last run is returned with sentAt + recipients",
+  r.body?.lastAlert != null &&
+  new Date(r.body.lastAlert.sentAt).getTime() === alertAt.getTime() &&
+  r.body.lastAlert.recipients === 3,
+  JSON.stringify(r.body?.lastAlert));
+
+// 5. Recovered then newly overdue: alert marker OLDER than the latest run must
+// NOT be surfaced — it escalated a previous, resolved outage.
+const oldAlertAt = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+const recoveryRunAt = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+activityRows = [
+  { id: 20, createdAt: oldAlertAt, action: "admin.sweep_health_alert_sent", metadataJson: { recipients: 2 } },
+  { id: 21, createdAt: recoveryRunAt, action: "admin.admins_auto_deactivated", metadataJson: { count: 1, thresholdDays: 90 } },
+];
+r = await callHandler();
+check("alert from a previous outage (older than latest run) is suppressed",
+  r.body?.lastAlert === null, JSON.stringify(r.body?.lastAlert));
+
+// 6. No run ever recorded: an alert marker still counts as current.
+activityRows = [
+  { id: 30, createdAt: alertAt, action: "admin.sweep_health_alert_sent", metadataJson: { recipients: 1 } },
+];
+r = await callHandler();
+check("alert with no recorded run at all is still surfaced",
+  r.body?.lastAlert?.recipients === 1, JSON.stringify(r.body?.lastAlert));
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

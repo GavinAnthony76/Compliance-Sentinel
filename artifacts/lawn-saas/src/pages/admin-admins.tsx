@@ -32,9 +32,15 @@ interface LockoutRun {
 const OVERDUE_AMBER_MS = 36 * 60 * 60 * 1000;
 const OVERDUE_RED_MS = 72 * 60 * 60 * 1000;
 
+interface LockoutAlert {
+  sentAt: string;
+  recipients: number | null;
+}
+
 export function LockoutHistoryPanel() {
   const [runs, setRuns] = useState<LockoutRun[] | null>(null);
   const [sweepEnabled, setSweepEnabled] = useState<boolean | null>(null);
+  const [lastAlert, setLastAlert] = useState<LockoutAlert | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -48,6 +54,7 @@ export function LockoutHistoryPanel() {
         if (!cancelled) {
           setRuns(data.runs ?? []);
           setSweepEnabled(typeof data.sweepEnabled === 'boolean' ? data.sweepEnabled : null);
+          setLastAlert(data.lastAlert && data.lastAlert.sentAt ? data.lastAlert : null);
         }
       } catch {
         if (!cancelled) setLoadFailed(true);
@@ -134,6 +141,14 @@ export function LockoutHistoryPanel() {
                 : 'The sweep is enabled but has never run — it may not be scheduled correctly.'}
             </p>
           ) : null}
+          {!disabled && overdueLevel !== 'none' && lastAlert && (
+            <p className="text-xs text-slate-400 mt-0.5">
+              {lastAlert.recipients != null
+                ? `Alert emailed to ${lastAlert.recipients} admin${lastAlert.recipients === 1 ? '' : 's'} on ${format(new Date(lastAlert.sentAt), 'MMM d, yyyy h:mm a')}`
+                : `Alert emailed to admins on ${format(new Date(lastAlert.sentAt), 'MMM d, yyyy h:mm a')}`}
+              {' '}— this outage was already escalated.
+            </p>
+          )}
         </div>
         {runs.length > 1 && (
           <button

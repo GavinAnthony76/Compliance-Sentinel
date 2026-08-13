@@ -109,6 +109,36 @@ describe("LockoutHistoryPanel (admin-admins.tsx)", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the last emailed alert next to the overdue warning", async () => {
+    const lastRan = new Date("2026-07-18T02:00:00Z");
+    vi.useFakeTimers({ now: lastRan.getTime() + 80 * HOUR, toFake: ["Date"] });
+    mockFetchWith({
+      sweepEnabled: true,
+      runs: [{ id: 1, ranAt: lastRan.toISOString(), deactivatedCount: 0, thresholdDays: 90 }],
+      lastAlert: { sentAt: "2026-07-20T09:00:00Z", recipients: 3 },
+    });
+
+    render(<LockoutHistoryPanel />);
+
+    const alertLine = await screen.findByText(/Alert emailed to 3 admins on/);
+    expect(alertLine.textContent).toContain("Jul 20, 2026");
+    vi.useRealTimers();
+  });
+
+  it("does not show the alert line when the sweep is healthy", async () => {
+    const lastRan = new Date();
+    mockFetchWith({
+      sweepEnabled: true,
+      runs: [{ id: 1, ranAt: lastRan.toISOString(), deactivatedCount: 0, thresholdDays: 90 }],
+      lastAlert: { sentAt: "2026-07-20T09:00:00Z", recipients: 3 },
+    });
+
+    render(<LockoutHistoryPanel />);
+
+    await screen.findByText(/Last ran/);
+    expect(screen.queryByText(/Alert emailed/)).not.toBeInTheDocument();
+  });
+
   it("labels a single-admin run with singular wording", async () => {
     mockFetchWith({
       sweepEnabled: true,

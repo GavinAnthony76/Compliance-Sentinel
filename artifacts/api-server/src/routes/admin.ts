@@ -9,6 +9,7 @@ import { isEmailConfigured } from "../lib/resend";
 import { sendAdminDeactivationEmail, sendAdminReactivationEmail, resolveBaseUrl } from "../lib/notifications";
 import { getCatalog } from "../lib/plan-catalog";
 import { deactivateStaleAdmins } from "../lib/stale-admins";
+import { SWEEP_ALERT_ACTION } from "../lib/sweep-health";
 import { getPlatformSettings, updatePlatformSettings, MIN_STALE_ADMIN_DAYS, MAX_STALE_ADMIN_DAYS } from "../lib/platform-settings";
 import { z } from "zod";
 
@@ -647,7 +648,30 @@ router.get("/lockout-runs", async (req, res) => {
 
   const settings = await getPlatformSettings();
 
-  return res.json({ runs, lastRun: runs[0] ?? null, sweepEnabled: settings.staleAdminSweepEnabled });
+  // Most recent sweep-outage alert email marker (logged by the sweep-health
+  // watchdog), so the UI can show that the outage was already escalated.
+  // Only surface it when it belongs to the CURRENT outage: once the sweep
+  // records a new run, any alert sent before that run is about a resolved
+  // outage and must not be shown against a later one (a stale "already
+  // escalated" notice would deter a needed manual escalation).
+  const [alertRow] = await db.select()
+    .from(activityLogsTable)
+    .where(eq(activityLogsTable.action, SWEEP_ALERT_ACTION))
+    .orderBy(desc(activityLogsTable.createdAt))
+    .limit(1);
+  const latestRunAt = rows[0] ? new Date(rows[0].createdAt).getTime() : null;
+  const alertIsCurrent = alertRow
+    ? latestRunAt == null || new Date(alertRow.createdAt).getTime() > latestRunAt
+    : false;
+  const alertMeta = (alertRow?.metadataJson ?? {}) as Record<string, unknown>;
+  const lastAlert = alertRow && alertIsCurrent
+    ? {
+        sentAt: alertRow.createdAt,
+        recipients: typeof alertMeta.recipients === "number" ? alertMeta.recipients : null,
+      }
+    : null;
+
+  return res.json({ runs, lastRun: runs[0] ?? null, sweepEnabled: settings.staleAdminSweepEnabled, lastAlert });
 });
 
 // ─── Admin Users ──────────────────────────────────────────────────────────────
