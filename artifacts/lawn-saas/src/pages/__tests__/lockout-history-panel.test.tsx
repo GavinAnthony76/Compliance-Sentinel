@@ -110,7 +110,7 @@ describe("LockoutHistoryPanel (admin-admins.tsx)", () => {
   });
 
   it("shows the last emailed alert next to the overdue warning", async () => {
-    const lastRan = new Date("2026-07-18T02:00:00Z");
+    const lastRan = new Date();
     vi.useFakeTimers({ now: lastRan.getTime() + 80 * HOUR, toFake: ["Date"] });
     mockFetchWith({
       sweepEnabled: true,
@@ -150,5 +150,65 @@ describe("LockoutHistoryPanel (admin-admins.tsx)", () => {
     const line = await screen.findByText(/Last ran/);
     expect(line.textContent).toContain("1 admin deactivated");
     expect(line.textContent).not.toContain("1 admins");
+  });
+
+  describe("overdue warning colors", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function renderWithLastRun(hoursAgo: number, sweepEnabled = true) {
+      const ranAt = new Date("2026-07-20T02:00:00Z");
+      vi.useFakeTimers({ now: ranAt.getTime() + hoursAgo * HOUR, toFake: ["Date"] });
+      mockFetchWith({
+        sweepEnabled,
+        runs: [{ id: 1, ranAt: ranAt.toISOString(), deactivatedCount: 0, thresholdDays: 90 }],
+      });
+      return render(<LockoutHistoryPanel />);
+    }
+
+    function panelContainer() {
+      return screen.getByText("Automatic inactivity lockout").closest(".rounded-xl") as HTMLElement;
+    }
+
+    it("shows no warning and emerald styling under 36 hours", async () => {
+      const { container } = renderWithLastRun(35);
+      await screen.findByText(/Last ran/);
+
+      expect(screen.queryByText(/hasn't run in/)).not.toBeInTheDocument();
+      expect(panelContainer().className).toContain("border-slate-800");
+      expect(panelContainer().className).not.toContain("amber");
+      expect(panelContainer().className).not.toContain("red");
+      expect(container.querySelector(".text-emerald-400")).not.toBeNull();
+    });
+
+    it("shows an amber border and warning text at 36 hours", async () => {
+      renderWithLastRun(36);
+      const warning = await screen.findByText(/hasn't run in 36 hours/);
+
+      expect(warning.className).toContain("text-amber-400");
+      expect(panelContainer().className).toContain("border-amber-500/50");
+      expect(panelContainer().className).not.toContain("red");
+    });
+
+    it("shows a red border and 'days' phrasing at 72 hours", async () => {
+      renderWithLastRun(72);
+      const warning = await screen.findByText(/hasn't run in 3 days/);
+
+      expect(warning.className).toContain("text-red-400");
+      expect(panelContainer().className).toContain("border-red-500/50");
+      expect(panelContainer().className).not.toContain("amber");
+    });
+
+    it("suppresses the overdue warning when the sweep is disabled, showing the turned-off note", async () => {
+      renderWithLastRun(100, false);
+      await screen.findByText(/Last ran/);
+
+      expect(screen.queryByText(/hasn't run in/)).not.toBeInTheDocument();
+      expect(screen.getByText("turned off")).toBeInTheDocument();
+      expect(panelContainer().className).toContain("border-slate-700");
+      expect(panelContainer().className).not.toContain("amber");
+      expect(panelContainer().className).not.toContain("red");
+    });
   });
 });
