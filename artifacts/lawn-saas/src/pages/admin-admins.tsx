@@ -31,6 +31,7 @@ interface LockoutRun {
 
 const OVERDUE_AMBER_MS = 36 * 60 * 60 * 1000;
 const OVERDUE_RED_MS = 72 * 60 * 60 * 1000;
+const OVERDUE_TICK_MS = 60 * 1000;
 
 interface LockoutAlert {
   sentAt: string;
@@ -43,6 +44,13 @@ export function LockoutHistoryPanel() {
   const [lastAlert, setLastAlert] = useState<LockoutAlert | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Re-render once a minute so the overdue level stays honest in long-lived tabs.
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), OVERDUE_TICK_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,7 +89,7 @@ export function LockoutHistoryPanel() {
 
   const lastRun = runs[0];
   const disabled = sweepEnabled === false;
-  const sinceLastRun = lastRun ? Date.now() - new Date(lastRun.ranAt).getTime() : null;
+  const sinceLastRun = lastRun ? now - new Date(lastRun.ranAt).getTime() : null;
   const hoursSince = sinceLastRun != null ? Math.floor(sinceLastRun / (60 * 60 * 1000)) : null;
   // Only warn about staleness when the sweep is supposed to be running.
   const overdueLevel: 'none' | 'amber' | 'red' = disabled

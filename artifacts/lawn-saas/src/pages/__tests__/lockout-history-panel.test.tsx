@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/hooks/use-toast", () => ({
@@ -196,6 +196,39 @@ describe("LockoutHistoryPanel (admin-admins.tsx)", () => {
       const warning = await screen.findByText(/hasn't run in 3 days/);
 
       expect(warning.className).toContain("text-red-400");
+      expect(panelContainer().className).toContain("border-red-500/50");
+      expect(panelContainer().className).not.toContain("amber");
+    });
+
+    it("upgrades the warning as time passes while the tab stays open", async () => {
+      const ranAt = new Date("2026-07-20T02:00:00Z");
+      vi.useFakeTimers({
+        now: ranAt.getTime() + 35 * HOUR,
+        toFake: ["Date", "setInterval", "clearInterval"],
+      });
+      mockFetchWith({
+        sweepEnabled: true,
+        runs: [{ id: 1, ranAt: ranAt.toISOString(), deactivatedCount: 0, thresholdDays: 90 }],
+      });
+      render(<LockoutHistoryPanel />);
+      await screen.findByText(/Last ran/);
+
+      // Healthy at 35h: no warning, emerald styling
+      expect(screen.queryByText(/hasn't run in/)).not.toBeInTheDocument();
+      expect(panelContainer().className).toContain("border-slate-800");
+
+      // Cross the 36h amber threshold without any refetch or reload
+      act(() => {
+        vi.advanceTimersByTime(2 * HOUR);
+      });
+      expect(screen.getByText(/hasn't run in 37 hours/)).toBeInTheDocument();
+      expect(panelContainer().className).toContain("border-amber-500/50");
+
+      // Keep the tab open past the 72h red threshold
+      act(() => {
+        vi.advanceTimersByTime(40 * HOUR);
+      });
+      expect(screen.getByText(/hasn't run in 3 days/)).toBeInTheDocument();
       expect(panelContainer().className).toContain("border-red-500/50");
       expect(panelContainer().className).not.toContain("amber");
     });
