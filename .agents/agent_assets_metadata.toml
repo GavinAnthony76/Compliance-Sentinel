@@ -11,33 +11,95 @@ id = "kwQAih80dLN-XN_vSIpxJ"
 uri = "file://GREENSYNC_OVERVIEW.md"
 type = "text"
 title = "GreenSynk — Comprehensive Application Document"
+logical_id = "73f6d171-204f-4907-a40d-aadbc35f43d0"
 
 [[outputs]]
 id = "FQVbXhAuwbTe1holrsQ-V"
 uri = "file://attached_assets/rcs/greensynk-rcs-logo.png"
 type = "image"
 title = "RCS Logo (224x224, ~30kB)"
+logical_id = "b8db0235-e8b2-424c-9289-a5bba4d038af"
 
 [[outputs]]
 id = "z6hE86TOYmLL8q9WRosTL"
 uri = "file://attached_assets/rcs/greensynk-rcs-banner.png"
 type = "image"
 title = "RCS Banner (1440x448, ~194kB)"
+logical_id = "b48eef0d-945b-4436-9a91-b6d9653c6e28"
 
 [[outputs]]
 id = "YOg5FGKMqCwCEs1Rj3-K_"
 uri = "file://artifacts/greensynk-ad/public/images/lawn-worker.jpg"
 type = "image"
 title = "professional lawn care landscaping worker maintaining grass"
+logical_id = "88ca9d73-84b1-498c-8d3f-5ab29d782185"
 
 [[outputs]]
 id = "hAW8fC-KVssBTybGr6u5k"
 uri = "file://artifacts/greensynk-ad/public/audio/bg_music.mp3"
 type = "audio"
 title = "background music"
+logical_id = "ac47f725-a892-440b-85ca-e979b8020ab8"
 
 [[outputs]]
 id = "AhetjCXPhyg9GYC8-U7hy"
 uri = "file://attached_assets/stock_images/lawn_care_worker.jpg"
 type = "image"
 title = "professional lawn care landscaper mowing a green lawn with a mower on a sunny day, residential yard"
+logical_id = "ec956ec1-e6d7-44dd-8894-97e272c30e2f"
+
+[[outputs]]
+id = "feNuHg_gopcmMOrwkDKhD"
+uri = "file://exports/greensynk/app-icon-1024.png"
+type = "image"
+title = "GreenSynk App Store Icon"
+description = "1024 × 1024 PNG • opaque background • square corners."
+logical_id = "7c501f46-55aa-4ce6-ad8c-b80c3799b265"
+content_hash = "sha256:c4dfdaa8c72be88b9e0ef962ecb61afe944085189b412fc4f5ce35b14de5f1dc"
+size = 25975
+mtime_ms = 1789934796727
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/7c501f46-55aa-4ce6-ad8c-b80c3799b265/a81cfbd3-1547-4f52-a741-5c8b5e499513"
+storage_version_token = "1789934808164241"
+content_type = "image/png"
+
+[[outputs]]
+id = "ehlCZd87lW1zevsFV9j_B"
+uri = "file://exports/greensynk/splash-screen-1290x2796.png"
+type = "image"
+title = "GreenSynk Splash Screen"
+description = "1290 × 2796 portrait PNG with the existing leaf mark and wordmark."
+logical_id = "cace2c18-af30-4158-a46a-bbcbff09f9ac"
+content_hash = "sha256:67fa2d9634b8e02be79a258c6687b0ba5259afd491dde32044c98bfc50900df0"
+size = 36974
+mtime_ms = 1789934797583
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/cace2c18-af30-4158-a46a-bbcbff09f9ac/0d0bd4f2-d11d-4ff1-a007-a62cde6e439b"
+storage_version_token = "1789934808670635"
+content_type = "image/png"
+
+[[outputs]]
+id = "77q-jfqnNY08A7CMJk6Qu"
+uri = "file://exports/greensynk/splash-logo-transparent.png"
+type = "image"
+title = "Adaptive Splash Logo"
+description = "Transparent PNG for centered placement on an emerald #059669 background across screen sizes."
+logical_id = "44cc2073-3c8b-4ca6-824b-6a62653d8f02"
+content_hash = "sha256:b4c20b246b4d88650edd69407f3a83708fb0352f0dc0fb951bd2afc010cba557"
+size = 21030
+mtime_ms = 1789934797119
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/44cc2073-3c8b-4ca6-824b-6a62653d8f02/fbba92f3-d12c-4dd6-b3e0-12e863af11e7"
+storage_version_token = "1789934809185225"
+content_type = "image/png"
+
+[[outputs]]
+id = "qhfX68jLKnq1jTbySWSzR"
+uri = "file://exports/greensynk/theme-colors.png"
+type = "image"
+title = "GreenSynk Theme Colors"
+description = "Mobile palette with exact hex codes and recommended uses."
+logical_id = "bc1395b2-beb6-4e70-a812-d333a176ca72"
+content_hash = "sha256:709ccd8aa6423408b12178692af245f5369c9b5f3db85207f50faa2723e13f7e"
+size = 97695
+mtime_ms = 1789934797803
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/bc1395b2-beb6-4e70-a812-d333a176ca72/74395560-2960-4090-adc1-92363c9c7f6d"
+storage_version_token = "1789934809737091"
+content_type = "image/png"
