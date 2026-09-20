@@ -103,3 +103,87 @@ mtime_ms = 1789934797803
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/bc1395b2-beb6-4e70-a812-d333a176ca72/74395560-2960-4090-adc1-92363c9c7f6d"
 storage_version_token = "1789934809737091"
 content_type = "image/png"
+
+[[outputs]]
+id = "_4vSW4Wltu496ho7VyGDU"
+uri = "file://exports/greensynk/GreenSynk-App-Store-Screenshots.zip"
+type = "unspecified"
+title = "Download All GreenSynk Screenshots"
+description = "ZIP containing all five Apple-ready 1242 × 2688 PNG files."
+logical_id = "cffc8dce-22e5-4a90-bd30-19b21e3bdfa5"
+content_hash = "sha256:18b3791aad3637f133cedb64bc43570b0ca3ff977bf8090de4b2c69d36b4845c"
+size = 968257
+mtime_ms = 1789940952168
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/cffc8dce-22e5-4a90-bd30-19b21e3bdfa5/6378f316-6782-420c-86bd-defccfe6bb7f"
+storage_version_token = "1789940958985723"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "KRmYK3L8g2qeoK5SjJd04"
+uri = "file://exports/greensynk/app-store-screenshots/01-dashboard.png"
+type = "image"
+title = "01 — Dashboard"
+description = "GreenSynk mobile dashboard at 1242 × 2688."
+logical_id = "cf96c8f8-8c4f-4042-af66-8fee6143cae1"
+content_hash = "sha256:634dc37b2b643b4d72d33e7d049c830f0c01695c322990f51d162cdca3693411"
+size = 178641
+mtime_ms = 1789940841984
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/cf96c8f8-8c4f-4042-af66-8fee6143cae1/a4fd8e16-d852-4e4a-a152-7d31c14e00f2"
+storage_version_token = "1789940959467345"
+content_type = "image/png"
+
+[[outputs]]
+id = "1b2sF-fwlJ_-ntzSgOlGN"
+uri = "file://exports/greensynk/app-store-screenshots/02-appointments.png"
+type = "image"
+title = "02 — Appointments"
+description = "GreenSynk appointments workflow at 1242 × 2688."
+logical_id = "c566377f-9ff9-49c0-bd9f-0de595764602"
+content_hash = "sha256:162169864b005935c0b1823a8d5e34f11701d051ac5a7d7c7450e9ce002f6972"
+size = 219909
+mtime_ms = 1789940862156
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/c566377f-9ff9-49c0-bd9f-0de595764602/55d5e2c4-810c-4370-8b06-496e93a46baa"
+storage_version_token = "1789940959978912"
+content_type = "image/png"
+
+[[outputs]]
+id = "1MupBfVt4DsGzMHpKwMo1"
+uri = "file://exports/greensynk/app-store-screenshots/03-customers.png"
+type = "image"
+title = "03 — Customers"
+description = "GreenSynk customer management at 1242 × 2688."
+logical_id = "19d0f118-502b-4776-a638-4a8aa0043ef1"
+content_hash = "sha256:dac278283a199de30775df80106ebf0b161723af138c0b1e99dcdea3f607d3a9"
+size = 222305
+mtime_ms = 1789940886172
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/19d0f118-502b-4776-a638-4a8aa0043ef1/8a683933-730e-41fd-95c9-5abfc39540fa"
+storage_version_token = "1789940961157118"
+content_type = "image/png"
+
+[[outputs]]
+id = "urio0JRSGO8RxKqI7qk5W"
+uri = "file://exports/greensynk/app-store-screenshots/04-invoices.png"
+type = "image"
+title = "04 — Invoices"
+description = "GreenSynk invoicing screen at 1242 × 2688."
+logical_id = "cc08dc02-f0bd-4ee5-a1e4-1b2fd94c5f48"
+content_hash = "sha256:1f353d0d7aaabe7a5fc174013053b52bd635e71cb89093c496c9ab96181959f2"
+size = 225660
+mtime_ms = 1789940909159
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/cc08dc02-f0bd-4ee5-a1e4-1b2fd94c5f48/495ede3d-39a7-412a-abf8-2458610bdba6"
+storage_version_token = "1789940961720107"
+content_type = "image/png"
+
+[[outputs]]
+id = "B08p2kcmgpsroxP6Gp3lg"
+uri = "file://exports/greensynk/app-store-screenshots/05-settings.png"
+type = "image"
+title = "05 — Settings"
+description = "GreenSynk business settings at 1242 × 2688."
+logical_id = "e2904206-cfaf-4cfd-9741-117234969e3d"
+content_hash = "sha256:e22bbe88b7da69d589205a188bc969713d1a33e8ca8eb7c659aeeaccbefe15f0"
+size = 187540
+mtime_ms = 1789940929407
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/e2904206-cfaf-4cfd-9741-117234969e3d/f412aa48-35ac-4edd-963e-4d02a79eff9b"
+storage_version_token = "1789940962223665"
+content_type = "image/png"
