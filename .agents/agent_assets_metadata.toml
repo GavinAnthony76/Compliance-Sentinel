@@ -187,3 +187,87 @@ mtime_ms = 1789940929407
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/e2904206-cfaf-4cfd-9741-117234969e3d/f412aa48-35ac-4edd-963e-4d02a79eff9b"
 storage_version_token = "1789940962223665"
 content_type = "image/png"
+
+[[outputs]]
+id = "6A9cUnmMX_ofuIM4wwXqP"
+uri = "file://exports/greensynk/GreenSynk-App-Store-Screenshots-iPad-13.zip"
+type = "unspecified"
+title = "Download All 13-inch iPad Screenshots"
+description = "ZIP containing all five Apple-ready 2064 × 2752 PNG files."
+logical_id = "56106fe5-6797-423b-97a8-0a08b22911f6"
+content_hash = "sha256:1b2f15424780cd1dfa358997f440a2b410455c34cf2ddc8697f2b92bf4d552d7"
+size = 1452632
+mtime_ms = 1789954945320
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/56106fe5-6797-423b-97a8-0a08b22911f6/069f70c9-ee89-494b-a036-2c0cb39b2300"
+storage_version_token = "1789954952432569"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "1MOnRn56cznPqKaa-gZCG"
+uri = "file://exports/greensynk/app-store-screenshots-ipad-13/01-dashboard.png"
+type = "image"
+title = "iPad 01 — Dashboard"
+description = "GreenSynk dashboard for the 13-inch iPad slot, 2064 × 2752."
+logical_id = "c5ba582d-34c8-4766-a5b3-a47b1c2d753d"
+content_hash = "sha256:550552761518f04bb49020ac46a843433811591e4b998b24827b8f7bf54926f4"
+size = 304230
+mtime_ms = 1789954847053
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/c5ba582d-34c8-4766-a5b3-a47b1c2d753d/930bbc38-dc6e-4bc4-a895-6d21f32b046d"
+storage_version_token = "1789954952977619"
+content_type = "image/png"
+
+[[outputs]]
+id = "tUL_5OmDO5VmfA8UzGHS7"
+uri = "file://exports/greensynk/app-store-screenshots-ipad-13/02-appointments.png"
+type = "image"
+title = "iPad 02 — Appointments"
+description = "GreenSynk appointments for the 13-inch iPad slot, 2064 × 2752."
+logical_id = "702134e1-2ddb-488e-81cb-da7fab6b4129"
+content_hash = "sha256:b0892162c9830bf4734beb0f9575cfd22a0ca6100707275b2f31be428e968a7d"
+size = 328011
+mtime_ms = 1789954866157
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/702134e1-2ddb-488e-81cb-da7fab6b4129/714b7b74-e49f-4387-8ae7-77f8002c78f2"
+storage_version_token = "1789954953605898"
+content_type = "image/png"
+
+[[outputs]]
+id = "euJDnO8K3YnE6PJVyKG9W"
+uri = "file://exports/greensynk/app-store-screenshots-ipad-13/03-customers.png"
+type = "image"
+title = "iPad 03 — Customers"
+description = "GreenSynk customer management for the 13-inch iPad slot, 2064 × 2752."
+logical_id = "e3241963-74b5-4fc6-b0be-4ca771f73d87"
+content_hash = "sha256:857ea78ab8ff37714bfe13e3480dfe00ad5b235c22bb1852977d5bc16ebc8bd6"
+size = 322105
+mtime_ms = 1789954884369
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/e3241963-74b5-4fc6-b0be-4ca771f73d87/1839bb11-4147-46eb-b0a7-6e88ed5ef38f"
+storage_version_token = "1789954954268119"
+content_type = "image/png"
+
+[[outputs]]
+id = "ODV-Wmsd8Px-R5suyPoDV"
+uri = "file://exports/greensynk/app-store-screenshots-ipad-13/04-invoices.png"
+type = "image"
+title = "iPad 04 — Invoices"
+description = "GreenSynk invoicing for the 13-inch iPad slot, 2064 × 2752."
+logical_id = "9e54dbac-5d72-4b44-b2f8-4670e522e3c1"
+content_hash = "sha256:0aa9f4ac3a60b36112d6cf54c3bd56f550f0998c18463cb722c5345628ad9189"
+size = 319848
+mtime_ms = 1789954902128
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/9e54dbac-5d72-4b44-b2f8-4670e522e3c1/43f99117-5763-4820-be7f-60a8191fbb99"
+storage_version_token = "1789954954778260"
+content_type = "image/png"
+
+[[outputs]]
+id = "WvpgewgWRKWUB965eG5MW"
+uri = "file://exports/greensynk/app-store-screenshots-ipad-13/05-settings.png"
+type = "image"
+title = "iPad 05 — Settings"
+description = "GreenSynk business settings for the 13-inch iPad slot, 2064 × 2752."
+logical_id = "deeead55-a986-405d-b69e-15aa29eaae37"
+content_hash = "sha256:4c35af104425fdf4e342df53f1d3a09f453d91be1f50441011d5af3b179dc055"
+size = 272557
+mtime_ms = 1789954921796
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/deeead55-a986-405d-b69e-15aa29eaae37/95378e0e-2d36-4133-bcf4-e3cf6fed0b96"
+storage_version_token = "1789954955409533"
+content_type = "image/png"
