@@ -47,6 +47,8 @@ router.post("/", async (req: any, res) => {
   const { companyId, userId } = req.user;
   const parsed = createPropertySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "ValidationError", message: parsed.error.message });
+  const [customer] = await db.select({ id: customersTable.id }).from(customersTable).where(and(eq(customersTable.id, parsed.data.customerId), eq(customersTable.companyId, companyId))).limit(1);
+  if (!customer) return res.status(400).json({ error: "ValidationError", message: "Customer not found for this company" });
   const [property] = await db.insert(propertiesTable).values({ companyId, ...parsed.data }).returning();
   await logActivity({ companyId, userId, action: "property.created", entityType: "property", entityId: property.id });
   return res.status(201).json(property);
