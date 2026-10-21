@@ -271,3 +271,45 @@ mtime_ms = 1789954921796
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/deeead55-a986-405d-b69e-15aa29eaae37/95378e0e-2d36-4133-bcf4-e3cf6fed0b96"
 storage_version_token = "1789954955409533"
 content_type = "image/png"
+
+[[outputs]]
+id = "ftn_gDSMa4P_DRc1sqLeI"
+uri = "file://generated-artifacts/greensynk-guide/GreenSynk-Product-Workflows-and-Technical-Reference.pdf"
+type = "pdf"
+title = "GreenSynk Comprehensive Guide — PDF"
+description = "57-page product, workflow, technical and operations reference, including 206 API handlers and 27 database tables."
+logical_id = "04f44a29-8bc5-4502-96b1-f704366491fd"
+content_hash = "sha256:985cad9b2440d51b43a07a05d5da8b897835f1c2ac64d2ae65f9e9b5c66359b8"
+size = 123284
+mtime_ms = 1792611310694
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/04f44a29-8bc5-4502-96b1-f704366491fd/bc0baea7-0907-40a0-8cb8-67fca0beb628"
+storage_version_token = "1792611324243105"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "e_77mVcrdaNLKWUQKfqHm"
+uri = "file://generated-artifacts/greensynk-guide/GreenSynk-Product-Workflows-and-Technical-Reference.docx"
+type = "word_document"
+title = "GreenSynk Comprehensive Guide — Editable Word"
+description = "Editable Word version of the complete guide."
+logical_id = "38d61b97-574a-46af-8521-feb6f2dc2dc1"
+content_hash = "sha256:c332b2f3e664498c43671625099a6d5c0db9f2746d9f254e5b59fa6ea289dfbb"
+size = 37168
+mtime_ms = 1792611309448
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/38d61b97-574a-46af-8521-feb6f2dc2dc1/add1afe8-6de5-4e7a-952f-4f65db97e56d"
+storage_version_token = "1792611324840456"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "4XUh3-AF3xhX88Z-LhB0j"
+uri = "file://generated-artifacts/greensynk-guide/GreenSynk-Complete-Documentation.zip"
+type = "unspecified"
+title = "GreenSynk Complete Documentation Pack"
+description = "All four formats: PDF, editable Word, self-contained HTML, and Markdown."
+logical_id = "954cccc4-5a06-4d28-a23e-ae63221f3875"
+content_hash = "sha256:6388f150f26d5e5dbd41f4470b06607ddaa68f257685c144a18e290c5b52f78f"
+size = 193279
+mtime_ms = 1792611310986
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/954cccc4-5a06-4d28-a23e-ae63221f3875/49d23f20-0960-4592-8ba8-efc50d47be2d"
+storage_version_token = "1792611326451927"
+content_type = "application/octet-stream"

@@ -54,3 +54,6 @@ Thumbs.db
 .env.local
 .env.*.local
 attached_assets/
+
+# Generated documentation and downloadable outputs
+/generated-artifacts/
