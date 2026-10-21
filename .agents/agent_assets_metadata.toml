@@ -313,3 +313,31 @@ mtime_ms = 1792611310986
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/954cccc4-5a06-4d28-a23e-ae63221f3875/49d23f20-0960-4592-8ba8-efc50d47be2d"
 storage_version_token = "1792611326451927"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "lJfSj_7UQbBVa3Esz4NXy"
+uri = "file://generated-artifacts/task-list/List%20of%20Tasks.pdf"
+type = "pdf"
+title = "List of Tasks — PDF"
+description = "All 11 listed task suggestions, grouped by topic, with scope, completion criteria, references, and status notes."
+logical_id = "215579be-3627-49c3-9315-da5563b36714"
+content_hash = "sha256:e954a5b42d2607eb8c05ea958fd9f44c08bd27a7c153522077721cce48fd9ae6"
+size = 12239
+mtime_ms = 1792611785802
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/215579be-3627-49c3-9315-da5563b36714/38ed928d-f25d-4dcf-9bb6-d5efcb8325f7"
+storage_version_token = "1792611793154883"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "1E4gtLOfs4XBPZgcXT3r6"
+uri = "file://generated-artifacts/task-list/List%20of%20Tasks.docx"
+type = "word_document"
+title = "List of Tasks — Editable Word Document"
+description = "Editable copy of the consolidated GreenSynk task list."
+logical_id = "97a74cea-21fd-4e68-9ae5-3f8e8e1d6042"
+content_hash = "sha256:0c050401e4ad8712d55302b96cdc6d9e3b933aa2da1aa94a96af5a69605f32a9"
+size = 6654
+mtime_ms = 1792611785638
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/97a74cea-21fd-4e68-9ae5-3f8e8e1d6042/64c20430-2d0b-442c-891d-58d03000d55a"
+storage_version_token = "1792611793955465"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
