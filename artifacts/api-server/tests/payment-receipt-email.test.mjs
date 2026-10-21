@@ -602,6 +602,56 @@ console.log("\nPath 4 — autopay charge:");
 }
 
 // ============================================================================
+// Manual mark-paid racing a live autopay claim (#217): while an autopay charge
+// holds the "processing" claim and is waiting on Stripe, a manual mark-paid
+// must not take over the invoice — otherwise the card charge settles with no
+// PaymentIntent recorded and the customer is effectively billed twice.
+// ============================================================================
+console.log("\nManual mark-paid vs. in-flight autopay claim:");
+{
+  const company = seedCompany();
+  const customer = seedCustomer(company.id);
+  const invoice = seedInvoice(company.id, customer.id);
+  const makeReq = (body = {}) => ({ user: { companyId: company.id, userId: 1 }, params: { id: String(invoice.id) }, body });
+
+  // Hold the charge inside Stripe so the manual writer lands mid-claim.
+  let releaseStripe;
+  const stripeGate = new Promise((resolve) => (releaseStripe = resolve));
+  const originalCreate = fakeStripe.paymentIntents.create;
+  fakeStripe.paymentIntents.create = async () => {
+    await stripeGate;
+    return { id: "pi_race_card", status: "succeeded" };
+  };
+
+  resetEmails();
+  const chargeRes = makeRes();
+  const charging = autopayCharge(makeReq(), chargeRes);
+  await settle();
+  check("autopay holds the processing claim while Stripe is pending", invoice.status === "processing", invoice.status);
+
+  const manualRes = makeRes();
+  await markPaid(makeReq({ paymentMethod: "cash" }), manualRes);
+  await settle();
+  check(
+    "manual mark-paid during a live claim is rejected with 409 ChargeInProgress",
+    manualRes.statusCode === 409 && manualRes.body?.error === "ChargeInProgress",
+    `${manualRes.statusCode} ${JSON.stringify(manualRes.body)}`,
+  );
+  check("the rejected manual action leaves the claim in place", invoice.status === "processing", invoice.status);
+  check("the rejected manual action records no payment method", invoice.paymentMethod == null, invoice.paymentMethod);
+  check("the rejected manual action sends NO receipt", receipts().length === 0, `sent ${receipts().length}`);
+
+  releaseStripe();
+  await charging;
+  await settle();
+  fakeStripe.paymentIntents.create = originalCreate;
+  check("the card charge then settles the invoice as paid", invoice.status === "paid", invoice.status);
+  check("the settled invoice records the card PaymentIntent", invoice.stripePaymentIntentId === "pi_race_card", invoice.stripePaymentIntentId);
+  check("the settled invoice records paymentMethod 'card'", invoice.paymentMethod === "card", invoice.paymentMethod);
+  check("exactly one receipt is sent, from the winning charge", receipts().length === 1, `sent ${receipts().length}`);
+}
+
+// ============================================================================
 // dispatchPaymentReceiptEmail itself: the shared no-email / missing-row guards.
 // ============================================================================
 console.log("\ndispatchPaymentReceiptEmail guards:");

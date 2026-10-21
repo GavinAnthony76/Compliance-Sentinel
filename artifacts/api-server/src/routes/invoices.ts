@@ -329,13 +329,19 @@ router.post("/:id/mark-paid", async (req: any, res) => {
   if (req.body.paymentMethod) updateData.paymentMethod = req.body.paymentMethod;
   if (req.body.paymentMethodNote) updateData.paymentMethodNote = req.body.paymentMethodNote;
   // Transition-guarded update: only the request that actually flips status ->
-  // paid notifies, so concurrent mark-paid calls can't double-send emails.
+  // paid notifies, so concurrent mark-paid calls can't double-send emails. It
+  // also refuses a "processing" row: a live autopay/portal charge holds that
+  // claim, and overwriting it would let the card settle with no PaymentIntent
+  // recorded on the invoice.
   const [transitioned] = await db.update(invoicesTable).set(updateData)
-    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId), ne(invoicesTable.status, "paid")))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId), ne(invoicesTable.status, "paid"), ne(invoicesTable.status, "processing")))
     .returning();
   const [updated] = transitioned
     ? [transitioned]
     : await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
+  if (!transitioned && updated?.status === "processing") {
+    return res.status(409).json({ error: "ChargeInProgress", message: "A charge for this invoice is already in progress" });
+  }
   await logActivity({ companyId, userId, action: "invoice.paid", entityType: "invoice", entityId: id, metadata: { paymentMethod: req.body.paymentMethod } });
   if (transitioned) {
     // Awaited: on Autoscale, work started after the response is sent gets
