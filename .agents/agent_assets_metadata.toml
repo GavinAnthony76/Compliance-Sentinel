@@ -341,3 +341,45 @@ mtime_ms = 1792611785638
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/97a74cea-21fd-4e68-9ae5-3f8e8e1d6042/64c20430-2d0b-442c-891d-58d03000d55a"
 storage_version_token = "1792611793955465"
 content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "srcrgRjhT8rPI7b_Ug_II"
+uri = "file://generated-artifacts/claude-handoff/GreenSynk-Claude-Handoff-Package.zip"
+type = "unspecified"
+title = "GreenSynk — Complete Claude Handoff Package"
+description = "All 13 requested Markdown documents, root CLAUDE.md instructions, supporting product/task references, and combined PDF, Word, and Markdown exports."
+logical_id = "a0e72fcf-a224-4c08-8049-4e904c8e0738"
+content_hash = "sha256:ea864e8de28e52fa3ed55b07fc7a87a77cedf24766dbd19d5c5fd918208bff04"
+size = 264691
+mtime_ms = 1792620267605
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/a0e72fcf-a224-4c08-8049-4e904c8e0738/0f57172e-6e1a-4406-a002-8548444ab6f2"
+storage_version_token = "1792620279168161"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "eRZ046JpnjqGOazA-4vJO"
+uri = "file://generated-artifacts/claude-handoff/GreenSynk-Claude-Engineering-Handoff.pdf"
+type = "pdf"
+title = "GreenSynk Engineering Handoff — PDF"
+description = "44-page verified architecture, feature inventory, prioritized backlog, baseline results, Git workflow, validation, rollback, and approval boundaries."
+logical_id = "61b0d5fd-0806-455c-900a-c473563fb6e8"
+content_hash = "sha256:e5053458aacef424730708ee72bdeaf57ec9f8cab945cfa4436da97fc0c16a9d"
+size = 123553
+mtime_ms = 1792620249249
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/61b0d5fd-0806-455c-900a-c473563fb6e8/58091409-c2dc-4c2f-bcd6-5b0a4acea166"
+storage_version_token = "1792620279785589"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "Thivo4s19Jy6mHLnJb6LE"
+uri = "file://generated-artifacts/claude-handoff/GreenSynk-Claude-Engineering-Handoff.docx"
+type = "word_document"
+title = "GreenSynk Engineering Handoff — Editable Word"
+description = "Editable combined copy of the full handoff and safe development protocol."
+logical_id = "0b7350f0-4a67-493f-843a-e0f205f6a846"
+content_hash = "sha256:ef2602337114dc3619389f35de36a96224e8422640e38317db3b161e88955e7e"
+size = 49608
+mtime_ms = 1792620247879
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:188892fa-1a66-4690-9284-32f84470baf2/0b7350f0-4a67-493f-843a-e0f205f6a846/71ecc928-8cd6-4517-83a3-2f30ea3e6e3f"
+storage_version_token = "1792620280419257"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
