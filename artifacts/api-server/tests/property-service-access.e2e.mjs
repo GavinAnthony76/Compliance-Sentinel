@@ -208,6 +208,34 @@ async function main() {
     );
   }
 
+  // --- 1a'. Tenant isolation: company B must NOT attach a property to A's customer
+  console.log("\nTenant isolation — POST /properties must reject a foreign or unknown customerId:");
+  const invalidCustomers = [
+    { label: "company A's customer", customerId: customerA, address: `${stamp} Foreign Customer Rd` },
+    { label: "a nonexistent customer", customerId: 2_000_000_000, address: `${stamp} Missing Customer Rd` },
+  ];
+  for (const { label, customerId, address } of invalidCustomers) {
+    const r = await req("POST", "/properties", {
+      token: companyB.ownerToken,
+      body: { customerId, propertyName: "Hijack", addressLine1: address },
+    });
+    check(
+      `company B creating a property for ${label} -> 400 ValidationError`,
+      r.status === 400 && r.json?.error === "ValidationError",
+      `got ${r.status} ${JSON.stringify(r.json)}`,
+    );
+  }
+  {
+    // Neither tenant may end up holding a row from the rejected attempts.
+    const addresses = new Set(invalidCustomers.map((c) => c.address));
+    const leaked = [];
+    for (const token of [companyA.ownerToken, companyB.ownerToken]) {
+      const r = await req("GET", "/properties?limit=100", { token });
+      for (const p of r.json?.properties ?? []) if (addresses.has(p.addressLine1)) leaked.push(p.id);
+    }
+    check("rejected property creations wrote no rows", leaked.length === 0, `leaked ids ${JSON.stringify(leaked)}`);
+  }
+
   // --- 1b. Tenant isolation: company B must NOT touch company A's service ----
   console.log("\nTenant isolation — company B must get 404 on company A's service:");
   const crossTenantService = [
