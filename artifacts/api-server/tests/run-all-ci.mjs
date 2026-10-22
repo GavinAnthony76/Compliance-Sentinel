@@ -168,6 +168,7 @@ async function main() {
     ["branded-emails", "tests/branded-emails.test.mjs", "Branded owner-email validation"],
     ["account-emails", "tests/account-emails.test.mjs", "Account-email validation"],
     ["portal-booking-notifications", "tests/portal-booking-notifications.test.mjs", "Portal booking/cancellation notification validation"],
+    ["background-jobs", "tests/background-jobs-characterization.test.mjs", "Background job characterization (REVIEW-C)"],
   ];
   const emailLabels = {};
   for (const [key, file, label] of emailSuites) {
