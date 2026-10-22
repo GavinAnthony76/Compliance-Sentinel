@@ -58,6 +58,7 @@ delete process.env.TWILIO_PHONE_NUMBER;
 
 // --- Email capture (mocked `resend` package) --------------------------------
 const sentEmails = [];
+let onEmailSent = null; // optional per-scenario hook, e.g. to snapshot DB state at send time
 mock.module("resend", {
   namedExports: {
     Resend: class {
@@ -65,6 +66,7 @@ mock.module("resend", {
         this.emails = {
           send: async (payload) => {
             sentEmails.push(payload);
+            onEmailSent?.(payload);
             return { error: null };
           },
         };
@@ -163,6 +165,22 @@ const fakeDb = {
       },
     };
   },
+  delete(table) {
+    return {
+      where: async (pred) => {
+        store[table.__store] = store[table.__store].filter((r) => pred && !pred(r));
+      },
+    };
+  },
+  insert(table) {
+    return {
+      values: async (vals) => {
+        for (const v of Array.isArray(vals) ? vals : [vals]) store[table.__store].push({ id: nextId++, ...v });
+      },
+    };
+  },
+  // Single-connection fake: a transaction is just the same executor.
+  transaction: async (fn) => fn(fakeDb),
 };
 
 const dbNamedExports = {
@@ -747,6 +765,32 @@ console.log("\nInvoice edit vs. in-flight payment:");
   await Promise.all([updateInvoice(racedReq({ status: "paid" }), makeRes()), markPaid(racedReq({}), makeRes())]);
   await settle();
   check("PUT status=paid racing mark-paid sends exactly one receipt", receipts().length === 1, `sent ${receipts().length}`);
+}
+{
+  // PUT { status: "paid", lineItems } must save the new line items BEFORE the
+  // receipt goes out, so the receipt reflects what was actually billed.
+  const company = seedCompany();
+  const customer = seedCustomer(company.id);
+  const invoice = seedInvoice(company.id, customer.id);
+  store.invoiceLineItems.push({ id: nextId++, invoiceId: invoice.id, description: "Old mowing", quantity: "1", unitPrice: "100", lineTotal: "100", sortOrder: 0 });
+  let lineItemsAtReceipt = null;
+  onEmailSent = (payload) => {
+    if (String(payload.subject).startsWith(RECEIPT_SUBJECT_PREFIX)) {
+      lineItemsAtReceipt = store.invoiceLineItems.filter((li) => li.invoiceId === invoice.id).map((li) => li.description);
+    }
+  };
+  resetEmails();
+  const res = makeRes();
+  await updateInvoice({
+    user: { companyId: company.id, userId: 1 },
+    params: { id: String(invoice.id) },
+    body: { status: "paid", lineItems: [{ description: "Spring cleanup", quantity: 2, unitPrice: 60 }] },
+  }, res);
+  await settle();
+  onEmailSent = null;
+  check("PUT status=paid with line items sends one receipt", receipts().length === 1, `sent ${receipts().length}`);
+  check("the receipt is generated after the new line items are saved", JSON.stringify(lineItemsAtReceipt) === JSON.stringify(["Spring cleanup"]), JSON.stringify(lineItemsAtReceipt));
+  check("the paid invoice total matches the saved line items", Number(invoice.total) === 120, invoice.total);
 }
 
 // ============================================================================
