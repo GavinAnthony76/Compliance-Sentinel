@@ -40,8 +40,8 @@ process.env.NODE_ENV = "test";
 // short-circuits to delivered:true under NODE_ENV=test.
 let recoveryEmailImpl = async () => ({ delivered: true });
 let recoverySends = [];
-mock.module("../src/lib/notifications.ts", {
-  namedExports: {
+const relativeMocks = {
+  "../src/lib/notifications.ts": {
     resolveBaseUrl: () => "http://test.local",
     sendSweepHealthAlertEmail: async () => ({ delivered: true }),
     sendSweepHealthRecoveredEmail: async (opts) => {
@@ -49,22 +49,23 @@ mock.module("../src/lib/notifications.ts", {
       return recoveryEmailImpl(opts);
     },
   },
-});
+};
+for (const [specifier, namedExports] of Object.entries(relativeMocks)) {
+  mock.module(specifier, { namedExports });
+}
 
-mock.module("resend", {
-  namedExports: {
-    Resend: class {
-      constructor() {
-        this.emails = { send: async () => ({ error: null }) };
-      }
-    },
+const resendNamedExports = {
+  Resend: class {
+    constructor() {
+      this.emails = { send: async () => ({ error: null }) };
+    }
   },
-});
+};
+mock.module("resend", { namedExports: resendNamedExports });
 
 // Inspectable stand-ins for drizzle operators so the db mock can tell which
 // activity-log action is being queried and which direction it's ordered.
-mock.module("drizzle-orm", {
-  namedExports: {
+const drizzleNamedExports = {
     eq: (col, val) => ({ op: "eq", col, val }),
     and: (...args) => ({ op: "and", args }),
     or: (...args) => ({ op: "or", args }),
@@ -79,8 +80,8 @@ mock.module("drizzle-orm", {
     isNull: (col) => ({ op: "isNull", col }),
     ne: (col, val) => ({ op: "ne", col, val }),
     count: () => ({ op: "count" }),
-  },
-});
+};
+mock.module("drizzle-orm", { namedExports: drizzleNamedExports });
 
 function tableProxy(name) {
   return new Proxy(
@@ -187,15 +188,24 @@ const dbMock = {
   }),
 };
 
-mock.module("@workspace/db", {
-  namedExports: {
-    db: dbMock,
-    platformAdminsTable,
-    activityLogsTable,
-    platformSettingsTable,
-    DEFAULT_STALE_ADMIN_DAYS: 90,
-    ...tables,
-  },
+const dbNamedExports = {
+  db: dbMock,
+  platformAdminsTable,
+  activityLogsTable,
+  platformSettingsTable,
+  DEFAULT_STALE_ADMIN_DAYS: 90,
+  ...tables,
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
+
+// Preflight: fail with an actionable message if production code grew an
+// import these mocks don't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/lib/sweep-health.ts"],
+  packageMocks: { resend: resendNamedExports, "drizzle-orm": drizzleNamedExports, "@workspace/db": dbNamedExports },
+  relativeMocks,
 });
 
 const { checkSweepHealth, SWEEP_ALERT_ACTION, SWEEP_RECOVERED_ACTION } = await import("../src/lib/sweep-health.ts");
