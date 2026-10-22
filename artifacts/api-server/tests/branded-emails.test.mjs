@@ -48,20 +48,19 @@ process.env.APP_BASE_URL = "https://app.greensynk.test";
 // Mocks
 // ---------------------------------------------------------------------------
 const sentEmails = [];
-mock.module("resend", {
-  namedExports: {
-    Resend: class {
-      constructor() {
-        this.emails = {
-          send: async (payload) => {
-            sentEmails.push(payload);
-            return { error: null };
-          },
-        };
-      }
-    },
+const resendNamedExports = {
+  Resend: class {
+    constructor() {
+      this.emails = {
+        send: async (payload) => {
+          sentEmails.push(payload);
+          return { error: null };
+        },
+      };
+    }
   },
-});
+};
+mock.module("resend", { namedExports: resendNamedExports });
 
 // Table sentinels so the db mock can route each select to the right rows.
 const invoicesTable = { id: "id", companyId: "companyId", customerId: "customerId" };
@@ -73,29 +72,38 @@ const usersTable = { email: "email", companyId: "companyId", role: "role" };
 // Per-test rows, keyed by table sentinel.
 const tableRows = new Map();
 
-mock.module("@workspace/db", {
-  namedExports: {
-    db: {
-      select: () => ({
-        from: (table) => ({
-          where: () => ({
-            limit: async () => tableRows.get(table) ?? [],
-            // Line-items query (PDF attachment path). Throw so the receipt-PDF
-            // generation is skipped via its documented graceful fallback — this
-            // suite is about the email bodies, not the attachment.
-            orderBy: async () => {
-              throw new Error("line items unavailable in unit test");
-            },
-          }),
+const dbNamedExports = {
+  db: {
+    select: () => ({
+      from: (table) => ({
+        where: () => ({
+          limit: async () => tableRows.get(table) ?? [],
+          // Line-items query (PDF attachment path). Throw so the receipt-PDF
+          // generation is skipped via its documented graceful fallback — this
+          // suite is about the email bodies, not the attachment.
+          orderBy: async () => {
+            throw new Error("line items unavailable in unit test");
+          },
         }),
       }),
-    },
-    invoicesTable,
-    companiesTable,
-    customersTable,
-    invoiceLineItemsTable,
-    usersTable,
+    }),
   },
+  invoicesTable,
+  companiesTable,
+  customersTable,
+  invoiceLineItemsTable,
+  usersTable,
+  smsConsentEventsTable: {},
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
+
+// Preflight: fail with an actionable message if production code grew an
+// import these mocks don't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/lib/notifications.ts"],
+  packageMocks: { resend: resendNamedExports, "@workspace/db": dbNamedExports },
 });
 
 const { sendWelcomeEmail, dispatchOwnerPaymentNotification } = await import(

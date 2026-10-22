@@ -278,6 +278,7 @@ console.log("Company email set:");
   check("business notice mentions the attached signed copy", /signed copy is attached/i.test(businessNotices()[0]?.text ?? ""), businessNotices()[0]?.text);
   check("customer receives their signed copy", customerCopies().length === 1 && customerCopies()[0].to === customer.email);
   check("response says the copy was emailed", /emailed/i.test(res.body?.message ?? ""), res.body?.message);
+  check("response reports signedCopyEmailed=true", res.body?.signedCopyEmailed === true, JSON.stringify(res.body));
 }
 
 console.log("\nCompany email missing — owner fallback:");
@@ -324,6 +325,8 @@ console.log("\nCustomer copy rejected by the provider:");
   rejectRecipient = null;
   check("signing still succeeds", res.statusCode === 200 && res.body?.success === true, JSON.stringify(res.body));
   check("response does NOT claim the copy was emailed", !/emailed/i.test(res.body?.message ?? ""), res.body?.message);
+  check("response reports signedCopyEmailed=false while the customer HAS an email", res.body?.signedCopyEmailed === false && res.body?.customerHasEmail === true, JSON.stringify(res.body));
+  check("the signature is still persisted", store.estimates.find((e) => e.customerId === customer.id)?.signedAt != null);
 }
 
 console.log(`\n${passes} passed, ${failures} failed`);
