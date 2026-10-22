@@ -98,6 +98,7 @@ const store = {
   recurringPlans: [],
   estimates: [],
   appointmentPhotos: [],
+  activityLogs: [],
 };
 
 function makeTable(storeKey) {
@@ -165,6 +166,12 @@ const fakeDb = {
   },
 };
 
+fakeDb.insert = (table) => ({
+  values: async (vals) => {
+    for (const v of Array.isArray(vals) ? vals : [vals]) store[table.__store].push({ id: nextId++, ...v });
+  },
+});
+
 const dbNamedExports = {
   db: fakeDb,
   companiesTable: makeTable("companies"),
@@ -178,6 +185,7 @@ const dbNamedExports = {
   recurringPlansTable: makeTable("recurringPlans"),
   estimatesTable: makeTable("estimates"),
   appointmentPhotosTable: makeTable("appointmentPhotos"),
+  activityLogsTable: makeTable("activityLogs"),
 };
 mock.module("@workspace/db", { namedExports: dbNamedExports });
 
@@ -213,6 +221,8 @@ const passthrough = (_req, _res, next) => next();
 // Controlled per-scenario Stripe stub. constructEvent trusts the raw body here —
 // signature verification is Stripe SDK behavior, not what this suite guards.
 let invoiceEmailImpl = async () => true;
+const expiredSessions = [];
+let expireFails = false;
 let stripeSessionResult = { payment_status: "paid" };
 let stripePaymentIntentResult = { id: "pi_test", status: "succeeded" };
 const fakeStripe = {
@@ -223,6 +233,11 @@ const fakeStripe = {
     sessions: {
       retrieve: async () => stripeSessionResult,
       create: async () => ({ id: "cs_test", url: "https://stripe.test/checkout" }),
+      expire: async (id) => {
+        expiredSessions.push(id);
+        if (expireFails) throw new Error("session already completed (test)");
+        return { id, status: "expired" };
+      },
     },
   },
   paymentIntents: { create: async () => stripePaymentIntentResult },
@@ -485,6 +500,8 @@ console.log("\nPath 2 — Stripe portal checkout webhook:");
         id: "cs_webhook_test",
         payment_status: "paid",
         payment_intent: "pi_webhook_test",
+        amount_total: 10000,
+        currency: "usd",
         metadata: { source: "customer_portal", invoiceId: String(invoice.id), companyId: String(company.id) },
       },
     },
@@ -527,8 +544,16 @@ console.log("\nPath 3 — portal confirm-payment fallback:");
   check("unpaid session sends NO receipt", receipts().length === 0, `sent ${receipts().length}`);
   check("unpaid session responds 402", resUnpaid.statusCode === 402, String(resUnpaid.statusCode));
 
-  // Session verified paid: genuine transition, exactly one receipt.
-  stripeSessionResult = { payment_status: "paid" };
+  // Session verified paid (and paying exactly this invoice): genuine
+  // transition, exactly one receipt.
+  stripeSessionResult = {
+    id: "cs_confirm_test",
+    payment_status: "paid",
+    payment_intent: "pi_confirm_test",
+    amount_total: 10000,
+    currency: "usd",
+    metadata: { invoiceId: String(invoice.id), companyId: String(company.id) },
+  };
   resetEmails();
   const res = makeRes();
   await confirmPayment(makeReq(), res);

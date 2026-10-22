@@ -1,6 +1,20 @@
 # REVIEW-B — Stripe ownership, reconciliation and notification audit
 
-Status: **review complete; corrections require approval.** No behavior was changed and no money moved; all evidence comes from mocked Stripe. `tests/stripe-paid-paths-characterization.test.mjs` (registered in `run-all-ci`) pins current behavior, and its **FINDING** checks flip when a correction is approved.
+Status: **B1, B2, B3, B4, B5, B7 and B8 corrected** per the approved priorities, in the PR that adds `src/lib/payment-reconciliation.ts`. B6 is open: harmless today, revisit if portal payments ever take a claim. `tests/stripe-paid-paths-characterization.test.mjs` (registered in `run-all-ci`) now asserts the corrected behavior. All evidence comes from mocked Stripe, and no money moved.
+
+### Approved corrections, as implemented
+
+- **Retryable failures (B7/B8):** the webhook answers 503 when the Stripe client can't start, and 500 on any processing error. It never acknowledges a payment it didn't record. Every handler is replay-safe.
+- **No overlapping charges (B4):**
+  - Portal pay refuses a `processing` invoice.
+  - Portal pay reuses the invoice's recorded open Checkout session instead of opening another; at most one open session per invoice is ever recorded.
+  - If portal pay can't record a new session, it expires it and never returns its URL.
+  - Autopay, after taking its claim, expires the recorded open session before charging. If that session already completed or can't be closed, it releases the claim without charging.
+  - A portal payment arriving while autopay holds the claim gets 503, and Stripe redelivers once the claim resolves.
+- **Additional payments are durably recorded:** a second successful payment for an already-paid invoice (webhook with a different PaymentIntent, or an autopay success after another payment) is written to the activity log as `invoice.payment_flagged` and logged at error level. It is never discarded and never refunded automatically. The flag write is not best-effort; if it fails, the webhook returns 5xx so Stripe retries.
+- **Verification (B1/B3):** before marking paid, the webhook and confirm-payment require `amount_total` = invoice total in cents, currency `usd`, `metadata.companyId` = invoice company, and `metadata.invoiceId` = invoice. On a mismatch the webhook records a flag and doesn't mark paid; confirm-payment answers 409 and leaves recording to the webhook.
+- **Consistent recording (B2/B5):** confirm-payment stores `paymentMethod: "card"` and the session's PaymentIntent, and answers 503 on Stripe lookup errors.
+- **Money flows unchanged:** Connect destination charges for the portal, platform context for autopay.
 
 ## Paid-transition inventory
 

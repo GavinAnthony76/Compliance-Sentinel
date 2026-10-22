@@ -9,6 +9,7 @@ import { requireAuth } from "../lib/auth";
 import { requireFeature } from "../lib/features";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
+import { flagPaymentForReconciliation } from "../lib/payment-reconciliation";
 import { sendEmail, dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } from "../lib/notifications";
 import { sendSMSWithConsent } from "../lib/sms-consent";
 
@@ -211,6 +212,22 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
     return res.status(503).json({ error: "BillingUnavailable" });
   }
 
+  // A previously opened portal checkout must not stay payable while we charge
+  // the saved card. Our "processing" claim stops new sessions from opening or
+  // being recorded; close the recorded one first. If it already completed (or
+  // can't be closed), the customer has paid there — release and don't charge.
+  if (String(invoice.stripePaymentIntentId ?? "").startsWith("cs_")) {
+    try {
+      const portalSession = await stripe.checkout.sessions.retrieve(invoice.stripePaymentIntentId);
+      if (portalSession?.status === "open") await stripe.checkout.sessions.expire(portalSession.id);
+      else if (portalSession?.status === "complete") throw new Error("portal checkout already completed");
+    } catch (err) {
+      await revertClaim();
+      logger.warn({ err, invoiceId }, "Autopay skipped: a portal checkout for this invoice is completed or could not be closed");
+      return res.status(409).json({ error: "PortalPaymentInProgress", message: "The customer has a portal payment in progress for this invoice" });
+    }
+  }
+
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(Number(invoice.total) * 100),
@@ -240,6 +257,21 @@ router.post("/invoices/:id/charge", async (req: any, res) => {
       }).where(and(eq(invoicesTable.id, invoiceId), ne(invoicesTable.status, "paid"))).returning({ id: invoicesTable.id });
 
       await logActivity({ companyId, userId, action: "invoice.autopay_charged", entityType: "invoice", entityId: invoiceId });
+      if (transitioned.length === 0) {
+        // The card was charged but the invoice was already paid another way:
+        // record the second payment for reconciliation (never refund it here).
+        // Isolated: the charge DID succeed, so a failed flag write must not
+        // fall into the failure path below (which would report PaymentFailed).
+        // The helper logs the full payment at error level before writing.
+        try {
+          await flagPaymentForReconciliation({
+            companyId, invoiceId, reason: "additional_payment", source: "autopay",
+            paymentIntentId: paymentIntent.id, amountCents: Math.round(Number(invoice.total) * 100), currency: "usd",
+          });
+        } catch (err) {
+          logger.error({ err, invoiceId, paymentIntentId: paymentIntent.id }, "Could not persist the additional-payment flag");
+        }
+      }
       if (transitioned.length > 0) {
         // Awaited: on Autoscale, work started after the response is sent gets
         // CPU-throttled and can be silently dropped. Both dispatchers catch

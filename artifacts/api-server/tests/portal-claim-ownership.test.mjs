@@ -69,6 +69,7 @@ register("./ts-resolve.loader.mjs", import.meta.url);
 let onSessionRetrieve = null; // async () => void
 let onSessionCreate = null;   // async () => void
 let retrievePaymentStatus = "paid";
+const expiredSessionIds = [];
 
 const stripeNamedExports = {
     getUncachableStripeClient: async () => ({
@@ -80,7 +81,22 @@ const stripeNamedExports = {
               onSessionRetrieve = null;
               await hook();
             }
-            return { id: sessionId, payment_status: retrievePaymentStatus };
+            // A realistic paid session for the invoice that recorded it: the
+            // confirm path verifies amount, currency, invoice and company.
+            const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.stripePaymentIntentId, sessionId)).limit(1);
+            return {
+              id: sessionId,
+              status: retrievePaymentStatus === "paid" ? "complete" : "open",
+              payment_status: retrievePaymentStatus,
+              payment_intent: `pi_for_${sessionId}`,
+              amount_total: inv ? Math.round(Number(inv.total) * 100) : null,
+              currency: "usd",
+              metadata: inv ? { invoiceId: String(inv.id), companyId: String(inv.companyId) } : {},
+            };
+          },
+          expire: async (sessionId) => {
+            expiredSessionIds.push(sessionId);
+            return { id: sessionId, status: "expired" };
           },
           create: async () => {
             if (onSessionCreate) {
@@ -296,8 +312,12 @@ try {
       freshClaimUpdatedAt = fresh.updatedAt?.getTime();
     };
 
+    expiredSessionIds.length = 0;
     const res = await post(`/portal/invoices/${inv.id}/pay`);
-    check("checkout session is still returned", res.status === 200 && !!res.body.url, JSON.stringify(res.body));
+    // REVIEW-B B4: an unrecorded session could never be found and closed by
+    // the autopay charge holding the claim, so it is expired, not handed out.
+    check("the unrecordable checkout session is NOT handed to the customer (409)", res.status === 409 && !res.body.url, JSON.stringify(res.body));
+    check("...and it is expired at Stripe", expiredSessionIds.length === 1, JSON.stringify(expiredSessionIds));
 
     const after = await fetchInvoice(inv.id);
     check("the fresh claim is still 'processing'", after.status === "processing", after.status);

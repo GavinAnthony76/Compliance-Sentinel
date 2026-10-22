@@ -9,6 +9,7 @@ import { ObjectStorageService } from "../lib/objectStorage";
 import { z } from "zod";
 import crypto from "crypto";
 import { logger } from "../lib/logger";
+import { checkoutSessionMismatch } from "../lib/payment-reconciliation";
 
 const objectStorage = new ObjectStorageService();
 
@@ -753,6 +754,11 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
   const [invoice] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.customerId, customerId), eq(invoicesTable.companyId, companyId))).limit(1);
   if (!invoice) return res.status(404).json({ error: "NotFound" });
   if (invoice.status === "paid") return res.status(400).json({ error: "AlreadyPaid" });
+  // A saved-card (autopay) charge holds the claim: opening a checkout now
+  // could charge the customer twice.
+  if (invoice.status === "processing") {
+    return res.status(409).json({ error: "ChargeInProgress", message: "A payment for this invoice is already in progress." });
+  }
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, customerId)).limit(1);
   const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, companyId)).limit(1);
@@ -853,8 +859,35 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
   // path is ever opened. (The downstream confirm-payment + webhook handlers are
   // already transition-guarded on status, so the invoice still can't be marked
   // paid — or notified — twice.)
+  // At most ONE open checkout per invoice, always recorded on the invoice so
+  // an autopay charge can find and expire it first. Reuse a recorded session
+  // that is still open; if it already completed, the payment is in flight.
+  if (String(invoice.stripePaymentIntentId ?? "").startsWith("cs_")) {
+    let existing: any = null;
+    try {
+      existing = await stripe.checkout.sessions.retrieve(invoice.stripePaymentIntentId);
+    } catch {
+      return res.status(503).json({ error: "BillingUnavailable", message: "Could not reach the payment processor. Please try again." });
+    }
+    if (existing?.status === "open" && existing.amount_total === amountCents) return res.json({ url: existing.url });
+    if (existing?.status === "complete") {
+      return res.status(409).json({ error: "PaymentInProgress", message: "Your payment was received and is being confirmed." });
+    }
+    if (existing?.status === "open") {
+      // Amount changed since that session opened: close it before a new one.
+      try {
+        await stripe.checkout.sessions.expire(existing.id);
+      } catch {
+        return res.status(409).json({ error: "PaymentInProgress", message: "A payment for this invoice is already in progress." });
+      }
+    }
+  }
+
+  // Keyed on the observed row version: concurrent double-clicks share one
+  // session, while a retry after the invoice changed gets a fresh one (an
+  // expired session is never handed back).
   const session = await stripe.checkout.sessions.create(sessionParams, {
-    idempotencyKey: `portal-checkout-inv-${invoice.id}-${amountCents}`,
+    idempotencyKey: `portal-checkout-inv-${invoice.id}-${amountCents}-${new Date(invoice.updatedAt).getTime()}`,
   });
 
   // Store checkout session ID so confirm-payment can retrieve and verify it.
@@ -864,18 +897,31 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
   // concurrent writer (e.g. an autopay charge claiming the invoice with
   // status "processing") may have re-claimed the row, and overwriting its
   // stripePaymentIntentId/updatedAt would clobber that live claim's token.
-  // If the token no longer matches, skip the write: the webhook path will
-  // still record the payment if this session completes.
+  // If the token no longer matches, the session could not be recorded — so
+  // nothing (e.g. an autopay charge) could find and close it. Expire it and
+  // never hand it to the customer; they can retry against the current row.
   //
   // Millisecond truncation: DB-written timestamps (defaultNow()) carry
   // microseconds that a JS Date read-back loses, so a raw equality against
   // the observed Date would never match its own row. Compare at ms precision.
-  await db.update(invoicesTable).set({ stripePaymentIntentId: session.id, updatedAt: new Date() })
+  const recorded = await db.update(invoicesTable).set({ stripePaymentIntentId: session.id, updatedAt: new Date() })
     .where(and(
       eq(invoicesTable.id, id),
       ne(invoicesTable.status, "paid"),
+      ne(invoicesTable.status, "processing"),
       sql`date_trunc('milliseconds', ${invoicesTable.updatedAt}) = ${invoice.updatedAt}`,
-    ));
+    ))
+    .returning({ id: invoicesTable.id });
+  if (recorded.length === 0) {
+    try {
+      await stripe.checkout.sessions.expire(session.id);
+    } catch (err) {
+      // Already completed or expired: a completed payment is recorded (or
+      // flagged) by the webhook, never lost.
+      logger.warn({ err, invoiceId: id, sessionId: session.id }, "Could not expire an unrecorded portal checkout session");
+    }
+    return res.status(409).json({ error: "InvoiceChanged", message: "This invoice changed while preparing payment. Please try again." });
+  }
 
   return res.json({ url: session.url });
 });
@@ -907,10 +953,27 @@ router.post("/invoices/:id/confirm-payment", requirePortalAuth, async (req: any,
     return res.status(503).json({ error: "BillingUnavailable", message: "Payment processing not available." });
   }
 
-  const session = await stripe.checkout.sessions.retrieve(invoice.stripePaymentIntentId);
+  // Only a Checkout session id is ever stored here by the pay route; anything
+  // else (e.g. a PaymentIntent recorded by another path) has nothing to confirm.
+  if (!String(invoice.stripePaymentIntentId).startsWith("cs_")) {
+    return res.status(400).json({ error: "NoPendingPayment", message: "No pending payment session found for this invoice." });
+  }
+  let session: any;
+  try {
+    session = await stripe.checkout.sessions.retrieve(invoice.stripePaymentIntentId);
+  } catch (err) {
+    logger.warn({ err, invoiceId: id }, "confirm-payment: Stripe session lookup failed");
+    return res.status(503).json({ error: "BillingUnavailable", message: "Could not reach the payment processor. Please try again." });
+  }
   if (!session || session.payment_status !== "paid") {
     return res.status(402).json({ error: "NotPaid", message: "Payment not yet confirmed by Stripe." });
   }
+  // The session must pay exactly this invoice. A mismatch is left to the
+  // Stripe webhook, which records it durably for reconciliation.
+  if (checkoutSessionMismatch(invoice, session, { invoiceId: id, companyId })) {
+    return res.status(409).json({ error: "PaymentNeedsReview", message: "This payment needs review by the business before the invoice can be marked paid." });
+  }
+  const paymentIntentId = typeof session.payment_intent === "string" ? session.payment_intent : session.id;
 
   // Transition-guarded update: the webhook (billing.ts) may mark this invoice
   // paid concurrently between the pre-read guard above and here, so only the
@@ -929,6 +992,8 @@ router.post("/invoices/:id/confirm-payment", requirePortalAuth, async (req: any,
   const transitioned = await db.update(invoicesTable).set({
     status: "paid",
     paidAt: new Date(),
+    paymentMethod: "card",
+    stripePaymentIntentId: paymentIntentId,
     updatedAt: new Date(),
   }).where(and(
     eq(invoicesTable.id, id),
