@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, estimatesTable, estimateLineItemsTable, customersTable, companiesTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
 import { sendEmail, resolveBaseUrl } from "../lib/notifications";
@@ -10,14 +10,21 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+// Share tokens are stored only as a SHA-256 hash (see routes/estimates.ts), so
+// every public lookup must hash the raw token from the URL. Comparing the raw
+// value would never match — and would let a leaked stored hash act as a link.
+function hashShareToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 // Generate the signed-estimate PDF and email a copy to the customer, plus
-// notify the business that the estimate was accepted. Fire-and-forget: never
-// blocks or fails the signing response. All errors are caught and logged.
-async function dispatchSignedEstimateEmails(token: string): Promise<void> {
+// notify the business that the estimate was accepted. Never fails the signing
+// response: all errors are caught and logged. Resolves to whether the
+// customer's copy was actually delivered.
+async function dispatchSignedEstimateEmails(token: string): Promise<boolean> {
   try {
-    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-    const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, tokenHash)).limit(1);
-    if (!estimate) return;
+    const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, hashShareToken(token))).limit(1);
+    if (!estimate) return false;
     const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, estimate.customerId)).limit(1);
     const [company] = await db.select().from(companiesTable).where(eq(companiesTable.id, estimate.companyId)).limit(1);
     const lineItems = await db
@@ -63,6 +70,7 @@ async function dispatchSignedEstimateEmails(token: string): Promise<void> {
       : undefined;
 
     // Customer confirmation with a signed copy attached
+    let customerEmailed = false;
     if (customer?.email) {
       const firstName = customer.firstName || "there";
       const body = [
@@ -95,13 +103,14 @@ async function dispatchSignedEstimateEmails(token: string): Promise<void> {
           <p style="color:#555;">Thank you,<br/>${companyName}</p>
         </div>`;
 
-      await sendEmail({
+      const result = await sendEmail({
         to: customer.email,
         subject: `Your signed estimate ${estimate.estimateNumber} — ${companyName}`,
         body,
         html,
         attachments,
       });
+      customerEmailed = result.delivered;
     }
 
     // Business notification
@@ -127,16 +136,17 @@ async function dispatchSignedEstimateEmails(token: string): Promise<void> {
         attachments,
       });
     }
+    return customerEmailed;
   } catch (err) {
     logger.error({ err, token: "[redacted]" }, "Failed to dispatch signed estimate emails");
+    return false;
   }
 }
 
 // GET /public/estimates/:token — get estimate for signing
 router.get("/estimates/:token", async (req, res) => {
   const { token } = req.params;
-  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
-  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, tokenHash)).limit(1);
+  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, hashShareToken(token))).limit(1);
   if (!estimate) return res.status(404).json({ error: "NotFound", message: "Estimate not found" });
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, estimate.customerId)).limit(1);
@@ -163,7 +173,7 @@ router.get("/estimates/:token", async (req, res) => {
 // POST /public/estimates/:token/sign — customer signs estimate
 router.post("/estimates/:token/sign", async (req, res) => {
   const { token } = req.params;
-  const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+  const tokenHash = hashShareToken(token);
   const parsed = z.object({
     // 200 chars is generous for a full name; prevents DB bloat from crafted payloads.
     signerName: z.string().min(1).max(200).trim(),
@@ -182,13 +192,25 @@ router.post("/estimates/:token/sign", async (req, res) => {
   if (estimate.signedAt) return res.status(400).json({ error: "AlreadySigned", message: "This estimate has already been signed" });
   if (estimate.status === "rejected") return res.status(400).json({ error: "Rejected", message: "This estimate has been rejected" });
 
+  // Guarded update: only an unsigned, non-rejected row is accepted, so a repeat
+  // or concurrent submission that passed the checks above cannot sign twice.
   const [updated] = await db.update(estimatesTable).set({
     status: "accepted",
     signedAt: new Date(),
     signerName: parsed.data.signerName,
     signatureData: parsed.data.signatureData,
     updatedAt: new Date(),
-  }).where(eq(estimatesTable.publicToken, token)).returning();
+  }).where(and(
+    eq(estimatesTable.publicToken, tokenHash),
+    isNull(estimatesTable.signedAt),
+    ne(estimatesTable.status, "rejected"),
+  )).returning();
+  if (!updated) {
+    const [current] = await db.select({ status: estimatesTable.status }).from(estimatesTable).where(eq(estimatesTable.publicToken, tokenHash)).limit(1);
+    if (!current) return res.status(404).json({ error: "NotFound" });
+    if (current.status === "rejected") return res.status(400).json({ error: "Rejected", message: "This estimate has been rejected" });
+    return res.status(400).json({ error: "AlreadySigned", message: "This estimate has already been signed" });
+  }
 
   // Record activity so the company's in-app activity indicator surfaces the signing.
   await logActivity({
@@ -199,12 +221,14 @@ router.post("/estimates/:token/sign", async (req, res) => {
     metadata: { estimateNumber: updated.estimateNumber, signerName: parsed.data.signerName },
   });
 
-  // Fire-and-forget: email the customer a signed copy and notify the business.
-  // Never block or fail the signing response on email/PDF errors.
-  void dispatchSignedEstimateEmails(token);
+  // Awaited: on Autoscale, work started after the response is sent gets
+  // CPU-throttled and can be silently dropped. The dispatcher catches its own
+  // errors, so awaiting never fails the signing; it reports whether the
+  // customer's copy was delivered so the message below never over-promises.
+  const customerEmailed = await dispatchSignedEstimateEmails(token);
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, updated.customerId)).limit(1);
-  const message = customer?.email
+  const message = customerEmailed
     ? "Thank you! Your estimate has been signed and accepted. A signed copy has been emailed to you."
     : "Thank you! Your estimate has been signed and accepted. You can download a signed copy below.";
 
@@ -214,7 +238,7 @@ router.post("/estimates/:token/sign", async (req, res) => {
 // GET /public/estimates/:token/pdf — download the estimate (signed copy when signed)
 router.get("/estimates/:token/pdf", async (req, res) => {
   const { token } = req.params;
-  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, token)).limit(1);
+  const [estimate] = await db.select().from(estimatesTable).where(eq(estimatesTable.publicToken, hashShareToken(token))).limit(1);
   if (!estimate) return res.status(404).json({ error: "NotFound", message: "Estimate not found" });
 
   const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, estimate.customerId)).limit(1);

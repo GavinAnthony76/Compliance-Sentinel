@@ -321,6 +321,7 @@ export const HARNESSES = {
       "tests/appointment-customer-access.e2e.mjs",
       "tests/property-service-access.e2e.mjs",
       "tests/estimate-recurring-plan-access.e2e.mjs",
+      "tests/public-estimate-signing.e2e.mjs",
       "tests/shared-screen-access.e2e.mjs",
       "tests/manager-screen-access.e2e.mjs",
       "tests/billing-access.e2e.mjs",
