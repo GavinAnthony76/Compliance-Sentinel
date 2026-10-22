@@ -223,6 +223,39 @@ activityRows = [
 r = await callHandler();
 check("alert with no recorded run at all is still surfaced",
   r.body?.lastAlert?.recipients === 1, JSON.stringify(r.body?.lastAlert));
+check("no recovery marker yields lastRecovery=null", r.body?.lastRecovery === null, JSON.stringify(r.body?.lastRecovery));
+
+// 7. Resolved incident (#201): the recovery marker belongs to the newest alert
+// → surfaced with its recovered-run time, the alert it resolves and recipients.
+const day = 24 * 60 * 60 * 1000;
+const incidentAlertAt = new Date(Date.now() - 6 * day);
+const recoveredRunAt = new Date(Date.now() - 5 * day);
+const recoveryLoggedAt = new Date(recoveredRunAt.getTime() + 60 * 1000);
+activityRows = [
+  { id: 40, createdAt: incidentAlertAt, action: "admin.sweep_health_alert_sent", metadataJson: { recipients: 2 } },
+  { id: 41, createdAt: recoveredRunAt, action: "admin.admins_auto_deactivated", metadataJson: { count: 0, thresholdDays: 90 } },
+  {
+    id: 42, createdAt: recoveryLoggedAt, action: "admin.sweep_health_recovered",
+    metadataJson: { recoveredRunAt: recoveredRunAt.toISOString(), alertSentAt: incidentAlertAt.toISOString(), recipients: 2, delivered: 2, failed: 0 },
+  },
+];
+r = await callHandler();
+check("a recovery that resolves the newest alert is surfaced",
+  r.body?.lastRecovery != null &&
+  new Date(r.body.lastRecovery.recoveredAt).getTime() === recoveredRunAt.getTime() &&
+  new Date(r.body.lastRecovery.alertSentAt).getTime() === incidentAlertAt.getTime() &&
+  r.body.lastRecovery.recipients === 2,
+  JSON.stringify(r.body?.lastRecovery));
+check("the resolved alert is no longer the current lastAlert", r.body?.lastAlert === null, JSON.stringify(r.body?.lastAlert));
+
+// 8. A NEWER alert after that recovery: the old all-clear must not hide it.
+const newIncidentAlertAt = new Date(Date.now() - 1 * day);
+activityRows = [...activityRows,
+  { id: 43, createdAt: newIncidentAlertAt, action: "admin.sweep_health_alert_sent", metadataJson: { recipients: 3 } },
+];
+r = await callHandler();
+check("an older recovery cannot hide a newer incident (lastRecovery=null)", r.body?.lastRecovery === null, JSON.stringify(r.body?.lastRecovery));
+check("the newer incident's alert is surfaced instead", r.body?.lastAlert?.recipients === 3, JSON.stringify(r.body?.lastAlert));
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed`);

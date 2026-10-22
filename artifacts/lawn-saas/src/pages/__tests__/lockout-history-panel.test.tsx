@@ -139,6 +139,37 @@ describe("LockoutHistoryPanel (admin-admins.tsx)", () => {
     expect(screen.queryByText(/Alert emailed/)).not.toBeInTheDocument();
   });
 
+  it("shows the resolved incident when the sweep has recovered", async () => {
+    const recoveredAt = new Date(Date.now() - 2 * HOUR);
+    mockFetchWith({
+      sweepEnabled: true,
+      runs: [{ id: 2, ranAt: recoveredAt.toISOString(), deactivatedCount: 0, thresholdDays: 90 }],
+      lastRecovery: { recoveredAt: recoveredAt.toISOString(), alertSentAt: "2026-07-18T09:00:00Z", recipients: 2 },
+    });
+
+    render(<LockoutHistoryPanel />);
+
+    const line = await screen.findByText(/Resolved: the sweep recovered on/);
+    expect(line.textContent).toContain("Jul 18, 2026");
+    expect(line.textContent).toContain("all-clear sent to 2 admins");
+  });
+
+  it("never shows a resolved line next to a current outage", async () => {
+    const ranAt = new Date("2026-07-20T02:00:00Z");
+    vi.useFakeTimers({ now: ranAt.getTime() + 80 * HOUR, toFake: ["Date"] });
+    mockFetchWith({
+      sweepEnabled: true,
+      runs: [{ id: 1, ranAt: ranAt.toISOString(), deactivatedCount: 0, thresholdDays: 90 }],
+      lastRecovery: { recoveredAt: ranAt.toISOString(), alertSentAt: "2026-07-18T09:00:00Z", recipients: 2 },
+    });
+
+    render(<LockoutHistoryPanel />);
+
+    await screen.findByText(/hasn't run in 3 days/);
+    expect(screen.queryByText(/Resolved:/)).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
   it("labels a single-admin run with singular wording", async () => {
     mockFetchWith({
       sweepEnabled: true,
