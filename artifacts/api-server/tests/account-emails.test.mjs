@@ -51,36 +51,44 @@ process.env.APP_BASE_URL = "https://app.greensynk.test";
 // Mocks
 // ---------------------------------------------------------------------------
 const sentEmails = [];
-mock.module("resend", {
-  namedExports: {
-    Resend: class {
-      constructor() {
-        this.emails = {
-          send: async (payload) => {
-            sentEmails.push(payload);
-            return { error: null };
-          },
-        };
-      }
-    },
+const resendNamedExports = {
+  Resend: class {
+    constructor() {
+      this.emails = {
+        send: async (payload) => {
+          sentEmails.push(payload);
+          return { error: null };
+        },
+      };
+    }
   },
-});
+};
+mock.module("resend", { namedExports: resendNamedExports });
 
 // Neither function under test touches the DB, but notifications.ts imports
 // @workspace/db at module load — mock it so no driver/connection is created.
-mock.module("@workspace/db", {
-  namedExports: {
-    db: {
-      select: () => {
-        throw new Error("db access not expected in this unit test");
-      },
+const dbNamedExports = {
+  db: {
+    select: () => {
+      throw new Error("db access not expected in this unit test");
     },
-    invoicesTable: {},
-    companiesTable: {},
-    customersTable: {},
-    invoiceLineItemsTable: {},
-    usersTable: {},
   },
+  invoicesTable: {},
+  companiesTable: {},
+  customersTable: {},
+  invoiceLineItemsTable: {},
+  usersTable: {},
+  smsConsentEventsTable: {},
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
+
+// Preflight: fail with an actionable message if production code grew an
+// import these mocks don't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/lib/notifications.ts"],
+  packageMocks: { resend: resendNamedExports, "@workspace/db": dbNamedExports },
 });
 
 const { sendEmailVerificationEmail, sendPasswordResetEmail, sendPasswordChangedEmail, sendForgotUsernameEmail } = await import(

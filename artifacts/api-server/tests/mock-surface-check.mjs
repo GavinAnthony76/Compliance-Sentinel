@@ -259,3 +259,26 @@ export function assertRelativeMockCovers({ testFile, modulePath, providedNames, 
   );
   process.exit(1);
 }
+
+/**
+ * One-call preflight for a suite's whole mock set: runs assertMockCovers for
+ * every mocked package and assertRelativeMockCovers for every mocked relative
+ * module, treating all mocked relative modules as skipped (their real imports
+ * are irrelevant — the mock intercepts them). Call it after the mock.module(...)
+ * calls and BEFORE importing production code.
+ *
+ * @param {object} opts
+ * @param {string}   opts.testFile        import.meta.url of the calling test
+ * @param {string[]} opts.entryFiles      production modules the suite imports, relative to tests/
+ * @param {Record<string, object>} [opts.packageMocks]  package name -> namedExports object
+ * @param {Record<string, object>} [opts.relativeMocks] relative path -> namedExports object
+ */
+export function assertSuiteMocksCover({ testFile, entryFiles, packageMocks = {}, relativeMocks = {} }) {
+  const skipModules = Object.keys(relativeMocks);
+  for (const [packageName, exportsObject] of Object.entries(packageMocks)) {
+    assertMockCovers({ testFile, packageName, providedNames: Object.keys(exportsObject), entryFiles, skipModules });
+  }
+  for (const [modulePath, exportsObject] of Object.entries(relativeMocks)) {
+    assertRelativeMockCovers({ testFile, modulePath, providedNames: Object.keys(exportsObject), entryFiles, skipModules });
+  }
+}

@@ -77,12 +77,20 @@ const dbMock = {
   insert: () => chain(() => []),
 };
 
-mock.module("@workspace/db", {
-  namedExports: {
-    db: dbMock,
-    platformSettingsTable,
-    DEFAULT_STALE_ADMIN_DAYS: 90,
-  },
+const dbNamedExports = {
+  db: dbMock,
+  platformSettingsTable,
+  DEFAULT_STALE_ADMIN_DAYS: 90,
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
+
+// Preflight: fail with an actionable message if production code grew an
+// import this mock doesn't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/lib/platform-settings.ts"],
+  packageMocks: { "@workspace/db": dbNamedExports },
 });
 
 const { updatePlatformSettings, MIN_STALE_ADMIN_DAYS, MAX_STALE_ADMIN_DAYS } =

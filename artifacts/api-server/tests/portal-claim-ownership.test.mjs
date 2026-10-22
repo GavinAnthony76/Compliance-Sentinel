@@ -70,8 +70,7 @@ let onSessionRetrieve = null; // async () => void
 let onSessionCreate = null;   // async () => void
 let retrievePaymentStatus = "paid";
 
-mock.module("../src/lib/stripe.ts", {
-  namedExports: {
+const stripeNamedExports = {
     getUncachableStripeClient: async () => ({
       checkout: {
         sessions: {
@@ -103,25 +102,44 @@ mock.module("../src/lib/stripe.ts", {
         },
       },
     }),
-  },
-});
+};
 
 const receiptCalls = [];
 const ownerNotifCalls = [];
-mock.module("../src/lib/notifications.ts", {
-  namedExports: {
-    sendEmail: async () => ({ delivered: false, reason: "test" }),
-    dispatchPaymentReceiptEmail: (invoiceId, companyId) => {
-      receiptCalls.push({ invoiceId, companyId });
-    },
-    dispatchOwnerPaymentNotification: (invoiceId, companyId) => {
-      ownerNotifCalls.push({ invoiceId, companyId });
-    },
+const notificationsNamedExports = {
+  sendEmail: async () => ({ delivered: false, reason: "test" }),
+  dispatchPaymentReceiptEmail: (invoiceId, companyId) => {
+    receiptCalls.push({ invoiceId, companyId });
   },
-});
+  dispatchOwnerPaymentNotification: (invoiceId, companyId) => {
+    ownerNotifCalls.push({ invoiceId, companyId });
+  },
+  // Inert stubs for the rest of the module surface customer-portal.ts (and
+  // sms-consent.ts) can reach; the payment paths under test never call them.
+  resolveCompanyNotificationEmail: async () => null,
+  sendBookingConfirmationEmail: async () => ({ delivered: false, reason: "test" }),
+  sendBookingRequestNotification: async () => ({ delivered: false, reason: "test" }),
+  sendPortalAccessEmail: async () => ({ delivered: false, reason: "test" }),
+  sendPortalCancellationNotification: async () => ({ delivered: false, reason: "test" }),
+  sendSMS: async () => ({ success: false }),
+};
 
-mock.module("../src/lib/objectStorage.ts", {
-  namedExports: { ObjectStorageService: class {} },
+const relativeMocks = {
+  "../src/lib/stripe.ts": stripeNamedExports,
+  "../src/lib/notifications.ts": notificationsNamedExports,
+  "../src/lib/objectStorage.ts": { ObjectStorageService: class {} },
+};
+for (const [specifier, namedExports] of Object.entries(relativeMocks)) {
+  mock.module(specifier, { namedExports });
+}
+
+// Preflight: fail with an actionable message if production code grew an
+// import these mocks don't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/routes/customer-portal.ts"],
+  relativeMocks,
 });
 
 // Imported AFTER the mocks so the router picks them up.

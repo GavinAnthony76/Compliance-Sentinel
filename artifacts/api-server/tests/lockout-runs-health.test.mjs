@@ -23,15 +23,14 @@ process.env.SESSION_SECRET = process.env.SESSION_SECRET || "test-session-secret"
 process.env.ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || "test-admin-secret";
 process.env.NODE_ENV = "test";
 
-mock.module("resend", {
-  namedExports: {
-    Resend: class {
-      constructor() {
-        this.emails = { send: async () => ({ error: null }) };
-      }
-    },
+const resendNamedExports = {
+  Resend: class {
+    constructor() {
+      this.emails = { send: async () => ({ error: null }) };
+    }
   },
-});
+};
+mock.module("resend", { namedExports: resendNamedExports });
 
 function tableProxy(name) {
   return new Proxy(
@@ -118,16 +117,24 @@ const dbMock = {
   insert: () => chain(() => []),
 };
 
-mock.module("@workspace/db", {
-  namedExports: {
-    db: dbMock,
-    pool: { connect: async () => ({ query: async () => ({ rows: [{ locked: true }] }), release: () => {} }) },
-    platformAdminsTable,
-    activityLogsTable,
-    platformSettingsTable,
-    DEFAULT_STALE_ADMIN_DAYS: 90,
-    ...tables,
-  },
+const dbNamedExports = {
+  db: dbMock,
+  pool: { connect: async () => ({ query: async () => ({ rows: [{ locked: true }] }), release: () => {} }) },
+  platformAdminsTable,
+  activityLogsTable,
+  platformSettingsTable,
+  DEFAULT_STALE_ADMIN_DAYS: 90,
+  ...tables,
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
+
+// Preflight: fail with an actionable message if production code grew an
+// import these mocks don't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/routes/admin.ts"],
+  packageMocks: { resend: resendNamedExports, "@workspace/db": dbNamedExports },
 });
 
 const adminRouter = (await import("../src/routes/admin.ts")).default;
