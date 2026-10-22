@@ -4,6 +4,13 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
+// Drizzle reads and writes `timestamp` (without time zone) columns as UTC wall
+// time regardless of the process TZ. Raw Date parameters inside sql`...`
+// templates (e.g. the ms-truncated claim-ownership token compares) bypass that
+// mapping, and node-postgres would otherwise serialize them in the process's
+// LOCAL zone — so outside a UTC process those guards never match their own row.
+pg.defaults.parseInputDatesAsUTC = true;
+
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {

@@ -5,8 +5,14 @@ import { AppLayout } from '@/components/layout';
 import { Card, Button, Input } from '@/components/ui';
 import { Plus, Calendar, Download, FileText, Images, X, ImageIcon, Loader2 } from 'lucide-react';
 import { useAuthState } from '@/hooks/use-auth-state';
-import { toDateRangeParams } from '@/lib/appointment-date-range';
+import { toDateRangeParams, presetDateRange, activeDatePreset, type DateRangePreset } from '@/lib/appointment-date-range';
 import { useLocation } from 'wouter';
+
+const DATE_PRESETS: { preset: DateRangePreset; label: string }[] = [
+  { preset: 'today', label: 'Today' },
+  { preset: 'week', label: 'This week' },
+  { preset: 'month', label: 'This month' },
+];
 
 function downloadExport(path: string, filename: string, onError: (msg: string) => void) {
   fetch(path, { headers: { Authorization: `Bearer ${localStorage.getItem('greensync_token')}` } })
@@ -341,6 +347,8 @@ export function AppointmentsPage() {
   const [endDate, setEndDate] = useState('');
   const [creatingInvoice, setCreatingInvoice] = useState<number | null>(null);
   const { startDate: startDateParam, endDate: endDateParam } = toDateRangeParams(startDate, endDate);
+  // Highlight follows the inputs, so a manual edit away from a preset clears it.
+  const activePreset = activeDatePreset(startDate, endDate);
   const { user } = useAuthState();
   const plan = user?.company?.subscriptionPlan ?? 'starter';
   const isStaff = user?.role === 'staff';
@@ -427,6 +435,21 @@ export function AppointmentsPage() {
         ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {DATE_PRESETS.map(({ preset, label }) => (
+            <button
+              key={preset}
+              type="button"
+              aria-pressed={activePreset === preset}
+              onClick={() => {
+                const r = presetDateRange(preset);
+                setStartDate(r.startDate);
+                setEndDate(r.endDate);
+              }}
+              className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${activePreset === preset ? 'bg-primary text-primary-foreground shadow-md' : 'bg-card border border-border hover:border-primary/50 text-muted-foreground hover:text-foreground'}`}
+            >
+              {label}
+            </button>
+          ))}
           <label className="text-sm text-muted-foreground font-medium">From</label>
           <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-10 w-40" aria-label="From date" />
           <label className="text-sm text-muted-foreground font-medium">To</label>

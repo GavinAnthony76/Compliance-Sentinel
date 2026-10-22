@@ -233,6 +233,93 @@ describe("LockoutHistoryPanel (admin-admins.tsx)", () => {
       expect(panelContainer().className).not.toContain("amber");
     });
 
+    describe("auto-refresh while mounted", () => {
+      const REFRESH = 5 * 60 * 1000;
+      const ranAt = new Date("2026-07-20T02:00:00Z");
+      const staleBody = {
+        sweepEnabled: true,
+        runs: [{ id: 1, ranAt: ranAt.toISOString(), deactivatedCount: 0, thresholdDays: 90 }],
+      };
+
+      function startOverdue() {
+        vi.useFakeTimers({ now: ranAt.getTime() + 80 * HOUR, toFake: ["Date", "setInterval", "clearInterval"] });
+      }
+
+      it("clears the overdue warning when a new run appears, without a reload", async () => {
+        startOverdue();
+        const fetchMock = mockFetchWith(staleBody);
+        render(<LockoutHistoryPanel />);
+        await screen.findByText(/hasn't run in 3 days/);
+
+        const freshRun = { id: 2, ranAt: new Date(Date.now() - HOUR).toISOString(), deactivatedCount: 1, thresholdDays: 90 };
+        fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ sweepEnabled: true, runs: [freshRun, staleBody.runs[0]] }) }));
+        await act(async () => {
+          vi.advanceTimersByTime(REFRESH);
+        });
+
+        await waitFor(() => expect(screen.queryByText(/hasn't run in/)).not.toBeInTheDocument());
+        expect(screen.getByText(/Last ran/).textContent).toContain("1 admin deactivated");
+        expect(panelContainer().className).toContain("border-slate-800");
+      });
+
+      it("keeps the last history (still overdue) when a refresh fails — never falsely healthy", async () => {
+        startOverdue();
+        const fetchMock = mockFetchWith(staleBody);
+        render(<LockoutHistoryPanel />);
+        await screen.findByText(/hasn't run in 3 days/);
+
+        fetchMock.mockImplementation(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+        await act(async () => {
+          vi.advanceTimersByTime(REFRESH);
+        });
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(screen.getByText(/hasn't run in 3 days/)).toBeInTheDocument();
+        expect(screen.queryByText("Couldn't load the sweep history right now.")).not.toBeInTheDocument();
+        expect(panelContainer().className).toContain("border-red-500/50");
+      });
+
+      it("ignores a slow older response that resolves after a newer one", async () => {
+        startOverdue();
+        const fetchMock = mockFetchWith(staleBody);
+        render(<LockoutHistoryPanel />);
+        await screen.findByText(/hasn't run in 3 days/);
+
+        // Refresh #1 hangs; refresh #2 brings a fresh run; then #1 resolves stale.
+        let releaseSlow: () => void = () => {};
+        fetchMock.mockImplementationOnce(() => new Promise((resolve) => {
+          releaseSlow = () => resolve({ ok: true, status: 200, json: async () => staleBody } as any);
+        }) as any);
+        await act(async () => {
+          vi.advanceTimersByTime(REFRESH);
+        });
+        const freshRun = { id: 2, ranAt: new Date(Date.now() - HOUR).toISOString(), deactivatedCount: 0, thresholdDays: 90 };
+        fetchMock.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ sweepEnabled: true, runs: [freshRun] }) }));
+        await act(async () => {
+          vi.advanceTimersByTime(REFRESH);
+        });
+        await waitFor(() => expect(screen.queryByText(/hasn't run in/)).not.toBeInTheDocument());
+
+        await act(async () => {
+          releaseSlow();
+        });
+        expect(screen.queryByText(/hasn't run in/)).not.toBeInTheDocument();
+      });
+
+      it("stops refreshing once unmounted", async () => {
+        startOverdue();
+        const fetchMock = mockFetchWith(staleBody);
+        const { unmount } = render(<LockoutHistoryPanel />);
+        await screen.findByText(/hasn't run in 3 days/);
+        unmount();
+
+        act(() => {
+          vi.advanceTimersByTime(3 * REFRESH);
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it("suppresses the overdue warning when the sweep is disabled, showing the turned-off note", async () => {
       renderWithLastRun(100, false);
       await screen.findByText(/Last ran/);

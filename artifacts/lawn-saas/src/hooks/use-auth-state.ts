@@ -5,10 +5,14 @@ import { useGetMe, useAdminGetMe, getGetMeQueryKey, getAdminGetMeQueryKey } from
 export const TOKEN_KEY = 'greensync_token';
 export const ADMIN_TOKEN_KEY = 'greensync_admin_token';
 
+// localStorage does not exist during the build-time SSR prerender of public
+// pages (e.g. the landing page); the server renders the signed-out view.
+const readStoredToken = (key: string) => (typeof window === 'undefined' ? null : localStorage.getItem(key));
+
 export function useAuthState() {
   const [, setLocation] = useLocation();
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
-  const [adminToken, setAdminToken] = useState<string | null>(() => localStorage.getItem(ADMIN_TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => readStoredToken(TOKEN_KEY));
+  const [adminToken, setAdminToken] = useState<string | null>(() => readStoredToken(ADMIN_TOKEN_KEY));
 
   const {
     data: user,
