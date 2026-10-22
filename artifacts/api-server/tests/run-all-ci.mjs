@@ -169,6 +169,7 @@ async function main() {
     ["account-emails", "tests/account-emails.test.mjs", "Account-email validation"],
     ["portal-booking-notifications", "tests/portal-booking-notifications.test.mjs", "Portal booking/cancellation notification validation"],
     ["auth-policy", "tests/auth-policy-characterization.test.mjs", "Auth/subscription policy characterization (REVIEW-A)"],
+    ["estimate-signed-notifications", "tests/estimate-signed-notifications.test.mjs", "Signed-estimate notification validation"],
   ];
   const emailLabels = {};
   for (const [key, file, label] of emailSuites) {

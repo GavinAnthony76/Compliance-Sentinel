@@ -201,7 +201,7 @@ export function CustomersPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Search customers by name, email, or phone..."
+              placeholder="Search customers by name, email, phone, or address..."
               className="w-full h-10 pl-9 pr-4 rounded-lg border border-border bg-background text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
