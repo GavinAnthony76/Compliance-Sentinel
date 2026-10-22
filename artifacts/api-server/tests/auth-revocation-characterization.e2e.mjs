@@ -3,11 +3,10 @@
  * REVIEW-A — end-to-end characterization of session revocation for company
  * users, against a RUNNING api-server (self-provisioned company + staff).
  *
- * Pins CURRENT behavior recorded in docs/claude-handoff/reviews/REVIEW-A-auth-policy.md:
- * deactivating or demoting a team member blocks NEW logins, but a token issued
- * before the change keeps working until it expires (7 days), because
- * requireAuth never re-reads is_active or role. "FINDING" checks document that
- * gap; when a revocation policy is approved, flip them deliberately.
+ * Asserts the approved REVIEW-A policy (docs/claude-handoff/reviews/REVIEW-A-auth-policy.md):
+ * deactivating or demoting a team member takes effect on tokens ALREADY
+ * issued, portal invites go through the same guard, and an administratively
+ * suspended company keeps only session + billing-recovery access.
  *
  * Exit code 0 = all checks passed, 1 = at least one check failed.
  */
@@ -86,11 +85,11 @@ async function main() {
   }
   {
     const r = await req("GET", "/customers", { token: staff.token });
-    check("FINDING A1: the deactivated member's existing token still reads data", r.status === 200, `got ${r.status}`);
+    check("A1: the deactivated member's existing token can no longer read (401)", r.status === 401, `got ${r.status}`);
   }
   {
     const r = await req("POST", "/customers", { token: staff.token, body: { firstName: "Ghost", lastName: "Write", phone: `444${stamp}`.slice(0, 12) } });
-    check("FINDING A1: ...and still writes data", r.status === 201, `got ${r.status}`);
+    check("A1: ...or write (401)", r.status === 401, `got ${r.status}`);
   }
 
   console.log("\nDemoted admin:");
@@ -102,7 +101,38 @@ async function main() {
   {
     // /invoices is owner/admin-only (requireRole) — a staff role must get 403.
     const r = await req("GET", "/invoices", { token: manager.token });
-    check("FINDING A4: the demoted member's old token still passes the admin-only role check", r.status === 200, `got ${r.status}`);
+    check("A4: the demoted member's old token is held to the CURRENT role (403 on an admin-only route)", r.status === 403, `got ${r.status}`);
+  }
+
+  console.log("\nPortal invites use the shared guard (A9):");
+  {
+    const r = await req("POST", "/portal/auth/send-invite", { token: staff.token, body: { customerId: 1 } });
+    check("a deactivated member's token cannot send portal invites (401)", r.status === 401, `got ${r.status}`);
+  }
+
+  console.log("\nAdministratively suspended company (A8):");
+  {
+    // Mirrors POST /admin/companies/:id/suspend (sets companies.is_active=false)
+    // directly in the throwaway test DB, like verify-owner.mjs does.
+    const { default: pg } = await import("pg");
+    const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+    await client.connect();
+    try {
+      await client.query(
+        "UPDATE companies SET is_active = false WHERE id = (SELECT company_id FROM users WHERE email = $1)",
+        [ownerEmail.toLowerCase()],
+      );
+    } finally {
+      await client.end();
+    }
+    const blocked = await req("GET", "/customers", { token: ownerToken });
+    check("suspended company: operational reads are blocked (403 CompanySuspended)", blocked.status === 403 && blocked.json?.error === "CompanySuspended", `got ${blocked.status} ${blocked.json?.error}`);
+    const write = await req("POST", "/customers", { token: ownerToken, body: { firstName: "Sus", lastName: "Pended", phone: `333${stamp}`.slice(0, 12) } });
+    check("suspended company: writes are blocked (403)", write.status === 403, `got ${write.status}`);
+    const me = await req("GET", "/auth/me", { token: ownerToken });
+    check("suspended company: the session endpoint still works (200)", me.status === 200, `got ${me.status}`);
+    const billing = await req("GET", "/billing/status", { token: ownerToken });
+    check("suspended company: billing recovery is still reachable (not 403 CompanySuspended)", billing.json?.error !== "CompanySuspended" && billing.status < 500, `got ${billing.status} ${billing.json?.error}`);
   }
 
   console.log(`\n${passes} passed, ${failures} failed`);

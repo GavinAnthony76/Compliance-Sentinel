@@ -1,6 +1,20 @@
 # REVIEW-A — Identity and subscription policy matrix
 
-Status: **review complete; policy decisions required.** No behavior was changed. The tests listed below pin current behavior, including every fail-open path, so that each policy decision lands as a deliberate, reviewed test change.
+Status: **A1–A9 implemented** per the approved policy, in the PR that changes `src/lib/auth.ts`. **A10 is a proposal awaiting approval** (see the end of this document). The matrices below describe the behavior *before* that change. Both suites now assert the approved behavior.
+
+### Approved policy, as implemented
+
+- **Company users (`requireAuth`):** one joined user + company lookup per request.
+  - A deleted user, a deactivated user, or a user whose company changed gets **401**, including requests with existing tokens.
+  - `req.user.role` and `companyId` come from the **database**, never from token claims.
+  - Password-change revocation is kept.
+- **Platform admins (`requireAdminAuth`):** a database lookup per request. A deleted or deactivated admin gets **401**, and the current database role is used.
+- **Lookup failures:** both identity guards and the subscription guard return a retryable **503**. They never fall back to unrestricted access.
+- **Missing company record:** **403** `CompanyNotFound`, from `requireAuth` and from the subscription check on writes.
+- **Administrative suspension** (`companies.is_active=false`): **403** `CompanySuspended` for all company-user routes except the session endpoints (`/api/auth/*`) and billing recovery (`/api/billing/*`). Login itself is unauthenticated and unaffected. Support access means the platform-admin console, which suspension doesn't affect.
+- **Expired subscriptions** are unchanged: reads stay allowed and writes get 402. Suspension and expiry are separate checks.
+- **Portal invites** (`POST /portal/auth/send-invite`): now mounted behind the shared `requireAuth`.
+- **Not changed:** portal-customer tokens (`requirePortalAuth`). Portal login already refuses suspended companies; per-request portal re-checks weren't requested.
 
 Sources reviewed: `artifacts/api-server/src/lib/auth.ts`, `src/lib/subscription.ts`, `src/routes/index.ts` and every `src/routes/*.ts` mount, `src/routes/admin-auth.ts`, `src/routes/customer-portal.ts` (`requirePortalAuth`, `/auth/send-invite`), `src/routes/team.ts`, and the `users`, `platform_admins` and `companies` schemas.
 
@@ -58,3 +72,20 @@ Token lifetimes: company users 7 days, platform admins 4 hours, portal tokens st
 | A10 | Several data-writing routers aren't subscription-gated | Lapsed tenants can keep using those features | Decide per router. Keep `billing` and `settings` ungated. |
 
 Implementation of any row should be its own PR, flipping the matching FINDING check in the tests above and adding allowed and forbidden e2e cases. Suggested order: A1+A2+A4 (one lookup, one PR), then A5, then A9, then A8 and A10, then the A3 and A7 failure policy.
+
+## A10 — subscription gating, route by route (proposal; not implemented)
+
+These routers authenticate company users but don't run `requireActiveSubscription`, so an expired or canceled tenant can still **write** through them. Reads stay allowed either way. **Billing and settings are not blanket-blocked.** Each row needs your yes/no before implementation.
+
+| Router | Write endpoints | Proposal | Reason |
+| --- | --- | --- | --- |
+| `billing` | `POST /subscribe`, `/connect/onboard`, `/connect/dashboard`, `/portal`; webhooks | **Keep ungated** | Billing recovery: a lapsed tenant must be able to resubscribe and pay. Webhooks aren't user requests. |
+| `settings` | `PUT /`, `PUT /payment-config` | **Keep ungated** | Account and contact details must stay editable to resolve billing. Optionally gate only `PUT /payment-config`, since it only matters for paid features. |
+| `activity` | `POST /mark-seen` | **Keep ungated** | UI bookkeeping, not an operational write |
+| `appointment-photos` | `POST /`, `DELETE /:id` | **Gate** | Operational data writes |
+| `autopay` | `POST/DELETE /customers/:id/payment-method`, `PATCH /customers/:id/autopay`, `POST /invoices/:id/charge`, `POST /invoices/send-reminders` | **Gate** charge, reminders and autopay toggles. **Decide** on payment-method removal: allowing a lapsed tenant to *remove* a stored card may be desirable. | Charging customers and sending messages are operational |
+| `communications` | `POST /` | **Gate** | Logs and sends customer communications |
+| `routes-mgmt` | route CRUD, stops, `optimize`, `on-my-way`, `send-appointment-reminders` | **Gate** | Operational, and two endpoints message customers |
+| `dashboard` | none | n/a | Read-only |
+
+Once approved, the change is mounting `requireActiveSubscription` (GET stays allowed) on the gated routers, or per route where marked. Allowed and blocked cases would be added to the characterization suite's mount matrix and to `billing-access.e2e.mjs`.
