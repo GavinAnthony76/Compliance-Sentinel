@@ -168,6 +168,7 @@ async function main() {
     ["branded-emails", "tests/branded-emails.test.mjs", "Branded owner-email validation"],
     ["account-emails", "tests/account-emails.test.mjs", "Account-email validation"],
     ["portal-booking-notifications", "tests/portal-booking-notifications.test.mjs", "Portal booking/cancellation notification validation"],
+    ["stripe-paid-paths", "tests/stripe-paid-paths-characterization.test.mjs", "Stripe paid-path characterization (REVIEW-B)"],
   ];
   const emailLabels = {};
   for (const [key, file, label] of emailSuites) {
