@@ -773,20 +773,22 @@ router.post("/invoices/:id/pay", requirePortalAuth, async (req: any, res) => {
     return res.status(403).json({ error: "PaymentMethodNotEnabled", message: "Online card payments are not enabled for this company." });
   }
 
+  // --- CONNECT ENFORCEMENT: company must have a connected Stripe account ---
+  // Checked before Stripe client setup: it needs no Stripe call, and a company
+  // that never connected should get this answer even if platform billing is down.
+  if (!company.stripeConnectAccountId) {
+    return res.status(403).json({
+      error: "ConnectRequired",
+      message: "This company has not connected their Stripe account yet. Online payments are not available.",
+    });
+  }
+
   let stripe: any;
   try {
     const { getUncachableStripeClient } = await import("../lib/stripe");
     stripe = await getUncachableStripeClient();
   } catch {
     return res.status(503).json({ error: "BillingUnavailable", message: "Payment processing not configured" });
-  }
-
-  // --- CONNECT ENFORCEMENT: company must have a connected Stripe account ---
-  if (!company.stripeConnectAccountId) {
-    return res.status(403).json({
-      error: "ConnectRequired",
-      message: "This company has not connected their Stripe account yet. Online payments are not available.",
-    });
   }
 
   // Verify the Connect account can accept charges via V2 API (falls back to V1 for legacy accounts)
