@@ -212,6 +212,7 @@ const passthrough = (_req, _res, next) => next();
 
 // Controlled per-scenario Stripe stub. constructEvent trusts the raw body here —
 // signature verification is Stripe SDK behavior, not what this suite guards.
+let invoiceEmailImpl = async () => true;
 let stripeSessionResult = { payment_status: "paid" };
 let stripePaymentIntentResult = { id: "pi_test", status: "succeeded" };
 const fakeStripe = {
@@ -251,7 +252,8 @@ const relativeMocks = {
   },
   "../src/lib/activity.ts": { logActivity: async () => {} },
   "../src/lib/automations.ts": { fireAutomations: () => {} },
-  "../src/lib/invoice-email.ts": { dispatchInvoiceEmail: async () => true },
+  // Delegates so a scenario can hold the invoice email mid-send.
+  "../src/lib/invoice-email.ts": { dispatchInvoiceEmail: (...args) => invoiceEmailImpl(...args) },
   "../src/lib/invoice-pdf.ts": { buildInvoicePdf: async () => Buffer.from("PDF") },
   "../src/lib/invoice-number.ts": { insertInvoiceWithNumber: async () => null },
   "../src/lib/sms-consent.ts": { sendSMSWithConsent: async () => {} },
@@ -319,6 +321,7 @@ function routeHandler(router, method, path) {
 }
 
 const markPaid = routeHandler(invoicesRouter, "post", "/:id/mark-paid");
+const updateInvoice = routeHandler(invoicesRouter, "put", "/:id");
 const autopayCharge = routeHandler(autopayRouter, "post", "/invoices/:id/charge");
 const billingWebhook = routeHandler(billingRouter, "post", "/webhook");
 const confirmPayment = routeHandler(customerPortalRouter, "post", "/invoices/:id/confirm-payment");
@@ -649,6 +652,101 @@ console.log("\nManual mark-paid vs. in-flight autopay claim:");
   check("the settled invoice records the card PaymentIntent", invoice.stripePaymentIntentId === "pi_race_card", invoice.stripePaymentIntentId);
   check("the settled invoice records paymentMethod 'card'", invoice.paymentMethod === "card", invoice.paymentMethod);
   check("exactly one receipt is sent, from the winning charge", receipts().length === 1, `sent ${receipts().length}`);
+}
+
+// ============================================================================
+// Invoice edits (PUT /invoices/:id) racing a payment: an edit must not write
+// over a live charge claim, and its deferred draft -> sent promotion must not
+// reopen an invoice that was paid while the invoice email was being sent.
+// ============================================================================
+console.log("\nInvoice edit vs. in-flight payment:");
+{
+  const company = seedCompany();
+  const customer = seedCustomer(company.id);
+  const invoice = seedInvoice(company.id, customer.id);
+  const makeReq = (body = {}) => ({ user: { companyId: company.id, userId: 1 }, params: { id: String(invoice.id) }, body });
+
+  let releaseStripe;
+  const stripeGate = new Promise((resolve) => (releaseStripe = resolve));
+  const originalCreate = fakeStripe.paymentIntents.create;
+  fakeStripe.paymentIntents.create = async () => {
+    await stripeGate;
+    return { id: "pi_edit_race", status: "succeeded" };
+  };
+
+  resetEmails();
+  const charging = autopayCharge(makeReq(), makeRes());
+  await settle();
+
+  const editRes = makeRes();
+  await updateInvoice(makeReq({ total: 1, notes: "edited mid-charge" }), editRes);
+  check(
+    "editing an invoice during a live claim is rejected with 409 ChargeInProgress",
+    editRes.statusCode === 409 && editRes.body?.error === "ChargeInProgress",
+    `${editRes.statusCode} ${JSON.stringify(editRes.body)}`,
+  );
+  check("the rejected edit leaves the total untouched", invoice.total === "100.00", invoice.total);
+  check("the rejected edit leaves the claim in place", invoice.status === "processing", invoice.status);
+
+  releaseStripe();
+  await charging;
+  await settle();
+  fakeStripe.paymentIntents.create = originalCreate;
+  check("the card charge then settles with its PaymentIntent", invoice.status === "paid" && invoice.stripePaymentIntentId === "pi_edit_race", `${invoice.status} ${invoice.stripePaymentIntentId}`);
+}
+{
+  const company = seedCompany();
+  const customer = seedCustomer(company.id);
+  const invoice = seedInvoice(company.id, customer.id, { status: "draft" });
+  const makeReq = (body = {}) => ({ user: { companyId: company.id, userId: 1 }, params: { id: String(invoice.id) }, body });
+
+  // Hold the invoice email so the invoice is paid before the edit promotes it.
+  let releaseEmail;
+  const emailGate = new Promise((resolve) => (releaseEmail = resolve));
+  invoiceEmailImpl = async () => {
+    await emailGate;
+    return true;
+  };
+
+  const editRes = makeRes();
+  const editing = updateInvoice(makeReq({ status: "sent" }), editRes);
+  await settle();
+  await markPaid(makeReq({ paymentMethod: "check" }), makeRes());
+  check("the invoice is paid while the edit's email is still sending", invoice.status === "paid", invoice.status);
+
+  releaseEmail();
+  await editing;
+  invoiceEmailImpl = async () => true;
+  check("the edit's deferred promotion does NOT reopen the paid invoice", invoice.status === "paid", invoice.status);
+  check("the paid invoice keeps its payment method", invoice.paymentMethod === "check", invoice.paymentMethod);
+  check("the edit responds with the invoice as it actually is (paid)", editRes.body?.status === "paid", JSON.stringify(editRes.body?.status));
+}
+{
+  // PUT { status: "paid" } is a genuine paid transition: receipt exactly once,
+  // paidAt stamped, and replays / concurrent duplicates send nothing more.
+  const company = seedCompany();
+  const customer = seedCustomer(company.id);
+  const invoice = seedInvoice(company.id, customer.id);
+  const makeReq = (body = {}) => ({ user: { companyId: company.id, userId: 1 }, params: { id: String(invoice.id) }, body });
+
+  resetEmails();
+  const res = makeRes();
+  await updateInvoice(makeReq({ status: "paid" }), res);
+  await settle();
+  check("PUT status=paid sends exactly one receipt", receipts().length === 1, `sent ${receipts().length}`);
+  check("PUT status=paid stamps paidAt", invoice.status === "paid" && invoice.paidAt instanceof Date, `${invoice.status} ${invoice.paidAt}`);
+
+  resetEmails();
+  await updateInvoice(makeReq({ status: "paid", notes: "replay" }), makeRes());
+  await settle();
+  check("a replayed PUT status=paid sends NO duplicate receipt", receipts().length === 0, `sent ${receipts().length}`);
+
+  const raced = seedInvoice(company.id, customer.id);
+  const racedReq = (body) => ({ user: { companyId: company.id, userId: 1 }, params: { id: String(raced.id) }, body });
+  resetEmails();
+  await Promise.all([updateInvoice(racedReq({ status: "paid" }), makeRes()), markPaid(racedReq({}), makeRes())]);
+  await settle();
+  check("PUT status=paid racing mark-paid sends exactly one receipt", receipts().length === 1, `sent ${receipts().length}`);
 }
 
 // ============================================================================

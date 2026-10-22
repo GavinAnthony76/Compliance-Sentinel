@@ -43,7 +43,10 @@ import { mock } from "node:test";
 register("./ts-resolve.loader.mjs", import.meta.url);
 
 // Make sendEmail take the real Resend path (creds present) so we can capture the
-// outgoing payload through the mocked `resend` package below.
+// outgoing payload through the mocked `resend` package below. NODE_ENV must NOT
+// be "test" (as an inherited shell value would make it), or sendEmail
+// short-circuits before ever reaching the mock.
+delete process.env.NODE_ENV;
 process.env.RESEND_API_KEY = "re_test_dummy";
 process.env.RESEND_FROM_EMAIL = "noreply@greensynk.test";
 

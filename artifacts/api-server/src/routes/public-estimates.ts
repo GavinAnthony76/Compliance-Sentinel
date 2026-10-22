@@ -3,7 +3,7 @@ import { db, estimatesTable, estimateLineItemsTable, customersTable, companiesTa
 import { eq, and, ne, isNull } from "drizzle-orm";
 import { z } from "zod";
 import crypto from "crypto";
-import { sendEmail, resolveBaseUrl } from "../lib/notifications";
+import { sendEmail, resolveBaseUrl, resolveCompanyNotificationEmail } from "../lib/notifications";
 import { buildEstimatePdf } from "../lib/estimate-pdf";
 import { logActivity } from "../lib/activity";
 import { logger } from "../lib/logger";
@@ -113,8 +113,10 @@ async function dispatchSignedEstimateEmails(token: string): Promise<boolean> {
       customerEmailed = result.delivered;
     }
 
-    // Business notification
-    if (company?.email) {
+    // Business notification: company contact email, falling back to the owner
+    // (the same recipient rule as booking/cancellation notices).
+    const businessEmail = company ? await resolveCompanyNotificationEmail(company.id, company.email) : null;
+    if (businessEmail) {
       const customerName = customer
         ? (`${customer.firstName ?? ""} ${customer.lastName ?? ""}`.trim() || customer.email || "A customer")
         : "A customer";
@@ -125,12 +127,11 @@ async function dispatchSignedEstimateEmails(token: string): Promise<boolean> {
         `${customerName} accepted estimate ${estimate.estimateNumber} for $${total}.`,
         estimate.signerName ? `Signed by: ${estimate.signerName}` : "",
         signedDate ? `Date: ${signedDate}` : "",
-        "",
-        "A signed copy is attached.",
+        pdfBuffer ? "\nA signed copy is attached." : "",
       ].filter(Boolean).join("\n");
 
       await sendEmail({
-        to: company.email,
+        to: businessEmail,
         subject: `Estimate ${estimate.estimateNumber} accepted by ${customerName}`,
         body,
         attachments,

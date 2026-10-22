@@ -117,18 +117,24 @@ async function main() {
     process.exit(1);
   }
 
-  // Distinct names / emails / phones so each search term matches a known subset.
+  // Distinct names / emails / phones / addresses so each search term matches a known subset.
+  const street = `${stamp} Juniper Ln`;
+  const city = `Fernvale${stamp}`;
+  const zip = `Z${stamp}`.slice(0, 12);
   const specs = [
-    { firstName: "Zelda", lastName: `Maplewood${stamp}`, email: `zelda_${stamp}@example.com`, phone: `1555${stamp}`.slice(0, 10) + "01" },
-    { firstName: "Zack", lastName: `Maplewood${stamp}`, email: `zack_${stamp}@rosemail.test`, phone: `1555${stamp}`.slice(0, 10) + "02" },
-    { firstName: "Quinn", lastName: `Oakhurst${stamp}`, email: `quinn_${stamp}@rosemail.test`, phone: `777${stamp}`.slice(0, 10) + "99" },
+    { firstName: "Zelda", lastName: `Maplewood${stamp}`, email: `zelda_${stamp}@example.com`, phone: `1555${stamp}`.slice(0, 10) + "01", addressLine1: street, city, zip },
+    { firstName: "Zack", lastName: `Maplewood${stamp}`, email: `zack_${stamp}@rosemail.test`, phone: `1555${stamp}`.slice(0, 10) + "02", addressLine1: "1 Other Rd", city, zip: null },
+    { firstName: "Quinn", lastName: `Oakhurst${stamp}`, email: `quinn_${stamp}@rosemail.test`, phone: `777${stamp}`.slice(0, 10) + "99", addressLine1: null, city: null, zip },
     { firstName: "Perry", lastName: `Oakhurst${stamp}`, email: null, phone: `777${stamp}`.slice(0, 10) + "98" },
   ];
   const seeded = [];
   for (const s of specs) {
     const r = await req("POST", "/customers", {
       token,
-      body: { firstName: s.firstName, lastName: s.lastName, email: s.email ?? undefined, phone: s.phone },
+      body: {
+        firstName: s.firstName, lastName: s.lastName, email: s.email ?? undefined, phone: s.phone,
+        addressLine1: s.addressLine1 ?? undefined, city: s.city ?? undefined, zip: s.zip ?? undefined,
+      },
     });
     if (r.status !== 201 || !r.json?.id) {
       console.error("Setup failed: customer", r.status, r.json);
@@ -179,6 +185,53 @@ async function main() {
     token,
     [],
   );
+
+  console.log("\nSearch by address (#214):");
+  await checkExport(
+    "search=street",
+    `/export/customers?search=${encodeURIComponent(`${stamp} juniper ln`)}`,
+    token,
+    seeded.filter((c) => c.addressLine1 === street),
+  );
+  await checkExport(
+    "search=city",
+    `/export/customers?search=${encodeURIComponent(city.toLowerCase())}`,
+    token,
+    seeded.filter((c) => c.city === city),
+  );
+  await checkExport(
+    "search=zip",
+    `/export/customers?search=${encodeURIComponent(zip)}`,
+    token,
+    seeded.filter((c) => c.zip === zip),
+  );
+  {
+    const listRes = await req("GET", `/customers?search=${encodeURIComponent(city)}&limit=100`, { token });
+    const listIds = (listRes.json?.customers ?? []).map((c) => c.id).sort((a, b) => a - b);
+    const { text } = await fetchCsv(`/export/customers?search=${encodeURIComponent(city)}`, token);
+    const exportIds = [...csvIds(text)].sort((a, b) => a - b);
+    check("address search: list vs export id parity", listIds.length === 2 && JSON.stringify(listIds) === JSON.stringify(exportIds), `list [${listIds}] vs export [${exportIds}]`);
+  }
+  {
+    // Another tenant with a customer at the same address must never appear.
+    const otherEmail = `${nsPrefix}custexp_other_${stamp}@example.com`;
+    const reg2 = await req("POST", "/auth/register", {
+      body: { firstName: "Otto", lastName: "Other", email: otherEmail, password: PASSWORD, companyName: `Cust Export Other ${stamp}`, selectedPlan: "pro" },
+    });
+    if (reg2.status !== 201) {
+      console.error("Setup failed: register second company", reg2.status, reg2.json);
+      process.exit(1);
+    }
+    await markOwnerVerified(otherEmail);
+    const otherToken = (await req("POST", "/auth/login", { body: { identifier: otherEmail, password: PASSWORD } })).json?.token;
+    const other = await req("POST", "/customers", {
+      token: otherToken,
+      body: { firstName: "Olga", lastName: "Neighbor", phone: `888${stamp}`.slice(0, 12), addressLine1: street, city, zip },
+    });
+    check("second tenant customer created", other.status === 201, `got ${other.status}`);
+    const { text } = await fetchCsv(`/export/customers?search=${encodeURIComponent(city)}`, token);
+    check("address search never returns another tenant's customer", !csvIds(text).has(other.json?.id), `leaked ${other.json?.id}`);
+  }
 
   console.log("\nExport matches the list endpoint for the same search:");
   const listRes = await req("GET", `/customers?search=${encodeURIComponent(`Oakhurst${stamp}`)}&limit=100`, { token });

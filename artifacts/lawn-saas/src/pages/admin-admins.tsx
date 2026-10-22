@@ -32,6 +32,9 @@ interface LockoutRun {
 const OVERDUE_AMBER_MS = 36 * 60 * 60 * 1000;
 const OVERDUE_RED_MS = 72 * 60 * 60 * 1000;
 const OVERDUE_TICK_MS = 60 * 1000;
+// Refetch the history while the panel is open so a recovered sweep (a new run)
+// clears the overdue warning without a page reload.
+const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 
 interface LockoutAlert {
   sentAt: string;
@@ -54,21 +57,34 @@ export function LockoutHistoryPanel() {
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let latestRequest = 0;
+    let loadedOnce = false;
+    const load = async () => {
+      const requestId = ++latestRequest;
       try {
         const res = await adminFetch('/api/admin/lockout-runs?limit=10');
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (!cancelled) {
-          setRuns(data.runs ?? []);
-          setSweepEnabled(typeof data.sweepEnabled === 'boolean' ? data.sweepEnabled : null);
-          setLastAlert(data.lastAlert && data.lastAlert.sentAt ? data.lastAlert : null);
-        }
+        // Ignore a slow response once a newer request has been issued.
+        if (cancelled || requestId !== latestRequest) return;
+        loadedOnce = true;
+        setRuns(data.runs ?? []);
+        setSweepEnabled(typeof data.sweepEnabled === 'boolean' ? data.sweepEnabled : null);
+        setLastAlert(data.lastAlert && data.lastAlert.sentAt ? data.lastAlert : null);
+        setLoadFailed(false);
       } catch {
-        if (!cancelled) setLoadFailed(true);
+        // A failed refresh keeps the last good history (whose age still drives
+        // the overdue warning) rather than hiding it; only a first load that
+        // never succeeded shows the error state.
+        if (!cancelled && !loadedOnce) setLoadFailed(true);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    load();
+    const interval = setInterval(load, HISTORY_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   if (loadFailed) {
