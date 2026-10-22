@@ -69,8 +69,7 @@ const midSearchHooks = new Map();
 // invoiceId(string) -> succeeded PaymentIntent id (drives the paid path).
 let succeededByInvoiceId = new Map();
 
-mock.module("../src/lib/stripe.ts", {
-  namedExports: {
+const stripeNamedExports = {
     getUncachableStripeClient: async () => ({
       paymentIntents: {
         search: async ({ query }) => {
@@ -86,13 +85,13 @@ mock.module("../src/lib/stripe.ts", {
         },
       },
     }),
-  },
-});
+};
 
 const receiptCalls = [];
 const ownerNotifCalls = [];
-mock.module("../src/lib/notifications.ts", {
-  namedExports: {
+const relativeMocks = {
+  "../src/lib/stripe.ts": stripeNamedExports,
+  "../src/lib/notifications.ts": {
     dispatchPaymentReceiptEmail: (invoiceId, companyId) => {
       receiptCalls.push({ invoiceId, companyId });
     },
@@ -100,6 +99,18 @@ mock.module("../src/lib/notifications.ts", {
       ownerNotifCalls.push({ invoiceId, companyId });
     },
   },
+};
+for (const [specifier, namedExports] of Object.entries(relativeMocks)) {
+  mock.module(specifier, { namedExports });
+}
+
+// Preflight: fail with an actionable message if production code grew an
+// import these mocks don't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/lib/stuck-invoices.ts"],
+  relativeMocks,
 });
 
 // Imported AFTER the mocks so the sweep picks them up.

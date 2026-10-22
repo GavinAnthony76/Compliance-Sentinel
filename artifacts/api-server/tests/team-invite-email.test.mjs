@@ -48,41 +48,49 @@ process.env.APP_BASE_URL = "https://app.greensynk.test";
 // Mocks
 // ---------------------------------------------------------------------------
 const sentEmails = [];
-mock.module("resend", {
-  namedExports: {
-    Resend: class {
-      constructor() {
-        this.emails = {
-          send: async (payload) => {
-            sentEmails.push(payload);
-            return { error: null };
-          },
-        };
-      }
-    },
+const resendNamedExports = {
+  Resend: class {
+    constructor() {
+      this.emails = {
+        send: async (payload) => {
+          sentEmails.push(payload);
+          return { error: null };
+        },
+      };
+    }
   },
-});
+};
+mock.module("resend", { namedExports: resendNamedExports });
 
 // notifications.ts imports @workspace/db at module scope; sendTeamInviteEmail
 // itself never touches the DB, so an inert mock is enough.
-mock.module("@workspace/db", {
-  namedExports: {
-    db: {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [],
-            orderBy: async () => [],
-          }),
+const dbNamedExports = {
+  db: {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [],
+          orderBy: async () => [],
         }),
       }),
-    },
-    invoicesTable: {},
-    companiesTable: {},
-    customersTable: {},
-    invoiceLineItemsTable: {},
-    usersTable: {},
+    }),
   },
+  invoicesTable: {},
+  companiesTable: {},
+  customersTable: {},
+  invoiceLineItemsTable: {},
+  usersTable: {},
+  smsConsentEventsTable: {},
+};
+mock.module("@workspace/db", { namedExports: dbNamedExports });
+
+// Preflight: fail with an actionable message if production code grew an
+// import these mocks don't provide (instead of an opaque import-time crash).
+const { assertSuiteMocksCover } = await import("./mock-surface-check.mjs");
+assertSuiteMocksCover({
+  testFile: import.meta.url,
+  entryFiles: ["../src/lib/notifications.ts"],
+  packageMocks: { resend: resendNamedExports, "@workspace/db": dbNamedExports },
 });
 
 const { sendTeamInviteEmail } = await import("../src/lib/notifications.ts");

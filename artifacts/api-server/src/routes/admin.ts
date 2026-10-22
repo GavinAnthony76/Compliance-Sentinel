@@ -9,7 +9,7 @@ import { isEmailConfigured } from "../lib/resend";
 import { sendAdminDeactivationEmail, sendAdminReactivationEmail, resolveBaseUrl } from "../lib/notifications";
 import { getCatalog } from "../lib/plan-catalog";
 import { deactivateStaleAdmins } from "../lib/stale-admins";
-import { SWEEP_ALERT_ACTION } from "../lib/sweep-health";
+import { SWEEP_ALERT_ACTION, SWEEP_RECOVERED_ACTION } from "../lib/sweep-health";
 import { getPlatformSettings, updatePlatformSettings, MIN_STALE_ADMIN_DAYS, MAX_STALE_ADMIN_DAYS } from "../lib/platform-settings";
 import { z } from "zod";
 
@@ -671,7 +671,29 @@ router.get("/lockout-runs", async (req, res) => {
       }
     : null;
 
-  return res.json({ runs, lastRun: runs[0] ?? null, sweepEnabled: settings.staleAdminSweepEnabled, lastAlert });
+  // Most recent recovery all-clear (logged once the sweep runs again after an
+  // alerted outage). Only surface it when it resolves the NEWEST alert: a
+  // recovery for an earlier outage must never read as an all-clear for a
+  // newer incident that is still open. Compared by timestamp, not a flag.
+  const [recoveryRow] = await db.select()
+    .from(activityLogsTable)
+    .where(eq(activityLogsTable.action, SWEEP_RECOVERED_ACTION))
+    .orderBy(desc(activityLogsTable.createdAt))
+    .limit(1);
+  const recoveryMeta = (recoveryRow?.metadataJson ?? {}) as Record<string, unknown>;
+  const recoveredAlertAt = typeof recoveryMeta.alertSentAt === "string" ? new Date(recoveryMeta.alertSentAt).getTime() : null;
+  const resolvesNewestAlert = recoveryRow != null && recoveredAlertAt != null && !Number.isNaN(recoveredAlertAt) &&
+    (!alertRow || recoveredAlertAt >= new Date(alertRow.createdAt).getTime());
+  const lastRecovery = resolvesNewestAlert
+    ? {
+        recoveredAt: typeof recoveryMeta.recoveredRunAt === "string" ? recoveryMeta.recoveredRunAt : recoveryRow.createdAt,
+        alertSentAt: recoveryMeta.alertSentAt,
+        notifiedAt: recoveryRow.createdAt,
+        recipients: typeof recoveryMeta.recipients === "number" ? recoveryMeta.recipients : null,
+      }
+    : null;
+
+  return res.json({ runs, lastRun: runs[0] ?? null, sweepEnabled: settings.staleAdminSweepEnabled, lastAlert, lastRecovery });
 });
 
 // ─── Admin Users ──────────────────────────────────────────────────────────────
