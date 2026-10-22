@@ -26,7 +26,10 @@ export async function requireActiveSubscription(
       .where(eq(companiesTable.id, user.companyId))
       .limit(1);
 
-    if (!company) { next(); return; }
+    if (!company) {
+      res.status(403).json({ error: "CompanyNotFound", message: "Your company account could not be found." });
+      return;
+    }
 
     const now = new Date();
     const isTrialing = company.subscriptionStatus === "trialing";
@@ -52,7 +55,9 @@ export async function requireActiveSubscription(
       return;
     }
   } catch {
-    // DB check failed — don't block the request
+    // Retryable, never unrestricted.
+    res.status(503).json({ error: "ServiceUnavailable", message: "Could not verify your subscription. Please try again." });
+    return;
   }
 
   next();

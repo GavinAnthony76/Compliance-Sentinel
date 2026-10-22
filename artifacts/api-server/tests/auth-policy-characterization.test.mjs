@@ -4,11 +4,13 @@
  * subscription middleware (src/lib/auth.ts, src/lib/subscription.ts) and a
  * static matrix of which routers mount which guard.
  *
- * These tests PIN CURRENT BEHAVIOR, including the fail-open paths recorded in
- * docs/claude-handoff/reviews/REVIEW-A-auth-policy.md. Cases marked
- * "FINDING" are not endorsements: they document today's behavior so that the
- * policy decision (deny vs. allow vs. 503 for each case) lands as a deliberate,
- * reviewed change to this file rather than a silent behavior shift.
+ * Originally pinned the fail-open paths recorded in
+ * docs/claude-handoff/reviews/REVIEW-A-auth-policy.md; now asserts the approved
+ * policy: deleted/deactivated principals are rejected even with existing
+ * tokens, roles and company membership come from the database, lookup
+ * failures return a retryable 503, a missing company is rejected, and
+ * administrative suspension blocks operational access (session + billing
+ * recovery exempt) while expired subscriptions keep read-only access.
  *
  * Mocks: @workspace/db (a fake db whose next result or failure each case
  * controls) and drizzle-orm. No network or database is touched.
@@ -40,6 +42,7 @@ const fakeDb = {
     };
     const builder = {
       from: () => builder,
+      leftJoin: () => builder,
       where: () => builder,
       limit: () => resolve(),
       then: (ok, err) => resolve().then(ok, err),
@@ -49,7 +52,7 @@ const fakeDb = {
 };
 const column = (name) => ({ name });
 const table = new Proxy({}, { get: (_t, prop) => column(String(prop)) });
-const dbNamedExports = { db: fakeDb, usersTable: table, companiesTable: table };
+const dbNamedExports = { db: fakeDb, usersTable: table, companiesTable: table, platformAdminsTable: table };
 mock.module("@workspace/db", { namedExports: dbNamedExports });
 const drizzleNamedExports = { eq: (col, val) => ({ op: "eq", col, val }) };
 mock.module("drizzle-orm", { namedExports: drizzleNamedExports });
@@ -108,8 +111,13 @@ const userToken = signUserToken({ userId: 7, companyId: 3, role: "admin" });
 const nowSec = Math.floor(Date.now() / 1000);
 
 console.log("requireAuth (company users):");
+// The joined user + company row requireAuth reads on every request.
+const userRow = (overrides = {}) => ({
+  isActive: true, role: "admin", companyId: 3, passwordChangedAt: null, companyRowId: 3, companyActive: true, ...overrides,
+});
+const at = (path, token = userToken) => ({ headers: { authorization: `Bearer ${token}` }, originalUrl: path });
 {
-  const r = await run(requireAuth, bearer(userToken), { rows: [{ passwordChangedAt: null, isActive: true }] });
+  const r = await run(requireAuth, at("/api/customers"), { rows: [userRow()] });
   check("valid token + active user -> next", r.nextCalled && r.req.user?.userId === 7);
 }
 {
@@ -125,30 +133,63 @@ console.log("requireAuth (company users):");
   check("platform-admin token cannot act as a company user -> 401", r.status === 401 && !r.nextCalled);
 }
 {
-  const r = await run(requireAuth, bearer(userToken), { rows: [{ passwordChangedAt: new Date((nowSec + 60) * 1000) }] });
+  const r = await run(requireAuth, at("/api/customers"), { rows: [userRow({ passwordChangedAt: new Date((nowSec + 60) * 1000) })] });
   check("token issued before the last password change -> 401", r.status === 401 && !r.nextCalled);
 }
 {
-  const r = await run(requireAuth, bearer(userToken), { rows: [{ passwordChangedAt: null, isActive: false }] });
-  check("FINDING A1: deactivated user (is_active=false) is still let through", r.nextCalled && r.status === null);
+  const r = await run(requireAuth, at("/api/customers"), { rows: [userRow({ isActive: false })] });
+  check("A1: deactivated user's existing token -> 401", r.status === 401 && !r.nextCalled, `${r.status}`);
 }
 {
-  const r = await run(requireAuth, bearer(userToken), { rows: [] });
-  check("FINDING A2: deleted user (no row) is still let through", r.nextCalled && r.status === null);
+  const r = await run(requireAuth, at("/api/customers"), { rows: [] });
+  check("A2: deleted user's existing token -> 401", r.status === 401 && !r.nextCalled, `${r.status}`);
 }
 {
-  const r = await run(requireAuth, bearer(userToken), { fail: true });
-  check("FINDING A3: user lookup DB failure fails OPEN (next)", r.nextCalled && r.status === null);
+  const r = await run(requireAuth, at("/api/customers"), { fail: true });
+  check("A3: identity lookup failure -> retryable 503, not access", r.status === 503 && !r.nextCalled, `${r.status}`);
 }
 {
-  const r = await run(requireAuth, bearer(userToken), { rows: [{ passwordChangedAt: null, isActive: true, role: "staff" }] });
-  check("FINDING A4: role comes from the token, not the current DB role", r.nextCalled && r.req.user?.role === "admin", r.req.user?.role);
+  const r = await run(requireAuth, at("/api/customers"), { rows: [userRow({ role: "staff" })] });
+  check("A4: the CURRENT database role is used, not the token's", r.nextCalled && r.req.user?.role === "staff", r.req.user?.role);
+}
+{
+  const r = await run(requireAuth, at("/api/customers"), { rows: [userRow({ companyId: 99, companyRowId: 99 })] });
+  check("A4: a user moved to another company cannot use the old company's token -> 401", r.status === 401 && !r.nextCalled, `${r.status}`);
+}
+{
+  const r = await run(requireAuth, at("/api/customers"), { rows: [userRow({ companyRowId: null, companyActive: null })] });
+  check("A6: missing company record -> 403", r.status === 403 && !r.nextCalled, `${r.status}`);
+}
+for (const path of ["/api/customers", "/api/invoices/12", "/api/portal/auth/send-invite"]) {
+  const r = await run(requireAuth, at(path), { rows: [userRow({ companyActive: false })] });
+  check(`A8: suspended company is blocked from operational access (${path}) -> 403`, r.status === 403 && !r.nextCalled, `${r.status}`);
+}
+for (const path of ["/api/auth/me", "/api/billing/status", "/api/billing/portal-session"]) {
+  const r = await run(requireAuth, at(path), { rows: [userRow({ companyActive: false })] });
+  check(`A8: suspended company keeps session/billing-recovery access (${path})`, r.nextCalled, `${r.status}`);
+}
+{
+  const r = await run(requireAuth, at("/api/billingx"), { rows: [userRow({ companyActive: false })] });
+  check("A8: the exemption is prefix-exact (/api/billingx is not billing)", r.status === 403, `${r.status}`);
 }
 
 console.log("\nrequireAdminAuth (platform admins):");
+const adminToken = signAdminToken({ adminId: 1, role: "admin" });
 {
-  const r = await run(requireAdminAuth, bearer(signAdminToken({ adminId: 1, role: "admin" })), { rows: [{ isActive: false }] });
-  check("FINDING A5: no DB check at all — a deactivated admin's token is accepted", r.nextCalled && r.selects === 0, `selects=${r.selects}`);
+  const r = await run(requireAdminAuth, bearer(adminToken), { rows: [{ isActive: true, role: "super_admin" }] });
+  check("active admin -> next, with the CURRENT database role", r.nextCalled && r.req.admin?.role === "super_admin", r.req.admin?.role);
+}
+{
+  const r = await run(requireAdminAuth, bearer(adminToken), { rows: [{ isActive: false, role: "admin" }] });
+  check("A5: deactivated admin's existing token -> 401", r.status === 401 && !r.nextCalled, `${r.status}`);
+}
+{
+  const r = await run(requireAdminAuth, bearer(adminToken), { rows: [] });
+  check("A5: deleted admin's existing token -> 401", r.status === 401 && !r.nextCalled, `${r.status}`);
+}
+{
+  const r = await run(requireAdminAuth, bearer(adminToken), { fail: true });
+  check("admin lookup failure -> retryable 503", r.status === 503 && !r.nextCalled, `${r.status}`);
 }
 {
   const r = await run(requireAdminAuth, bearer(userToken));
@@ -181,19 +222,15 @@ const sub = (method, rows, opts = {}) => run(requireActiveSubscription, { method
 }
 {
   const r = await sub("GET", [{ subscriptionStatus: "canceled" }]);
-  check("reads (GET) are never subscription-gated, even when canceled (by design)", r.nextCalled && r.selects === 0);
+  check("expired/canceled subscriptions keep read-only access (GET)", r.nextCalled && r.selects === 0);
 }
 {
   const r = await sub("POST", []);
-  check("FINDING A6: missing company row fails OPEN (next)", r.nextCalled && r.status === null);
+  check("A6: missing company row on a write -> 403", r.status === 403 && !r.nextCalled, `${r.status}`);
 }
 {
   const r = await sub("POST", [], { fail: true });
-  check("FINDING A7: company lookup DB failure fails OPEN (next)", r.nextCalled && r.status === null);
-}
-{
-  const r = await sub("POST", [{ subscriptionStatus: "active", isActive: false }]);
-  check("FINDING A8: a platform-suspended company (is_active=false) is not blocked", r.nextCalled && r.status === null);
+  check("A7: subscription lookup failure -> retryable 503, not access", r.status === 503 && !r.nextCalled, `${r.status}`);
 }
 {
   const r = await run(requireActiveSubscription, { method: "POST", headers: {} });

@@ -3,7 +3,7 @@ import { Readable } from "stream";
 import { db, customersTable, invoicesTable, invoiceLineItemsTable, appointmentsTable, estimatesTable, companiesTable, servicesTable, appointmentPhotosTable } from "@workspace/db";
 import { eq, and, ne, desc, sql } from "drizzle-orm";
 import jwt from "jsonwebtoken";
-import { hashPassword, verifyPassword } from "../lib/auth";
+import { hashPassword, verifyPassword, requireAuth } from "../lib/auth";
 import { hasFeature, getRequiredPlanForFeature } from "../lib/features";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { z } from "zod";
@@ -113,21 +113,10 @@ router.post("/auth/login", async (req, res) => {
 });
 
 // POST /portal/auth/send-invite — business sends portal invite to customer
-router.post("/auth/send-invite", async (req: any, res) => {
-  // This is called by the business (requires business auth header)
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  // Verify business user token
-  let businessCompanyId: number;
-  try {
-    const { verifyUserToken } = await import("../lib/auth");
-    const payload = verifyUserToken(authHeader.slice(7));
-    businessCompanyId = payload.companyId;
-  } catch {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+router.post("/auth/send-invite", requireAuth, async (req: any, res) => {
+  // Called by the business: the shared company-user guard applies (token type,
+  // revocation, deactivation, current company membership, suspension).
+  const businessCompanyId: number = req.user.companyId;
 
   const [businessCompany] = await db.select({ subscriptionPlan: companiesTable.subscriptionPlan }).from(companiesTable).where(eq(companiesTable.id, businessCompanyId)).limit(1);
   if (!hasFeature(businessCompany?.subscriptionPlan, "customer_portal")) {
