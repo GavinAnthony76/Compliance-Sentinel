@@ -13,6 +13,7 @@ import {
   buildStatusFlipLog,
 } from "../lib/billing-activity";
 import { logger } from "../lib/logger";
+import { checkoutSessionMismatch, flagPaymentForReconciliation } from "../lib/payment-reconciliation";
 
 const router = Router();
 
@@ -47,8 +48,10 @@ router.post("/webhook", async (req: Request, res) => {
   try {
     stripe = await getUncachableStripeClient();
   } catch (err) {
+    // Retryable: acknowledging here would tell Stripe the event was handled
+    // and a paid event would be lost. Stripe retries non-2xx responses.
     logger.error({ err }, "Stripe client init failed for webhook");
-    return res.json({ received: true });
+    return res.status(503).json({ error: "BillingUnavailable", message: "Webhook could not be processed; retry" });
   }
 
   const sig = req.headers["stripe-signature"];
@@ -87,25 +90,65 @@ router.post("/webhook", async (req: Request, res) => {
             const paymentIntentId = typeof session.payment_intent === "string"
               ? session.payment_intent
               : session.id;
+            const flagContext = {
+              source: "portal_webhook" as const,
+              paymentIntentId,
+              checkoutSessionId: session.id,
+              amountCents: session.amount_total ?? null,
+              currency: session.currency ?? null,
+            };
+
+            // Verify the session pays exactly this invoice (amount, currency,
+            // company, invoice) before marking anything paid. A mismatch is
+            // recorded durably for reconciliation and never applied.
+            const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, invoiceId)).limit(1);
+            const mismatch = checkoutSessionMismatch(invoice, session, { invoiceId, companyId });
+            if (mismatch) {
+              await flagPaymentForReconciliation({ companyId: invoice?.companyId ?? companyId, invoiceId, reason: mismatch, ...flagContext });
+              break;
+            }
+
+            // A live autopay charge holds the "processing" claim: never take
+            // the row from it. Answer retryably so Stripe redelivers once the
+            // claim resolves (paid -> flagged as additional payment below;
+            // released -> this payment is applied normally).
+            const invoiceBusy = () => {
+              logger.warn({ invoiceId, sessionId: session.id }, "Portal payment arrived while an autopay charge holds the invoice; asking Stripe to retry");
+              return res.status(503).json({ error: "InvoiceBusy", message: "Invoice has a charge in progress; retry" });
+            };
+            if (invoice.status === "processing") return invoiceBusy();
+
             // Conditional update so Stripe retries/replays of the same event
             // don't fire duplicate receipt + owner notification emails: only
-            // rows transitioning out of "paid" are updated and notified.
-            //
-            // Claim-ownership audit (see lib/stuck-invoices.ts): unlike the
-            // portal confirm-payment fallback, this writer does NO prior
-            // select of the invoice — it acts solely on the Stripe-signed
-            // event, so there is no stale "observed row" to protect and no
-            // select-then-update race to close with an updatedAt token. The
-            // single conditional UPDATE here is already atomic.
+            // rows transitioning out of "paid" (and never out of a live
+            // "processing" claim) are updated and notified.
             const transitioned = await db.update(invoicesTable).set({
               status: "paid",
               paidAt: new Date(),
               paymentMethod: "card",
               stripePaymentIntentId: paymentIntentId,
               updatedAt: new Date(),
-            }).where(and(eq(invoicesTable.id, invoiceId), ne(invoicesTable.status, "paid"))).returning({ id: invoicesTable.id });
+            }).where(and(
+              eq(invoicesTable.id, invoiceId),
+              eq(invoicesTable.companyId, invoice.companyId),
+              ne(invoicesTable.status, "paid"),
+              ne(invoicesTable.status, "processing"),
+            )).returning({ id: invoicesTable.id });
             logger.info({ invoiceId, sessionId: session.id, transitioned: transitioned.length > 0 }, "Invoice marked paid via portal checkout");
-            if (companyId && transitioned.length > 0) {
+            if (transitioned.length === 0) {
+              const [current] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, invoiceId)).limit(1);
+              if (current?.status === "processing") return invoiceBusy();
+              // Already paid by a DIFFERENT payment (cash, autopay, another
+              // session): the customer paid twice. Record it for reconciliation.
+              // A replay of this same payment (same PaymentIntent) is a no-op.
+              if (current?.status === "paid" && current.stripePaymentIntentId !== paymentIntentId) {
+                await flagPaymentForReconciliation({
+                  companyId: current.companyId, invoiceId, reason: "additional_payment",
+                  recordedPaymentIntentId: current.stripePaymentIntentId, ...flagContext,
+                });
+              }
+            }
+            if (transitioned.length > 0) {
               const { dispatchPaymentReceiptEmail, dispatchOwnerPaymentNotification } = await import("../lib/notifications");
               // Awaited: on Autoscale, work started after the webhook response
               // is sent gets CPU-throttled and can be silently dropped. Both
@@ -227,7 +270,10 @@ router.post("/webhook", async (req: Request, res) => {
       }
     }
   } catch (err) {
+    // Retryable: never acknowledge an event whose effects were not recorded.
+    // All handlers above are idempotent under replay (guarded transitions).
     logger.error({ err, eventType: event.type }, "Error processing webhook event");
+    return res.status(500).json({ error: "WebhookProcessingFailed", message: "Webhook processing failed; retry" });
   }
 
   return res.json({ success: true });

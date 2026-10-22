@@ -85,6 +85,7 @@ const store = {
   recurringPlans: [],
   estimates: [],
   appointmentPhotos: [],
+  activityLogs: [],
 };
 
 function makeTable(storeKey) {
@@ -197,6 +198,7 @@ const dbNamedExports = {
   recurringPlansTable: makeTable("recurringPlans"),
   estimatesTable: makeTable("estimates"),
   appointmentPhotosTable: makeTable("appointmentPhotos"),
+  activityLogsTable: makeTable("activityLogs"),
 };
 mock.module("@workspace/db", { namedExports: dbNamedExports });
 
