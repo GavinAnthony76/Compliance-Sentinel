@@ -170,6 +170,9 @@ async function main() {
     ["portal-booking-notifications", "tests/portal-booking-notifications.test.mjs", "Portal booking/cancellation notification validation"],
     ["mock-surface-selftest", "tests/mock-surface-check.selftest.mjs", "Mock-surface preflight self-test"],
     ["estimate-signed-notifications", "tests/estimate-signed-notifications.test.mjs", "Signed-estimate notification validation"],
+    ["auth-policy", "tests/auth-policy-characterization.test.mjs", "Auth/subscription policy characterization (REVIEW-A)"],
+    ["stripe-paid-paths", "tests/stripe-paid-paths-characterization.test.mjs", "Stripe paid-path characterization (REVIEW-B)"],
+    ["background-jobs", "tests/background-jobs-characterization.test.mjs", "Background job characterization (REVIEW-C)"],
   ];
   const emailLabels = {};
   for (const [key, file, label] of emailSuites) {
