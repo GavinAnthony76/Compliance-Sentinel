@@ -39,10 +39,12 @@ function fmtLineItem(li: any) {
   };
 }
 
-async function upsertLineItems(invoiceId: number, lineItems: any[]) {
-  await db.delete(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, invoiceId));
+type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function upsertLineItems(invoiceId: number, lineItems: any[], executor: DbExecutor = db) {
+  await executor.delete(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, invoiceId));
   if (!lineItems || lineItems.length === 0) return;
-  await db.insert(invoiceLineItemsTable).values(
+  await executor.insert(invoiceLineItemsTable).values(
     lineItems.map((li: any, i: number) => {
       const qty = Number(li.quantity ?? 1);
       const unitPrice = Number(li.unitPrice ?? 0);
@@ -256,7 +258,14 @@ router.put("/:id", async (req: any, res) => {
   // settled card payment unrecorded or mismatched with the invoice.
   const writeConditions = [eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId), ne(invoicesTable.status, "processing")];
   if (paidTransition) writeConditions.push(ne(invoicesTable.status, "paid"));
-  let [updated] = await db.update(invoicesTable).set(updates).where(and(...writeConditions)).returning();
+  // The invoice row and its line items commit together (the UPDATE's row lock
+  // serializes concurrent edits), and payment receipts are dispatched only
+  // after commit — so a paid receipt always reflects the saved line items.
+  let updated = await db.transaction(async (tx) => {
+    const [row] = await tx.update(invoicesTable).set(updates).where(and(...writeConditions)).returning();
+    if (row && lineItems) await upsertLineItems(id, lineItems, tx);
+    return row;
+  });
   if (!updated) {
     const [current] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
     if (!current) return res.status(404).json({ error: "NotFound" });
@@ -269,9 +278,6 @@ router.put("/:id", async (req: any, res) => {
     // own errors, so awaiting never fails the request.
     await dispatchPaymentReceiptEmail(id, companyId);
     await dispatchOwnerPaymentNotification(id, companyId);
-  }
-  if (lineItems) {
-    await upsertLineItems(id, lineItems);
   }
   await logActivity({ companyId, userId, action: "invoice.updated", entityType: "invoice", entityId: id });
   if (updates.status === "overdue" && existing.status !== "overdue") {
