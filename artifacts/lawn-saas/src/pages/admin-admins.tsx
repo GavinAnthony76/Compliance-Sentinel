@@ -41,10 +41,17 @@ interface LockoutAlert {
   recipients: number | null;
 }
 
+interface LockoutRecovery {
+  recoveredAt: string;
+  alertSentAt: string;
+  recipients: number | null;
+}
+
 export function LockoutHistoryPanel() {
   const [runs, setRuns] = useState<LockoutRun[] | null>(null);
   const [sweepEnabled, setSweepEnabled] = useState<boolean | null>(null);
   const [lastAlert, setLastAlert] = useState<LockoutAlert | null>(null);
+  const [lastRecovery, setLastRecovery] = useState<LockoutRecovery | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [expanded, setExpanded] = useState(false);
   // Re-render once a minute so the overdue level stays honest in long-lived tabs.
@@ -71,6 +78,7 @@ export function LockoutHistoryPanel() {
         setRuns(data.runs ?? []);
         setSweepEnabled(typeof data.sweepEnabled === 'boolean' ? data.sweepEnabled : null);
         setLastAlert(data.lastAlert && data.lastAlert.sentAt ? data.lastAlert : null);
+        setLastRecovery(data.lastRecovery && data.lastRecovery.recoveredAt && data.lastRecovery.alertSentAt ? data.lastRecovery : null);
         setLoadFailed(false);
       } catch {
         // A failed refresh keeps the last good history (whose age still drives
@@ -171,6 +179,16 @@ export function LockoutHistoryPanel() {
                 ? `Alert emailed to ${lastAlert.recipients} admin${lastAlert.recipients === 1 ? '' : 's'} on ${format(new Date(lastAlert.sentAt), 'MMM d, yyyy h:mm a')}`
                 : `Alert emailed to admins on ${format(new Date(lastAlert.sentAt), 'MMM d, yyyy h:mm a')}`}
               {' '}— this outage was already escalated.
+            </p>
+          )}
+          {/* The server only returns a recovery that resolves the newest alert;
+              it is shown only while the sweep is healthy, so a stale all-clear
+              can never sit next to a current outage. */}
+          {!disabled && overdueLevel === 'none' && lastRecovery && (
+            <p className="text-xs text-emerald-400/90 mt-0.5">
+              Resolved: the sweep recovered on {format(new Date(lastRecovery.recoveredAt), 'MMM d, yyyy h:mm a')} after
+              the outage alerted on {format(new Date(lastRecovery.alertSentAt), 'MMM d, yyyy h:mm a')}
+              {lastRecovery.recipients != null && ` — all-clear sent to ${lastRecovery.recipients} admin${lastRecovery.recipients === 1 ? '' : 's'}`}.
             </p>
           )}
         </div>

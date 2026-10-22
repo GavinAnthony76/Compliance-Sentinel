@@ -136,6 +136,12 @@ const INVOICE_UPDATE_VAR_STATUS_RE =
 // heuristic than the chain regex above; deduped by line.
 const CONTEXT_VAR_STATUS_RE = /\bstatus\s*:\s*(?!\s*["'])(?=[A-Za-z_$`[(])/g;
 
+// An invoice update chain whose .set() receives a bare identifier
+// (db.update(invoicesTable).set(updates)) — the object's status is traced
+// through the file by the object-flow pass in scanSource.
+const INVOICE_SET_IDENT_RE =
+  /\bupdate\s*\(\s*[\w$.]*invoice[\w$.]*\s*\)[^;]{0,400}?\.set\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/gi;
+
 // Explicit accept marker for variable-status writes that provably can never
 // be "paid" (e.g. reverting a stranded "processing" claim to sent/overdue).
 // Must appear in the raw source within 3 lines above (or on) the status line.
@@ -245,22 +251,12 @@ export function scanSource(raw, label) {
   const code = stripComments(raw);
   const lines = code.split("\n");
 
-  PAID_WRITE_RE.lastIndex = 0;
-  let m;
-  while ((m = PAID_WRITE_RE.exec(code)) !== null) {
-    const lineNo = code.slice(0, m.index).split("\n").length; // 1-based
+  // A literal "paid" write at lineNo must be followed by both dispatchers.
+  const paidSiteLines = new Set();
+  const checkPaidSite = (lineNo) => {
+    if (paidSiteLines.has(lineNo)) return;
+    paidSiteLines.add(lineNo);
     writeSites++;
-
-    // Skip response payloads like res.json({ status: "paid" }) — those
-    // report state, they don't transition it. Heuristic: the write must sit
-    // inside/near a db update (`.set(` or `update(` on the same or the 3
-    // preceding lines) to count as a transition.
-    const context = lines.slice(Math.max(0, lineNo - 4), lineNo).join("\n");
-    if (!/\.set\s*\(|\bupdate\s*\(|updateData|\bset\s*:\s*\{/.test(context)) {
-      writeSites--;
-      continue;
-    }
-
     const windowText = lines
       .slice(lineNo - 1, lineNo - 1 + WINDOW_LINES)
       .join("\n");
@@ -278,6 +274,21 @@ export function scanSource(raw, label) {
           "wrapper that is itself awaited within the window.",
       );
     }
+  };
+
+  PAID_WRITE_RE.lastIndex = 0;
+  let m;
+  while ((m = PAID_WRITE_RE.exec(code)) !== null) {
+    const lineNo = code.slice(0, m.index).split("\n").length; // 1-based
+
+    // Skip response payloads like res.json({ status: "paid" }) — those
+    // report state, they don't transition it. Heuristic: the write must sit
+    // inside/near a db update (`.set(` or `update(` on the same or the 3
+    // preceding lines) to count as a transition. (Objects built far from the
+    // update are traced separately below — see the object-flow pass.)
+    const context = lines.slice(Math.max(0, lineNo - 4), lineNo).join("\n");
+    if (!/\.set\s*\(|\bupdate\s*\(|updateData|\bset\s*:\s*\{/.test(context)) continue;
+    checkPaidSite(lineNo);
   }
 
   // Variable-status invoice writes: value could be "paid" at runtime.
@@ -334,6 +345,39 @@ export function scanSource(raw, label) {
     if (!/invoice/i.test(around)) continue;
     if (!/\.set\s*\(|\bupdateData\b|\bset\s*:\s*\{/.test(before)) continue;
     collectVarSite(m.index);
+  }
+
+  // Object-flow writes: an identifier passed to an invoice update's
+  // .set(<ident>) can carry its status from anywhere in the file — an object
+  // literal built far above, or `<ident>.status = ...`. Trace each such
+  // identifier: a "paid" literal must dispatch, a non-literal is a variable
+  // write (dispatch or paid-guard), any other string literal can never be paid.
+  INVOICE_SET_IDENT_RE.lastIndex = 0;
+  const setIdents = new Set();
+  while ((m = INVOICE_SET_IDENT_RE.exec(code)) !== null) setIdents.add(m[1]);
+  for (const ident of setIdents) {
+    const name = ident.replace(/\$/g, "\\$");
+    const valueSites = [];
+    const assignRe = new RegExp(`\\b${name}\\s*\\.\\s*status\\s*=(?![=>])\\s*`, "g");
+    while ((m = assignRe.exec(code)) !== null) {
+      valueSites.push({ statusIdx: m.index + m[0].indexOf("status"), valueIdx: m.index + m[0].length });
+    }
+    const declRe = new RegExp(`\\b(?:const|let|var)\\s+${name}\\b[^=;]*=\\s*\\{`, "g");
+    while ((m = declRe.exec(code)) !== null) {
+      const open = m.index + m[0].length - 1;
+      const body = code.slice(open, matchBracket(code, open));
+      const propRe = /\bstatus\s*:\s*/g;
+      let p;
+      while ((p = propRe.exec(body)) !== null) {
+        valueSites.push({ statusIdx: open + p.index, valueIdx: open + p.index + p[0].length });
+      }
+    }
+    for (const { statusIdx, valueIdx } of valueSites) {
+      const value = code.slice(valueIdx, valueIdx + 16);
+      if (/^["']paid["']/.test(value)) checkPaidSite(code.slice(0, statusIdx).split("\n").length);
+      else if (/^["']/.test(value)) continue;
+      else collectVarSite(statusIdx);
+    }
   }
 
   // Raw-SQL paid writes: banned outright (see RAW_SQL_PAID_WRITE_RE).
@@ -801,5 +845,114 @@ test("guard fixture: response payloads are not treated as transitions", () => {
     ].join("\n"),
   );
   assert.equal(res.writeSites, 0);
+  assert.deepEqual(res.problems, []);
+});
+
+// --- Object-flow evasions (#215) ---------------------------------------------
+// The status reaches db.update(invoices).set(<identifier>) from an object built
+// far above the call, or from a property assignment — never as a `status:` key
+// near the update, so the lexical windows above cannot see it.
+
+const FILLER = Array.from({ length: 25 }, (_, i) => `  const step${i} = ${i};`).join("\n");
+
+test("guard fixture: far-constructed object with variable status is flagged", () => {
+  const res = scanFixture(
+    "far-object-var.ts",
+    [
+      "export async function apply(id: string, next: string) {",
+      "  const patch = { updatedAt: new Date(), status: next };",
+      FILLER,
+      "  await db.update(invoicesTable).set(patch).where(eq(invoicesTable.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.problems.length, 1, res.problems.join("\n"));
+  assert.match(res.problems[0], /VARIABLE/);
+});
+
+test("guard fixture: far-constructed object with literal paid status is flagged", () => {
+  const res = scanFixture(
+    "far-object-paid.ts",
+    [
+      "export async function settle(id: string) {",
+      '  const patch = { paidAt: new Date(), status: "paid" };',
+      FILLER,
+      "  await db.update(invoicesTable).set(patch).where(eq(invoicesTable.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.equal(res.problems.length, 1, res.problems.join("\n"));
+  assert.match(res.problems[0], /dispatchPaymentReceiptEmail/);
+});
+
+test("guard fixture: status set by property assignment is flagged", () => {
+  for (const value of ["req.body.status", '"paid"']) {
+    const res = scanFixture(
+      "property-assign.ts",
+      [
+        "export async function edit(id: string, req: any) {",
+        "  const updates: any = { updatedAt: new Date() };",
+        `  if (req.body.status) updates.status = ${value};`,
+        FILLER,
+        "  await db.update(invoicesTable).set(updates).where(eq(invoicesTable.id, id));",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    assert.equal(res.problems.length, 1, `${value}: ${res.problems.join("\n")}`);
+  }
+});
+
+test("guard fixture: object-flow status WITH both dispatchers passes", () => {
+  const res = scanFixture(
+    "far-object-dispatched.ts",
+    [
+      "export async function apply(id: string, next: string) {",
+      "  const patch: any = { updatedAt: new Date() };",
+      "  patch.status = next;",
+      "  await db.update(invoicesTable).set(patch).where(eq(invoicesTable.id, id));",
+      BOTH_DISPATCH,
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.deepEqual(res.problems, []);
+  assert.ok(res.writeSites >= 1);
+});
+
+test("guard fixture: object-flow with a non-paid literal or paid-guard passes", () => {
+  const res = scanFixture(
+    "far-object-safe.ts",
+    [
+      "export async function reopen(id: string, prior: string) {",
+      '  const patch = { updatedAt: new Date(), status: "sent" };',
+      "  const revert: any = { updatedAt: new Date() };",
+      "  // paid-guard: prior was read from a row the claim verified was not paid",
+      "  revert.status = prior;",
+      FILLER,
+      "  await db.update(invoicesTable).set(patch).where(eq(invoicesTable.id, id));",
+      "  await db.update(invoicesTable).set(revert).where(eq(invoicesTable.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  assert.deepEqual(res.problems, []);
+});
+
+test("guard fixture: object-flow into a non-invoice table is not flagged", () => {
+  const res = scanFixture(
+    "far-object-other-table.ts",
+    [
+      "export async function setLead(id: string, next: string) {",
+      "  const patch: any = { updatedAt: new Date() };",
+      "  patch.status = next;",
+      FILLER,
+      "  await db.update(leadsTable).set(patch).where(eq(leadsTable.id, id));",
+      "}",
+      "",
+    ].join("\n"),
+  );
   assert.deepEqual(res.problems, []);
 });
