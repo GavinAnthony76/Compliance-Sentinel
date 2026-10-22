@@ -24,6 +24,10 @@ export function EstimateSignPage() {
   const [signerName, setSignerName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [signed, setSigned] = useState(false);
+  // Confirmed delivery of the signed-copy email, known only right after signing
+  // in this session. null = unknown (e.g. the page was reloaded later): an
+  // address on file is not proof the email went out, so nothing is claimed.
+  const [signedCopyEmailed, setSignedCopyEmailed] = useState<boolean | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
@@ -116,6 +120,8 @@ export function EstimateSignPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Failed to sign');
+      setEstimate((prev: any) => ({ ...prev, signedAt: data.signedAt ?? prev?.signedAt, signerName: data.signerName ?? signerName.trim() }));
+      setSignedCopyEmailed(data.signedCopyEmailed === true);
       setSigned(true);
       toast({ title: 'Estimate signed!', description: data.message });
     } catch (err: any) {
@@ -237,8 +243,11 @@ export function EstimateSignPage() {
               {estimate.signedAt && (
                 <p className="text-sm text-green-600">{new Date(estimate.signedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
               )}
-              {estimate.customer?.email && (
+              {signedCopyEmailed === true && (
                 <p className="text-sm text-green-700 pt-1">A signed copy has been emailed to you for your records.</p>
+              )}
+              {signedCopyEmailed === false && estimate.customer?.email && (
+                <p className="text-sm text-amber-700 pt-1">We couldn't email your signed copy — please download it below for your records.</p>
               )}
               <div className="pt-2">
                 <a href={`/api/public/estimates/${token}/pdf`} target="_blank" rel="noopener noreferrer">

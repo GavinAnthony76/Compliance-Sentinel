@@ -233,7 +233,16 @@ router.post("/estimates/:token/sign", async (req, res) => {
     ? "Thank you! Your estimate has been signed and accepted. A signed copy has been emailed to you."
     : "Thank you! Your estimate has been signed and accepted. You can download a signed copy below.";
 
-  return res.json({ success: true, signedAt: updated.signedAt, customerHasEmail: Boolean(customer?.email), message });
+  // signedCopyEmailed is the confirmed delivery outcome; the signing page shows
+  // "emailed" only when it is true (an address on file is not proof of delivery).
+  return res.json({
+    success: true,
+    signedAt: updated.signedAt,
+    signerName: updated.signerName,
+    customerHasEmail: Boolean(customer?.email),
+    signedCopyEmailed: customerEmailed,
+    message,
+  });
 });
 
 // GET /public/estimates/:token/pdf — download the estimate (signed copy when signed)
