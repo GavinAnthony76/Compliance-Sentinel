@@ -246,7 +246,30 @@ router.put("/:id", async (req: any, res) => {
   if (req.body.notes !== undefined) updates.notes = req.body.notes;
   if (req.body.paidAt) updates.paidAt = new Date(req.body.paidAt);
 
-  let [updated] = await db.update(invoicesTable).set(updates).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).returning();
+  // Setting status "paid" here is a genuine paid transition, exactly like
+  // mark-paid: it must notify once, so it is guarded against an already-paid row.
+  const paidTransition = updates.status === "paid" && existing.status !== "paid";
+  if (paidTransition && !updates.paidAt) updates.paidAt = new Date();
+
+  // Refuse to write over a "processing" row: a live autopay/portal charge holds
+  // that claim, and changing its status or totals mid-charge would leave the
+  // settled card payment unrecorded or mismatched with the invoice.
+  const writeConditions = [eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId), ne(invoicesTable.status, "processing")];
+  if (paidTransition) writeConditions.push(ne(invoicesTable.status, "paid"));
+  let [updated] = await db.update(invoicesTable).set(updates).where(and(...writeConditions)).returning();
+  if (!updated) {
+    const [current] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
+    if (!current) return res.status(404).json({ error: "NotFound" });
+    if (current.status === "paid") return res.status(400).json({ error: "AlreadyPaid", message: "This invoice has already been paid" });
+    return res.status(409).json({ error: "ChargeInProgress", message: "A charge for this invoice is already in progress" });
+  }
+  if (paidTransition) {
+    // Awaited: on Autoscale, work started after the response is sent gets
+    // CPU-throttled and can be silently dropped. Both dispatchers catch their
+    // own errors, so awaiting never fails the request.
+    await dispatchPaymentReceiptEmail(id, companyId);
+    await dispatchOwnerPaymentNotification(id, companyId);
+  }
   if (lineItems) {
     await upsertLineItems(id, lineItems);
   }
@@ -257,13 +280,19 @@ router.put("/:id", async (req: any, res) => {
   if (wantsSentTransition) {
     const emailed = await dispatchInvoiceEmail(id, companyId);
     if (emailed) {
+      // paid-guard: never reopens a paid invoice or a live charge claim that
+      // landed while the email was being sent.
       const [promoted] = await db.update(invoicesTable)
         .set({ status: "sent", updatedAt: new Date() })
-        .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId)))
+        .where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId), ne(invoicesTable.status, "paid"), ne(invoicesTable.status, "processing")))
         .returning();
-      updated = promoted ?? updated;
-      await logActivity({ companyId, userId, action: "invoice.sent", entityType: "invoice", entityId: id });
-      fireAutomations(companyId, "invoice_sent", { customerId: existing.customerId, userId, invoiceId: id });
+      if (promoted) {
+        updated = promoted;
+        await logActivity({ companyId, userId, action: "invoice.sent", entityType: "invoice", entityId: id });
+        fireAutomations(companyId, "invoice_sent", { customerId: existing.customerId, userId, invoiceId: id });
+      } else {
+        [updated] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.companyId, companyId))).limit(1);
+      }
     }
   }
   const savedLineItems = await db.select().from(invoiceLineItemsTable).where(eq(invoiceLineItemsTable.invoiceId, id)).orderBy(invoiceLineItemsTable.sortOrder);
